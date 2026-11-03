@@ -12,7 +12,6 @@
   (info nil :type (peek tail-probe-info (nintendo-ware::block-start nintendo-ware::header #x1000))))
 
 (defbinio tail-probe (simple-array (unsigned-byte 8) (*)))
-(defbinio tail-probe/be (simple-array (unsigned-byte 8) (*)))
 
 (defun run-endian-tests ()
   ;; Consumers see the same concrete classes in either byte order.
@@ -23,9 +22,9 @@
         (run-archive-tests)
         (let* ((tail #(20 19 18 17 16 15 14 13 12 11 10 9 8 7 6 5 4 3 2 1))
                (payload (octets-join (if (eq endian :little) #(4 3 2 1) #(1 2 3 4)) tail))
-               (file (funcall (if (eq endian :little) #'read-tail-probe #'read-tail-probe/be)
-                              (coerce (container-fixture "CTST" (list (list #x1000 "INFO" payload)))
-                                      '(simple-array (unsigned-byte 8) (*)))))
+               (file (read-tail-probe
+                       (coerce (container-fixture "CTST" (list (list #x1000 "INFO" payload)))
+                               '(simple-array (unsigned-byte 8) (*)))))
                (info (tail-probe-info file)))
           (assert (= #x01020304 (tail-probe-info-value info)))
           (assert (equalp tail (tail-probe-info-tail info))))
@@ -59,21 +58,23 @@
                                    (nintendo-ware:sound-sequence-labels flow)) 0)))))
           (assert (= -2 (nintendo-ware:sequence-event-set-variable-value (aref events 2))))))))
   ;; Embedded headers never inherit their parent's endian or C/F identity.
-  (let* ((wave (let ((*fixture-family* :c) (*fixture-endian* :little)) (wave-fixture 2)))
-         (archive (let ((*fixture-family* :f) (*fixture-endian* :big))
-                    (container-fixture "CWAR"
-                      (list (list #x6800 "INFO"
-                                  (encode-record 'sized-reference-table
-                                    (make-sized-reference-table :count 1 :entries
-                                     (vector (make-sized-reference :type #x1f00 :offset 0 :size (length wave))))))
-                            (list #x6801 "FILE" wave)))))
-         (parsed (nintendo-ware:read-file :auto archive))
-         (entry (aref (nintendo-ware:wave-archive-info-entries (nintendo-ware:wave-archive-info parsed)) 0))
-         (embedded (nintendo-ware:wave-archive-entry-content entry))
-         (channel (aref (nintendo-ware:sound-wave-info-channels (nintendo-ware:sound-wave-info embedded)) 0))
-         (coefficients (nintendo-ware:dsp-adpcm-info-coefficients (nintendo-ware:sound-wave-channel-codec-info channel))))
-    (assert (eq :big (nintendo-ware:header-endian (nintendo-ware:wave-archive-header parsed))))
-    (assert (eq :little (nintendo-ware:header-endian (nintendo-ware:sound-wave-header embedded))))
-    (assert (= -123 (aref coefficients 0))))
+  (dolist (endian '(:little :big))
+    (let* ((child-endian (if (eq endian :little) :big :little))
+           (wave (let ((*fixture-family* :c) (*fixture-endian* child-endian)) (wave-fixture 2)))
+           (archive (let ((*fixture-family* :f) (*fixture-endian* endian))
+                      (container-fixture "CWAR"
+                        (list (list #x6800 "INFO"
+                                    (encode-record 'sized-reference-table
+                                      (make-sized-reference-table :count 1 :entries
+                                       (vector (make-sized-reference :type #x1f00 :offset 0 :size (length wave))))))
+                              (list #x6801 "FILE" wave)))))
+           (parsed (nintendo-ware:read-file :auto archive))
+           (entry (aref (nintendo-ware:wave-archive-info-entries (nintendo-ware:wave-archive-info parsed)) 0))
+           (embedded (nintendo-ware:wave-archive-entry-content entry))
+           (channel (aref (nintendo-ware:sound-wave-info-channels (nintendo-ware:sound-wave-info embedded)) 0))
+           (coefficients (nintendo-ware:dsp-adpcm-info-coefficients (nintendo-ware:sound-wave-channel-codec-info channel))))
+      (assert (eq endian (nintendo-ware:header-endian (nintendo-ware:wave-archive-header parsed))))
+      (assert (eq child-endian (nintendo-ware:header-endian (nintendo-ware:sound-wave-header embedded))))
+      (assert (= -123 (aref coefficients 0)))))
   (assert (not (boundp 'nintendo-ware:*endian*)))
   (format t "Shared-type ME, C/F containers, event endian and mixed embedded files passed.~%"))

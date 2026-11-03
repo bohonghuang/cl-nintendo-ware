@@ -74,10 +74,10 @@
   (values :little :type (map null (lambda (ignored) (declare (ignore ignored))
                                    (ecase %value (#xfffe :little) (#xfeff :big))))))
 
-(defbinstruct/me header ()
-  (start 0 :type position)
-  (magic #.(coerce "" 'simple-base-string) :type (simple-base-string 4))
-  (endian :little :type file-byte-order)
+(defbinstruct/me header (start magic endian)
+  (start 0 :type (map null (constantly start)))
+  (magic #.(coerce "" 'simple-base-string) :type (map null (constantly magic)))
+  (endian :little :type (map null (constantly endian)))
   (header-size 20 :type (unsigned-byte 16))
   (version 0 :type (unsigned-byte 32))
   (file-size 20 :type (unsigned-byte 32))
@@ -86,6 +86,14 @@
   (references #() :type (simple-array sized-reference (block-count)))
   (%valid nil :type (map null (lambda (ignored) (declare (ignore ignored))
                                 (validate-header references)))))
+
+(defbinstruct (file-header (:type header) (:constructor progn) (:conc-name nil)) ()
+  (%start 0 :type position)
+  (%magic #.(coerce "" 'simple-base-string) :type (simple-base-string 4))
+  (%endian :little :type file-byte-order)
+  (values nil :type (ecase %endian
+                     (:little (header/le %start %magic %endian))
+                     (:big (header/be %start %magic %endian)))))
 
 (defun header-version-major (header)
   (mod (floor (header-version header) (if (char= (char (header-magic header) 0) #\C) #x1000000 #x10000)) 256))
@@ -158,29 +166,16 @@
         (t (fail-file "Unknown file magic ~S" magic))))
 
 (defbinstruct (embedded-file (:type nintendo-ware-file-union) (:constructor progn) (:conc-name nil)) ()
-  (%start 0 :type position)
   (%kind :sound-sequence :type (map (peek (simple-base-string 4)) #'magic-kind))
-  (%endian :little :type (peek file-byte-order (+ %start 4)))
-  (values nil :type (ecase %endian
-                     (:little (ecase %kind
-                                (:sound-sequence sound-sequence/le)
-                                (:sound-wave sound-wave/le)
-                                (:wave-archive wave-archive/le)
-                                (:sound-bank sound-bank/le)
-                                (:wave-sound-data wave-sound-data/le)
-                                (:sound-stream sound-stream/le)
-                                (:sound-archive sound-archive/le)
-                                (:sound-group sound-group/le)))
-                     (:big (ecase %kind
-                                (:sound-sequence sound-sequence/be)
-                                (:sound-wave sound-wave/be)
-                                (:wave-archive wave-archive/be)
-                                (:sound-bank sound-bank/be)
-                                (:wave-sound-data wave-sound-data/be)
-                                (:sound-stream sound-stream/be)
-                                (:sound-archive sound-archive/be)
-                                (:sound-group sound-group/be)))
-)))
+  (values nil :type (ecase %kind
+                     (:sound-sequence sound-sequence)
+                     (:sound-wave sound-wave)
+                     (:wave-archive wave-archive)
+                     (:sound-bank sound-bank)
+                     (:wave-sound-data wave-sound-data)
+                     (:sound-stream sound-stream)
+                     (:sound-archive sound-archive)
+                     (:sound-group sound-group))))
 
 (export '(read-file invalid-file invalid-file-reason header header-start header-magic header-endian header-version-major
           header-header-size header-version header-file-size header-block-count header-references

@@ -1,7 +1,7 @@
 (in-package #:nintendo-ware)
 
-(defbinstruct/me (nintendo-ware-file-header-at-start (:type header) (:constructor progn) (:conc-name nil)) ()
-  (values nil :type (pointer header (map null (constantly 0)) $nintendo-ware-file-start)))
+(defbinstruct (nintendo-ware-file-header-at-start (:type header) (:constructor progn) (:conc-name nil)) ()
+  (values nil :type (pointer file-header (map null (constantly 0)) $nintendo-ware-file-start)))
 
 (defbinstruct/me nintendo-ware-section (expected-magic content)
   ($nintendo-ware-section-start 0 :type position)

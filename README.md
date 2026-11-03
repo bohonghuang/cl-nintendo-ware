@@ -64,7 +64,7 @@ CSTM SEEK 上下文固定小端；当前 FSTM SEEK 布局按 Citric 的参考实
 
 ## 声明模式
 
-`define-nintendo-ware-file`、`define-nintendo-ware-section` 按 `cl-nitro` 的声明方式，名称／选项后直接写字段，不带参数表；具体 file、section 及 section body 的 reader 均无参数。公共头用原生 include 复用，section 用 `inline` 组合 body，并生成直接字段访问器。现代容器仍按 sized reference 定位区块，而非假设区块连续排列。
+`define-nintendo-ware-file`、`define-nintendo-ware-section` 按 `cl-nitro` 的声明方式，名称／选项后直接写字段，不带参数表；具体 file、section 及 section body 的 reader 均无参数。每个具体 file 只生成一个 reader：公共容器读取文件头的 BOM，再用 `ecase` 和 `inline` 选择 `body/be` 或 `body/le`，将已解析的 header 传给 body。只有 body、区块及记录保留共享 Lisp 类型的大小端布局，不生成完整文件的 `/le`、`/be` 入口。file／section 均生成直接字段访问器。现代容器仍按 sized reference 定位区块，而非假设区块连续排列。
 
 ```lisp
 (define-nintendo-ware-section (sample-info (:magic "INFO"))
@@ -74,7 +74,7 @@ CSTM SEEK 上下文固定小端；当前 FSTM SEEK 布局按 Citric 的参考实
   (info nil :type (peek sample-info (block-start header #x1000))))
 ```
 
-正文通过原生位置引用取得所属文件头与版本；普通记录、表、字符串和引用按声明的字段及数量读取，不接收或传递区块结束位置。每个文件字段读取前恢复本文件的位置锚点，避免内嵌文件影响外层后续区块。高阶 parser（`inline` 等）仅用于 file／section 容器，不用于具体记录、引用、表或事件。
+file body 直接接收容器已读取的 header；section body 通过原生位置引用取得所属文件头与版本。普通记录、表、字符串和引用按声明的字段及数量读取，不接收或传递区块结束位置。每个文件字段读取前恢复本文件的位置锚点，避免内嵌文件影响外层后续区块。内嵌文件只按 magic 选择文件类型，由其自身容器读取 BOM，不再预读 BOM 来选择完整文件的大小端 reader。高阶 parser（`inline` 等）仅用于 file／section 容器，不用于具体记录、引用、表或事件。
 
 只有确实需要剩余长度的布局使用零宽类型 `nintendo-ware-section-tail-size`，保存在 `%size`：它返回“区块大小 −（当前位置 − 区块起点）”，不消费输入，并遵循区块头端序。需要绝对结束位置时，就地用 `%position + %size` 计算。目前仅 SEQ 的无计数事件流需要结束位置，SEEK 需要剩余长度来读取尾部 padding；不向其他布局注入尾部上下文。
 

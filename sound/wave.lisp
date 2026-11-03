@@ -63,10 +63,7 @@
   (data nil :type (peek (raw-block "DATA")
                         (block-start header #x7001))))
 
-(defbinstruct (embedded-wave (:type sound-wave) (:constructor progn) (:conc-name nil)) ()
-  (%start 0 :type position)
-  (%endian :little :type (peek file-byte-order (+ %start 4)))
-  (values nil :type (ecase %endian (:little sound-wave/le) (:big sound-wave/be))))
+(defbinalias (embedded-wave (:type sound-wave)) () sound-wave)
 
 (export '(sound-wave sound-wave-header sound-wave-info sound-wave-data sound-wave-info-codec sound-wave-info-loop sound-wave-info-sample-rate
           sound-wave-info-loop-start sound-wave-info-loop-end sound-wave-info-channels sound-wave-channel sound-wave-channel-samples-reference
