@@ -26,11 +26,11 @@ sbcl --non-interactive --eval '(ql:quickload :cl-nintendo-ware :silent t)' \
 
 ```lisp
 (let* ((file (nintendo-ware:read-file :auto #P"/path/to/music.bcseq"))
-       (header (nintendo-ware:sound-sequence-header file))
-       (event (nintendo-ware:read-command file 0)))
-  (values (nintendo-ware:header-endian header)
-          (nintendo-ware:sequence-command-name event)
-          (nintendo-ware:sequence-command-arguments event)))
+       (events (nintendo-ware:sound-sequence-events file)))
+  (loop for event across events
+        when (typep event 'nintendo-ware:sequence-event-note)
+          collect (list (nintendo-ware:sequence-event-note-key event)
+                        (nintendo-ware:sequence-event-note-duration event))))
 ```
 
 每个完整文件都从自己的 magic 和 BOM 选择 reader，包括内嵌文件。头中的文件大小、区块范围、引用类型、偏移和数组数量在读取目标前验证；生成的文件读取入口不需要 `limit` 或端序参数。流输入先规范化为字节向量，随后使用 binstruct 的原生向量读取和边界检查。
@@ -48,18 +48,15 @@ sbcl --non-interactive --eval '(ql:quickload :cl-nintendo-ware :silent t)' \
 
 共用解析布局不等于保证所有游戏、版本和编码组合兼容。原始 ID、引用、可选字段、DATA 及填充保留；空引用为 `NIL`。外部档案路径只读取为字符串，绝不自动打开。
 
-## 事件 reader 与端序
+## 事件与端序
 
-容器 BOM 与事件字节序分别处理：CSEQ 事件固定大端；Wii U FSEQ 为大端；Switch FSEQ 为小端。`read-command` 根据已解析文件的 magic 和 BOM 自动选择，参数中的偏移始终相对于 DATA 字节流。
+`sound-sequence-events` 返回具体事件对象的向量，可直接以 `sequence-event-note`、`sequence-event-tempo` 等类型进行 CLOS 分派。字段直接表达音高、力度、时值、数值及内嵌 `sub-event`；不暴露 opcode、事件原始字节或二进制位置。开轨、跳转、调用的 `index` 和标签的 `label-entry-index` 均为该向量的零基索引。
 
-独立事件流入口按固定字节序命名；每次读取一条事件，而非完整容器：
+`define-sequence-event` 仿照 Nitro 的 `define-sseq-event`，从同一份字段声明生成完整和 `/partial` 布局；random/variable 内嵌的子事件使用 `/partial`，省略最后一个参数，而不是最后一个字节。`F0` 只是读取时的封装，返回扩展事件的具体类型。
 
-```lisp
-(nintendo-ware:read-bcseq stream) ; 3DS / Wii U，大端事件
-(nintendo-ware:read-bfseq stream) ; Switch，小端事件
-```
+事件选择使用 binstruct 的 `(or (事件类型) ...)` union，各类型的首字节声明校验操作码；不使用运行时 opcode 描述表或手写事件读取循环。`defbinio` 仅用于完整文件的最终代码生成，不提供事件级二进制读取 API。
 
-对应 `defbinio (sequence-command/be)` 和 `defbinio (sequence-command/le)`，没有额外参数。两者共用同一套 opcode 定义，允许已知的较新事件出现在旧平台文件中，不施加平台白名单。未知 opcode 仍抛出 `unknown-opcode`，保留偏移与操作码；结构错误使用 `invalid-file`。
+容器 BOM 与事件字节序分别处理：CSEQ 事件固定大端；Wii U FSEQ 为大端；Switch FSEQ 为小端。文件声明选择事件流布局，消费端无需处理端序。所有平台共享事件声明，不施加平台 opcode 白名单。
 
 CSTM SEEK 上下文固定小端；当前 FSTM SEEK 布局按 Citric 的参考实现使用大端上下文，独立于区块头 BOM。编码音频始终保留原始字节，不因容器换端序而交换音频 payload。
 
@@ -83,7 +80,7 @@ CSTM SEEK 上下文固定小端；当前 FSTM SEEK 布局按 Citric 的参考实
 2. 在本库独立的 `*endian*` 特殊变量绑定为 `:big` 时，提前展开 `/be` 的 `defbinstruct`，用 `(:type 原类型)` 共享 Lisp 数据布局。
 3. 通过 reader 类型展开方法，使嵌套结构和数组元素自动使用相应 `/le`、`/be`。不传递运行时端序参数，不复制 Lisp 结构类型。
 
-也接受 binstruct 风格的可选参数列表；生产 schema 最多三个参数。递归类型需先声明端序分派，见 `sequence-command`。打包进一个整数的子字段若在两端字节位置不同，则显式声明共享 Lisp 类型的两种布局，不假装字段顺序相同。
+也接受 binstruct 风格的可选参数列表；生产 schema 最多三个参数。递归类型需先声明端序分派，见 `sequence-event-union`。打包进一个整数的子字段若在两端字节位置不同，则显式声明共享 Lisp 类型的两种布局，不假装字段顺序相同。
 
 相对引用使用 `reference-to`、`bounded` 和原生 `pointer`。引用 tag、空偏移、最小目标跨度均先验证；不为每个格式生成一套长参数引用包装。
 
@@ -93,7 +90,7 @@ CSTM SEEK 上下文固定小端；当前 FSTM SEEK 布局按 Citric 的参考实
 
 测试使用 Common Lisp assertions 和独立 binstruct 输入夹具，检查实际字段、引用目标、可空引用、大小端、嵌套事件、文件边界及版本分支，不断言生成源码或测试库的 writer。
 
-真实样本验证通过 [OoT3D-Custom-Sequences](https://github.com/Kewlan/OoT3D-Custom-Sequences) 的 63 个 BCSEQ 文件、313,414 条静态可达事件。Citric 的 `guts.bcseq` 通过容器与标签读取；其事件流偏移 230 的开轨目标为 81，落在偏移 80 的扩展指令内部，按原始目标静态遍历会遇到未知 opcode，未计入全事件通过数。读取器保留原始目标，不擅自重定位。其他格式与平台主要依赖合成夹具验证，不能据此宣称所有商业游戏兼容。
+新事件接口通过 [OoT3D-Custom-Sequences](https://github.com/Kewlan/OoT3D-Custom-Sequences) 的 63 个 BCSEQ 文件，共读取 401,232 个顶层事件并完成目标索引转换。此数量包含声明式事件流读取到的非静态可达事件，不等同于旧 reader 的静态遍历计数。另已用实际 `closynth:event-emit` 验证解析所得 note/tempo 对象的类型分派，未接入播放。Citric 的 `guts.bcseq` 有一个开轨目标落在扩展指令内部，索引化时拒绝，不擅自重定位。其他格式与平台主要依赖合成夹具验证，不能据此宣称所有商业游戏兼容。
 
 - [ENDIAN.md](ENDIAN.md)：各平台、容器及事件流的端序证据。
 - [BCSEQ.md](BCSEQ.md)：3DS 音序、引用和格式资料。

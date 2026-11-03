@@ -1,16 +1,6 @@
 (in-package #:nintendo-ware)
 
 (defbinio embedded-file (simple-array (unsigned-byte 8) (*)))
-(defbinio (sequence-command/le) stream)
-(defbinio (sequence-command/be) stream)
-
-(defun read-bcseq (stream)
-  "Read one 3DS/Wii U sequence event (fixed big-endian operands)."
-  (read-sequence-command/be stream))
-
-(defun read-bfseq (stream)
-  "Read one Switch sequence event (little-endian operands)."
-  (read-sequence-command/le stream))
 
 (defgeneric read-file (type input))
 
