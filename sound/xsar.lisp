@@ -1,6 +1,6 @@
 (in-package #:cl-nintendo-ware)
 
-(defbinstruct/me sound-archive-patricia-node ()
+(defbinstruct/me xsar-patricia-node ()
   (leaf-flag 0 :type (unsigned-byte 16))
   (bit-index 0 :type (unsigned-byte 16))
   (left-index 0 :type (unsigned-byte 32))
@@ -8,7 +8,7 @@
   (string-index 0 :type (unsigned-byte 32))
   (resource-id 0 :type (unsigned-byte 32)))
 
-(defbinstruct/me sound-archive-sound-3d-info ()
+(defbinstruct/me xsar-sound-3d-info ()
   (flags 0 :type (unsigned-byte 32))
   (attenuation-rate 0.0 :type single-float)
   (attenuation-curve 0 :type (unsigned-byte 8))
@@ -16,31 +16,31 @@
   (padding 0 :type (unsigned-byte 16))
   (options (make-flag-values) :type flag-values))
 
-(defbinstruct/me sound-archive-wave-sound-info ()
+(defbinstruct/me xsar-wave-sound-info ()
   (item-index 0 :type (unsigned-byte 32))
   (allocate-track-count 0 :type (unsigned-byte 32))
   (flags (make-flag-values) :type flag-values))
 
-(defbinstruct/me sound-archive-stream-sound-info ()
+(defbinstruct/me xsar-stream-sound-info ()
   (allocate-track-flags 0 :type (unsigned-byte 16))
   (channel-count 0 :type (unsigned-byte 16))
   (flags (make-flag-values) :type flag-values))
 
-(defbinstruct/me sound-archive-wave-archive ()
+(defbinstruct/me xsar-wave-archive ()
   (file-id 0 :type (unsigned-byte 32))
   (load-individually 0 :type (unsigned-byte 8))
   (padding #.(make-array 0 :element-type '(unsigned-byte 8)) :type (simple-array (unsigned-byte 8) (3)))
   (flags (make-flag-values) :type flag-values))
 
-(defbinstruct/me sound-archive-group ()
+(defbinstruct/me xsar-group ()
   (file-id 0 :type (unsigned-byte 32))
   (flags (make-flag-values) :type flag-values))
 
-(defbinstruct/me sound-archive-player ()
+(defbinstruct/me xsar-player ()
   (sound-limit 0 :type (unsigned-byte 32))
   (flags (make-flag-values) :type flag-values))
 
-(defbinstruct/me sound-archive-project-info ()
+(defbinstruct/me xsar-project-info ()
   (maximum-sequences 0 :type (unsigned-byte 16))
   (maximum-sequence-tracks 0 :type (unsigned-byte 16))
   (maximum-stream-sounds 0 :type (unsigned-byte 16))
@@ -52,28 +52,28 @@
   (padding 0 :type (unsigned-byte 8))
   (options 0 :type (unsigned-byte 32)))
 
-(defbinstruct/me sound-archive-patricia-tree ()
+(defbinstruct/me xsar-patricia-tree ()
   (root-index 0 :type (unsigned-byte 32))
   (count 0 :type (unsigned-byte 32))
-  (nodes #() :type (simple-array sound-archive-patricia-node (count))))
+  (nodes #() :type (simple-array xsar-patricia-node (count))))
 
-(defbinstruct/me sound-archive-string (base)
+(defbinstruct/me xsar-string (base)
   (reference (make-sized-reference) :type sized-reference)
   (text #.(coerce "" 'simple-base-string)
         :type (peek (simple-base-string (sized-reference-size reference))
                     (sized-reference-target reference base #x1f01))))
 
-(defbinstruct/me sound-archive-string-table ()
+(defbinstruct/me xsar-string-table ()
   ($strings-start 0 :type position)
   (count 0 :type (unsigned-byte 32))
-  (entries #() :type (simple-array (sound-archive-string $strings-start) (count))))
+  (entries #() :type (simple-array (xsar-string $strings-start) (count))))
 
-(define-nintendo-ware-section (sound-archive-strg (:magic "STRG"))
+(define-nintendo-ware-section (xsar-strg (:magic "STRG"))
   ($strg-start 0 :type position)
-  (strings nil :type (reference-to #x2400 $strg-start sound-archive-string-table))
-  (tree nil :type (reference-to #x2401 $strg-start sound-archive-patricia-tree)))
+  (strings nil :type (reference-to #x2400 $strg-start xsar-string-table))
+  (tree nil :type (reference-to #x2401 $strg-start xsar-patricia-tree)))
 
-(defbinstruct/me sound-archive-sequence-info ()
+(defbinstruct/me xsar-sequence-info ()
   ($sequence-start 0 :type position)
   (banks nil :type (reference-to #x0100 $sequence-start integer-table))
   (allocate-track-flags 0 :type (unsigned-byte 32))
@@ -85,7 +85,7 @@
                         ((nil) null) ((t) (peek packed-priority
                                                (flag-position flags 1 %flags-start))))))
 
-(defbinstruct/me sound-archive-sound ()
+(defbinstruct/me xsar-sound ()
   (%start 0 :type position)
   (file-id 0 :type (unsigned-byte 32)) (player-id 0 :type (unsigned-byte 32))
   (volume 0 :type (unsigned-byte 8)) (remote-filter 0 :type (signed-byte 8))
@@ -93,116 +93,116 @@
   (detail-reference (make-reference) :type reference)
   (flags (make-flag-values) :type flag-values)
   (detail nil :type (ecase (reference-type detail-reference)
-                      (#x2203 (peek sound-archive-sequence-info
+                      (#x2203 (peek xsar-sequence-info
                                     (reference-target detail-reference %start #x2203)))
-                      (#x2202 (peek sound-archive-wave-sound-info
+                      (#x2202 (peek xsar-wave-sound-info
                                     (reference-target detail-reference %start #x2202)))
-                      (#x2201 (peek sound-archive-stream-sound-info
+                      (#x2201 (peek xsar-stream-sound-info
                                     (reference-target detail-reference %start #x2201)))))
   (sound-3d-info nil :type (ecase (not (null (flag-target flags 8 %start)))
-                             ((nil) null) ((t) (peek sound-archive-sound-3d-info
+                             ((nil) null) ((t) (peek xsar-sound-3d-info
                                                     (flag-target flags 8 %start))))))
 
-(defbinstruct/me sound-archive-wave-sound-group ()
+(defbinstruct/me xsar-wave-sound-group ()
   ($group-start 0 :type position)
   (wave-archives nil :type (reference-to #x0100 $group-start integer-table))
   (flags (make-flag-values) :type flag-values))
 
-(defbinstruct/me sound-archive-sound-group ()
+(defbinstruct/me xsar-sound-group ()
   ($group-start 0 :type position)
   (first-id 0 :type (unsigned-byte 32)) (last-id 0 :type (unsigned-byte 32))
   (files nil :type (reference-to #x0100 $group-start integer-table))
-  (wave-group nil :type (reference-to #x2205 $group-start sound-archive-wave-sound-group))
+  (wave-group nil :type (reference-to #x2205 $group-start xsar-wave-sound-group))
   (flags (make-flag-values) :type flag-values))
 
-(defbinstruct/me sound-archive-bank ()
-  ($bank-start 0 :type position)
+(defbinstruct/me xsar-bank ()
+  ($xbnk-start 0 :type position)
   (file-id 0 :type (unsigned-byte 32))
-  (wave-archives nil :type (reference-to #x0100 $bank-start integer-table))
+  (wave-archives nil :type (reference-to #x0100 $xbnk-start integer-table))
   (flags (make-flag-values) :type flag-values))
 
-(defbinstruct/me sound-archive-external-file ()
+(defbinstruct/me xsar-external-file ()
   (text #.(coerce "" 'simple-base-string) :type simple-base-string))
 
-(defbinstruct/me sound-archive-internal-file (data-start)
+(defbinstruct/me xsar-internal-file (data-start)
   (reference (make-sized-reference) :type sized-reference)
   (content nil :type (ecase (= (sized-reference-offset reference) -1)
                       ((t) null)
                       ((nil) (peek embedded-file
                                    (sized-reference-target reference (+ data-start 8) #x1f00))))))
 
-(defbinstruct/me sound-archive-file (data-start)
+(defbinstruct/me xsar-file (data-start)
   (%start 0 :type position)
   (location-reference (make-reference) :type reference)
   (flags (make-flag-values) :type flag-values)
   (location nil :type (ecase (= (reference-offset location-reference) -1)
                         ((t) null)
                         ((nil) (ecase (reference-type location-reference)
-                                 (#x220c (peek (sound-archive-internal-file data-start)
+                                 (#x220c (peek (xsar-internal-file data-start)
                                                (reference-target location-reference %start #x220c)))
-                                 (#x220d (peek sound-archive-external-file
+                                 (#x220d (peek xsar-external-file
                                                (reference-target location-reference %start #x220d))))))))
 
-(defbinstruct/me sound-archive-sounds-table ()
+(defbinstruct/me xsar-sounds-table ()
   ($table-start 0 :type position)
   (count 0 :type (unsigned-byte 32))
-  (entries #() :type (simple-array (reference-to #x2200 $table-start sound-archive-sound) (count))))
+  (entries #() :type (simple-array (reference-to #x2200 $table-start xsar-sound) (count))))
 
-(defbinstruct/me sound-archive-sound-groups-table ()
+(defbinstruct/me xsar-sound-groups-table ()
   ($table-start 0 :type position)
   (count 0 :type (unsigned-byte 32))
-  (entries #() :type (simple-array (reference-to #x2204 $table-start sound-archive-sound-group) (count))))
+  (entries #() :type (simple-array (reference-to #x2204 $table-start xsar-sound-group) (count))))
 
-(defbinstruct/me sound-archive-banks-table ()
+(defbinstruct/me xsar-banks-table ()
   ($table-start 0 :type position)
   (count 0 :type (unsigned-byte 32))
-  (entries #() :type (simple-array (reference-to #x2206 $table-start sound-archive-bank) (count))))
+  (entries #() :type (simple-array (reference-to #x2206 $table-start xsar-bank) (count))))
 
-(defbinstruct/me sound-archive-wave-archives-table ()
+(defbinstruct/me xsar-wave-archives-table ()
   ($table-start 0 :type position)
   (count 0 :type (unsigned-byte 32))
-  (entries #() :type (simple-array (reference-to #x2207 $table-start sound-archive-wave-archive) (count))))
+  (entries #() :type (simple-array (reference-to #x2207 $table-start xsar-wave-archive) (count))))
 
-(defbinstruct/me sound-archive-groups-table ()
+(defbinstruct/me xsar-groups-table ()
   ($table-start 0 :type position)
   (count 0 :type (unsigned-byte 32))
-  (entries #() :type (simple-array (reference-to #x2208 $table-start sound-archive-group) (count))))
+  (entries #() :type (simple-array (reference-to #x2208 $table-start xsar-group) (count))))
 
-(defbinstruct/me sound-archive-players-table ()
+(defbinstruct/me xsar-players-table ()
   ($table-start 0 :type position)
   (count 0 :type (unsigned-byte 32))
-  (entries #() :type (simple-array (reference-to #x2209 $table-start sound-archive-player) (count))))
+  (entries #() :type (simple-array (reference-to #x2209 $table-start xsar-player) (count))))
 
-(defbinstruct/me sound-archive-files-table (data-start)
+(defbinstruct/me xsar-files-table (data-start)
   ($table-start 0 :type position)
   (count 0 :type (unsigned-byte 32))
-  (entries #() :type (simple-array (reference-to #x220a $table-start (sound-archive-file data-start)) (count))))
+  (entries #() :type (simple-array (reference-to #x220a $table-start (xsar-file data-start)) (count))))
 
-(define-nintendo-ware-section (sound-archive-info (:magic "INFO"))
+(define-nintendo-ware-section (xsar-info (:magic "INFO"))
   (%data-start 0 :type (map null (lambda (ignored) (declare (ignore ignored)) (if (block-reference %header #x2002 nil) (block-start %header #x2002) 0))))
   ($info-start 0 :type position)
-  (sounds nil :type (reference-to #x2100 $info-start sound-archive-sounds-table))
-  (sound-groups nil :type (reference-to #x2104 $info-start sound-archive-sound-groups-table))
-  (banks nil :type (reference-to #x2101 $info-start sound-archive-banks-table))
-  (wave-archives nil :type (reference-to #x2103 $info-start sound-archive-wave-archives-table))
-  (groups nil :type (reference-to #x2105 $info-start sound-archive-groups-table))
-  (players nil :type (reference-to #x2102 $info-start sound-archive-players-table))
-  (files nil :type (reference-to #x2106 $info-start (sound-archive-files-table %data-start)))
-  (project-info nil :type (reference-to #x2107 $info-start sound-archive-project-info)))
+  (sounds nil :type (reference-to #x2100 $info-start xsar-sounds-table))
+  (sound-groups nil :type (reference-to #x2104 $info-start xsar-sound-groups-table))
+  (banks nil :type (reference-to #x2101 $info-start xsar-banks-table))
+  (wave-archives nil :type (reference-to #x2103 $info-start xsar-wave-archives-table))
+  (groups nil :type (reference-to #x2105 $info-start xsar-groups-table))
+  (players nil :type (reference-to #x2102 $info-start xsar-players-table))
+  (files nil :type (reference-to #x2106 $info-start (xsar-files-table %data-start)))
+  (project-info nil :type (reference-to #x2107 $info-start xsar-project-info)))
 
-(define-nintendo-ware-file (sound-archive (:magic ("CSAR" "FSAR")))
-  (strg nil :type (ecase (not (null (block-reference header #x2000 nil))) ((nil) null) ((t) (peek sound-archive-strg (block-start header #x2000)))))
-  (info nil :type (peek sound-archive-info (block-start header #x2001)))
+(define-nintendo-ware-file (xsar (:magic ("CSAR" "FSAR")))
+  (strg nil :type (ecase (not (null (block-reference header #x2000 nil))) ((nil) null) ((t) (peek xsar-strg (block-start header #x2000)))))
+  (info nil :type (peek xsar-info (block-start header #x2001)))
   (file nil :type (ecase (not (null (block-reference header #x2002 nil)))
                      ((nil) null)
                      ((t) (peek (raw-block "FILE")
                                 (block-start header #x2002))))))
 
-(export '(sound-archive sound-archive-header sound-archive-strg sound-archive-info sound-archive-file sound-archive-strg-strings sound-archive-strg-tree sound-archive-string-table-entries sound-archive-string-text
-          sound-archive-patricia-tree-root-index sound-archive-patricia-tree-nodes sound-archive-patricia-node-resource-id sound-archive-patricia-node-string-index
-          sound-archive-info-sounds sound-archive-info-sound-groups sound-archive-info-banks sound-archive-info-wave-archives sound-archive-info-groups sound-archive-info-players sound-archive-info-files sound-archive-info-project-info
-          sound-archive-sounds-table-entries sound-archive-sound-groups-table-entries sound-archive-banks-table-entries sound-archive-wave-archives-table-entries
-          sound-archive-groups-table-entries sound-archive-players-table-entries sound-archive-files-table-entries sound-archive-sound-file-id sound-archive-sound-player-id sound-archive-sound-detail
-          sound-archive-sequence-info sound-archive-sequence-info-banks sound-archive-sequence-info-start-offset sound-archive-sequence-info-priority
-          sound-archive-bank-file-id sound-archive-bank-wave-archives sound-archive-player-sound-limit sound-archive-file-location sound-archive-internal-file-reference sound-archive-internal-file-content
-          sound-archive-external-file-text sound-archive-project-info-maximum-sequences))
+(export '(xsar xsar-header xsar-strg xsar-info xsar-file xsar-strg-strings xsar-strg-tree xsar-string-table-entries xsar-string-text
+          xsar-patricia-tree-root-index xsar-patricia-tree-nodes xsar-patricia-node-resource-id xsar-patricia-node-string-index
+          xsar-info-sounds xsar-info-sound-groups xsar-info-banks xsar-info-wave-archives xsar-info-groups xsar-info-players xsar-info-files xsar-info-project-info
+          xsar-sounds-table-entries xsar-sound-groups-table-entries xsar-banks-table-entries xsar-wave-archives-table-entries
+          xsar-groups-table-entries xsar-players-table-entries xsar-files-table-entries xsar-sound-file-id xsar-sound-player-id xsar-sound-detail
+          xsar-sequence-info xsar-sequence-info-banks xsar-sequence-info-start-offset xsar-sequence-info-priority
+          xsar-bank-file-id xsar-bank-wave-archives xsar-player-sound-limit xsar-file-location xsar-internal-file-reference xsar-internal-file-content
+          xsar-external-file-text xsar-project-info-maximum-sequences))

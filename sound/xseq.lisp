@@ -1,0 +1,516 @@
+(in-package #:nintendo-ware)
+
+(defbinstruct (xseq-vlq-group (:endian :big)) ()
+  (part 0 :type (unsigned-byte 7))
+  (continued nil :type (boolean (unsigned-byte 1))))
+(defbinstruct (xseq-vlq-final-group (:type xseq-vlq-group) (:endian :big)) ()
+  (part 0 :type (unsigned-byte 7))
+  (continued nil :type (satisfies (boolean (unsigned-byte 1)))))
+(defbinstruct %xseq-vlq ()
+  (first (make-xseq-vlq-group) :type xseq-vlq-group)
+  (second nil :type (ecase (xseq-vlq-group-continued first) ((nil) null) (t xseq-vlq-group)))
+  (third nil :type (ecase (and second (xseq-vlq-group-continued second)) ((nil) null) (t xseq-vlq-group)))
+  (fourth nil :type (ecase (and third (xseq-vlq-group-continued third)) ((nil) null) (t xseq-vlq-final-group))))
+(defbinalias (xseq-vlq (:type (unsigned-byte 28))) ()
+  (map %xseq-vlq
+       (lambda (groups)
+         (let ((value (xseq-vlq-group-part (%xseq-vlq-first groups))))
+           (when (%xseq-vlq-second groups)
+             (setf value (+ (* value 128) (xseq-vlq-group-part (%xseq-vlq-second groups)))))
+           (when (%xseq-vlq-third groups)
+             (setf value (+ (* value 128) (xseq-vlq-group-part (%xseq-vlq-third groups)))))
+           (when (%xseq-vlq-fourth groups)
+             (setf value (+ (* value 128) (xseq-vlq-group-part (%xseq-vlq-fourth groups)))))
+           value))))
+
+(defbinstruct/me xseq-event ())
+(deftype xseq-event-union () 'xseq-event)
+(deftype xseq-event-partial-union (&optional status) (declare (ignore status)) 'xseq-event)
+(%define-endian-reader xseq-event-union)
+(%define-endian-reader xseq-event-partial-union)
+
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (defparameter *xseq-events* nil))
+
+(defmacro define-xseq-event ((name event-bytes) &body fields)
+  (let* ((class (alexandria:symbolicate 'xseq-event- name))
+         (partial (alexandria:symbolicate class '/partial))
+         (bytes (alexandria:ensure-list event-bytes))
+         (tags (loop for byte in bytes collect
+                 `(nil ,byte :type (satisfies (unsigned-byte 8) (alexandria:curry #'eql ,byte))))))
+    (alexandria:with-gensyms (status)
+      `(progn
+         (defbinstruct/me (,class (:include xseq-event)) () ,@tags ,@fields)
+         (defbinstruct/me (,partial (:type ,class)) (,status)
+           (nil ,(first bytes) :type (satisfies (map null (constantly ,status))
+                                              (alexandria:curry #'eql ,(first bytes))))
+           ,@(rest tags)
+           ,@(if (and fields (subtypep (binstruct::lisp-type (getf (cddr (car (last fields))) :type)) 'xseq-event))
+                 fields (butlast fields)))
+         (eval-when (:compile-toplevel :load-toplevel :execute)
+           (pushnew ',class *xseq-events*))
+         (export '(,class ,(alexandria:symbolicate 'make- class)
+                   ,(alexandria:symbolicate class '-p)
+                   ,@(loop for field in fields unless (or (null (car field))
+                                                         (char= (char (symbol-name (car field)) 0) #\%))
+                           collect (alexandria:symbolicate class '- (car field)))))))))
+
+;; A note's leading byte is its pitch, not a fixed event tag.
+(defbinstruct/me (xseq-event-note (:include xseq-event)) ()
+  (key 0 :type (satisfies (unsigned-byte 8) (lambda (key) (<= key #x7f))))
+  (velocity 0 :type (unsigned-byte 8))
+  (duration 0 :type xseq-vlq))
+(defbinstruct/me (xseq-event-note/partial (:type xseq-event-note)) (status)
+  (key 0 :type (satisfies (map null (constantly status)) (lambda (key) (<= 0 key #x7f))))
+  (velocity 0 :type (unsigned-byte 8)))
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (pushnew 'xseq-event-note *xseq-events*))
+(export '(xseq-event-note make-xseq-event-note xseq-event-note-p
+          xseq-event-note-key xseq-event-note-velocity xseq-event-note-duration))
+
+(define-xseq-event (wait #x80)
+  (value 0 :type xseq-vlq))
+
+(define-xseq-event (program-change #x81)
+  (value 0 :type xseq-vlq))
+
+(define-xseq-event (open-track #x88)
+  (track 0 :type (unsigned-byte 8))
+  (index 0 :type (unsigned-byte 24)))
+
+(define-xseq-event (jump #x89)
+  (index 0 :type (unsigned-byte 24)))
+
+(define-xseq-event (call #x8a)
+  (index 0 :type (unsigned-byte 24)))
+
+(define-xseq-event (random #xa0)
+  (%status 0 :type (unsigned-byte 8))
+  (sub-event nil :type (xseq-event-partial-union %status))
+  (min 0 :type (signed-byte 16))
+  (max 0 :type (signed-byte 16)))
+
+(define-xseq-event (variable #xa1)
+  (%status 0 :type (unsigned-byte 8))
+  (sub-event nil :type (xseq-event-partial-union %status))
+  (variable 0 :type (unsigned-byte 8)))
+
+(define-xseq-event (if #xa2)
+  (sub-event nil :type xseq-event-union))
+
+(define-xseq-event (time #xa3)
+  (sub-event nil :type xseq-event-union)
+  (value 0 :type (signed-byte 16)))
+
+(define-xseq-event (time-random #xa4)
+  (sub-event nil :type xseq-event-union)
+  (min 0 :type (signed-byte 16))
+  (max 0 :type (signed-byte 16)))
+
+(define-xseq-event (time-variable #xa5)
+  (sub-event nil :type xseq-event-union)
+  (variable 0 :type (unsigned-byte 8)))
+
+(define-xseq-event (timebase #xb0)
+  (value 0 :type (unsigned-byte 8)))
+
+(define-xseq-event (env-hold #xb1)
+  (value 0 :type (unsigned-byte 8)))
+
+(define-xseq-event (monophonic #xb2)
+  (value 0 :type (unsigned-byte 8)))
+
+(define-xseq-event (velocity-range #xb3)
+  (value 0 :type (unsigned-byte 8)))
+
+(define-xseq-event (biquad-type #xb4)
+  (value 0 :type (unsigned-byte 8)))
+
+(define-xseq-event (biquad-value #xb5)
+  (value 0 :type (unsigned-byte 8)))
+
+(define-xseq-event (bank-select #xb6)
+  (value 0 :type (unsigned-byte 8)))
+
+(define-xseq-event (mod-phase #xbd)
+  (value 0 :type (unsigned-byte 8)))
+
+(define-xseq-event (mod-curve #xbe)
+  (value 0 :type (unsigned-byte 8)))
+
+(define-xseq-event (front-bypass #xbf)
+  (value 0 :type (unsigned-byte 8)))
+
+(define-xseq-event (pan #xc0)
+  (value 0 :type (unsigned-byte 8)))
+
+(define-xseq-event (volume #xc1)
+  (value 0 :type (unsigned-byte 8)))
+
+(define-xseq-event (main-volume #xc2)
+  (value 0 :type (unsigned-byte 8)))
+
+(define-xseq-event (transpose #xc3)
+  (value 0 :type (signed-byte 8)))
+
+(define-xseq-event (pitch-bend #xc4)
+  (value 0 :type (signed-byte 8)))
+
+(define-xseq-event (bend-range #xc5)
+  (value 0 :type (unsigned-byte 8)))
+
+(define-xseq-event (priority #xc6)
+  (value 0 :type (unsigned-byte 8)))
+
+(define-xseq-event (note-wait #xc7)
+  (value 0 :type (unsigned-byte 8)))
+
+(define-xseq-event (tie #xc8)
+  (value 0 :type (unsigned-byte 8)))
+
+(define-xseq-event (portamento #xc9)
+  (value 0 :type (unsigned-byte 8)))
+
+(define-xseq-event (mod-depth #xca)
+  (value 0 :type (unsigned-byte 8)))
+
+(define-xseq-event (mod-speed #xcb)
+  (value 0 :type (unsigned-byte 8)))
+
+(define-xseq-event (mod-type #xcc)
+  (value 0 :type (unsigned-byte 8)))
+
+(define-xseq-event (mod-range #xcd)
+  (value 0 :type (unsigned-byte 8)))
+
+(define-xseq-event (portamento-switch #xce)
+  (value 0 :type (unsigned-byte 8)))
+
+(define-xseq-event (portamento-time #xcf)
+  (value 0 :type (unsigned-byte 8)))
+
+(define-xseq-event (attack #xd0)
+  (value 0 :type (unsigned-byte 8)))
+
+(define-xseq-event (decay #xd1)
+  (value 0 :type (unsigned-byte 8)))
+
+(define-xseq-event (sustain #xd2)
+  (value 0 :type (unsigned-byte 8)))
+
+(define-xseq-event (release #xd3)
+  (value 0 :type (unsigned-byte 8)))
+
+(define-xseq-event (loop-start #xd4)
+  (value 0 :type (unsigned-byte 8)))
+
+(define-xseq-event (volume2 #xd5)
+  (value 0 :type (unsigned-byte 8)))
+
+(define-xseq-event (print-variable #xd6)
+  (value 0 :type (unsigned-byte 8)))
+
+(define-xseq-event (surround-pan #xd7)
+  (value 0 :type (unsigned-byte 8)))
+
+(define-xseq-event (lpf-cutoff #xd8)
+  (value 0 :type (unsigned-byte 8)))
+
+(define-xseq-event (fx-send-a #xd9)
+  (value 0 :type (unsigned-byte 8)))
+
+(define-xseq-event (fx-send-b #xda)
+  (value 0 :type (unsigned-byte 8)))
+
+(define-xseq-event (main-send #xdb)
+  (value 0 :type (unsigned-byte 8)))
+
+(define-xseq-event (initial-pan #xdc)
+  (value 0 :type (unsigned-byte 8)))
+
+(define-xseq-event (mute #xdd)
+  (value 0 :type (unsigned-byte 8)))
+
+(define-xseq-event (fx-send-c #xde)
+  (value 0 :type (unsigned-byte 8)))
+
+(define-xseq-event (damper #xdf)
+  (value 0 :type (unsigned-byte 8)))
+
+(define-xseq-event (mod-delay #xe0)
+  (value 0 :type (signed-byte 16)))
+
+(define-xseq-event (tempo #xe1)
+  (value 0 :type (signed-byte 16)))
+
+(define-xseq-event (sweep-pitch #xe3)
+  (value 0 :type (signed-byte 16)))
+
+(define-xseq-event (mod-period #xe4)
+  (value 0 :type (signed-byte 16)))
+
+(define-xseq-event (envelope-reset #xfb))
+
+(define-xseq-event (loop-end #xfc))
+
+(define-xseq-event (return #xfd))
+
+(define-xseq-event (allocate-track #xfe)
+  (value 0 :type (unsigned-byte 16)))
+
+(define-xseq-event (finish #xff))
+
+(define-xseq-event (set-variable (#xf0 #x80))
+  (variable 0 :type (unsigned-byte 8))
+  (value 0 :type (signed-byte 16)))
+
+(define-xseq-event (add-variable (#xf0 #x81))
+  (variable 0 :type (unsigned-byte 8))
+  (value 0 :type (signed-byte 16)))
+
+(define-xseq-event (subtract-variable (#xf0 #x82))
+  (variable 0 :type (unsigned-byte 8))
+  (value 0 :type (signed-byte 16)))
+
+(define-xseq-event (multiply-variable (#xf0 #x83))
+  (variable 0 :type (unsigned-byte 8))
+  (value 0 :type (signed-byte 16)))
+
+(define-xseq-event (divide-variable (#xf0 #x84))
+  (variable 0 :type (unsigned-byte 8))
+  (value 0 :type (signed-byte 16)))
+
+(define-xseq-event (shift-variable (#xf0 #x85))
+  (variable 0 :type (unsigned-byte 8))
+  (value 0 :type (signed-byte 16)))
+
+(define-xseq-event (random-variable (#xf0 #x86))
+  (variable 0 :type (unsigned-byte 8))
+  (value 0 :type (signed-byte 16)))
+
+(define-xseq-event (and-variable (#xf0 #x87))
+  (variable 0 :type (unsigned-byte 8))
+  (value 0 :type (signed-byte 16)))
+
+(define-xseq-event (or-variable (#xf0 #x88))
+  (variable 0 :type (unsigned-byte 8))
+  (value 0 :type (signed-byte 16)))
+
+(define-xseq-event (xor-variable (#xf0 #x89))
+  (variable 0 :type (unsigned-byte 8))
+  (value 0 :type (signed-byte 16)))
+
+(define-xseq-event (not-variable (#xf0 #x8a))
+  (variable 0 :type (unsigned-byte 8))
+  (value 0 :type (signed-byte 16)))
+
+(define-xseq-event (modulo-variable (#xf0 #x8b))
+  (variable 0 :type (unsigned-byte 8))
+  (value 0 :type (signed-byte 16)))
+
+(define-xseq-event (compare-equal (#xf0 #x90))
+  (variable 0 :type (unsigned-byte 8))
+  (value 0 :type (signed-byte 16)))
+
+(define-xseq-event (compare-greater-equal (#xf0 #x91))
+  (variable 0 :type (unsigned-byte 8))
+  (value 0 :type (signed-byte 16)))
+
+(define-xseq-event (compare-greater (#xf0 #x92))
+  (variable 0 :type (unsigned-byte 8))
+  (value 0 :type (signed-byte 16)))
+
+(define-xseq-event (compare-less-equal (#xf0 #x93))
+  (variable 0 :type (unsigned-byte 8))
+  (value 0 :type (signed-byte 16)))
+
+(define-xseq-event (compare-less (#xf0 #x94))
+  (variable 0 :type (unsigned-byte 8))
+  (value 0 :type (signed-byte 16)))
+
+(define-xseq-event (compare-not-equal (#xf0 #x95))
+  (variable 0 :type (unsigned-byte 8))
+  (value 0 :type (signed-byte 16)))
+
+(define-xseq-event (mod2-curve (#xf0 #xa0))
+  (value 0 :type (unsigned-byte 8)))
+
+(define-xseq-event (mod2-phase (#xf0 #xa1))
+  (value 0 :type (unsigned-byte 8)))
+
+(define-xseq-event (mod2-depth (#xf0 #xa2))
+  (value 0 :type (unsigned-byte 8)))
+
+(define-xseq-event (mod2-speed (#xf0 #xa3))
+  (value 0 :type (unsigned-byte 8)))
+
+(define-xseq-event (mod2-type (#xf0 #xa4))
+  (value 0 :type (unsigned-byte 8)))
+
+(define-xseq-event (mod2-range (#xf0 #xa5))
+  (value 0 :type (unsigned-byte 8)))
+
+(define-xseq-event (mod3-curve (#xf0 #xa6))
+  (value 0 :type (unsigned-byte 8)))
+
+(define-xseq-event (mod3-phase (#xf0 #xa7))
+  (value 0 :type (unsigned-byte 8)))
+
+(define-xseq-event (mod3-depth (#xf0 #xa8))
+  (value 0 :type (unsigned-byte 8)))
+
+(define-xseq-event (mod3-speed (#xf0 #xa9))
+  (value 0 :type (unsigned-byte 8)))
+
+(define-xseq-event (mod3-type (#xf0 #xaa))
+  (value 0 :type (unsigned-byte 8)))
+
+(define-xseq-event (mod3-range (#xf0 #xab))
+  (value 0 :type (unsigned-byte 8)))
+
+(define-xseq-event (mod4-curve (#xf0 #xac))
+  (value 0 :type (unsigned-byte 8)))
+
+(define-xseq-event (mod4-phase (#xf0 #xad))
+  (value 0 :type (unsigned-byte 8)))
+
+(define-xseq-event (mod4-depth (#xf0 #xae))
+  (value 0 :type (unsigned-byte 8)))
+
+(define-xseq-event (mod4-speed (#xf0 #xaf))
+  (value 0 :type (unsigned-byte 8)))
+
+(define-xseq-event (mod4-type (#xf0 #xb0))
+  (value 0 :type (unsigned-byte 8)))
+
+(define-xseq-event (mod4-range (#xf0 #xb1))
+  (value 0 :type (unsigned-byte 8)))
+
+(define-xseq-event (user-call (#xf0 #xe0))
+  (value 0 :type (signed-byte 16)))
+
+(define-xseq-event (mod2-delay (#xf0 #xe1))
+  (value 0 :type (signed-byte 16)))
+
+(define-xseq-event (mod2-period (#xf0 #xe2))
+  (value 0 :type (signed-byte 16)))
+
+(define-xseq-event (mod3-delay (#xf0 #xe3))
+  (value 0 :type (signed-byte 16)))
+
+(define-xseq-event (mod3-period (#xf0 #xe4))
+  (value 0 :type (signed-byte 16)))
+
+(define-xseq-event (mod4-delay (#xf0 #xe5))
+  (value 0 :type (signed-byte 16)))
+
+(define-xseq-event (mod4-period (#xf0 #xe6))
+  (value 0 :type (signed-byte 16)))
+
+(defmacro define-xseq-event-unions ()
+  `(progn
+     (defbinstruct/me (xseq-event-union (:type xseq-event) (:constructor progn) (:conc-name nil)) ()
+       (values nil :type (or ,@(loop for type in *xseq-events* collect `(,type)))))
+     (defbinstruct/me (xseq-event-partial-union (:type xseq-event) (:constructor progn) (:conc-name nil)) (status)
+       (values nil :type (or ,@(loop for type in *xseq-events*
+                                    collect `(,(alexandria:symbolicate type '/partial) status)))))))
+(define-xseq-event-unions)
+
+;; These walkers operate on semantic events; binary positions stay local to
+;; the reader and are discarded after resolving references.
+(defun xseq-event-child (event)
+  (typecase event
+    (xseq-event-random (xseq-event-random-sub-event event))
+    (xseq-event-variable (xseq-event-variable-sub-event event))
+    (xseq-event-if (xseq-event-if-sub-event event))
+    (xseq-event-time (xseq-event-time-sub-event event))
+    (xseq-event-time-random (xseq-event-time-random-sub-event event))
+    (xseq-event-time-variable (xseq-event-time-variable-sub-event event))))
+
+
+(defun resolve-xseq-event (event indices &optional partial)
+  (flet ((index (offset)
+           (or (gethash offset indices) (fail-file "SEQ target ~D is not an event boundary" offset))))
+    (unless partial
+      (typecase event
+        (xseq-event-open-track (setf (xseq-event-open-track-index event) (index (xseq-event-open-track-index event))))
+        (xseq-event-jump (setf (xseq-event-jump-index event) (index (xseq-event-jump-index event))))
+        (xseq-event-call (setf (xseq-event-call-index event) (index (xseq-event-call-index event))))))
+    (let ((child (xseq-event-child event)))
+      (when child (resolve-xseq-event child indices (typep event '(or xseq-event-random xseq-event-variable))))))
+  event)
+
+(defun xseq-events-unpack (events positions labels)
+  (let* ((last (position-if (lambda (event) (typep event '(or xseq-event-finish xseq-event-return xseq-event-jump))) events :from-end t))
+         (indices (make-hash-table)))
+    (unless last (fail-file "SEQ has no terminating event"))
+    (loop for index from (1+ last) below (length events)
+          for event = (aref events index)
+          unless (and (typep event 'xseq-event-note)
+                      (zerop (xseq-event-note-key event))
+                      (zerop (xseq-event-note-velocity event))
+                      (zerop (xseq-event-note-duration event)))
+            do (fail-file "Non-padding data after final SEQ event"))
+    (let ((result (if (= (length events) (1+ last)) events (subseq events 0 (1+ last))))
+          (base (aref positions 0)))
+      (loop for index to last do (setf (gethash (- (aref positions index) base) indices) index))
+      (loop for event across result do (resolve-xseq-event event indices))
+      (loop for label across labels when label
+            do (setf (xseq-label-entry-index label)
+                     (or (gethash (xseq-label-entry-index label) indices) (fail-file "Invalid SEQ label"))))
+      result)))
+
+(defbinstruct/me (xseq-track-event (:type xseq-event) (:constructor progn) (:conc-name nil)) (end positions)
+  (%start 0 :type (satisfies position (lambda (position) (< position end))))
+  (values nil :type xseq-event-union)
+  (nil 0 :type (map (satisfies position (lambda (position) (<= position end)))
+                   (lambda (position) (declare (ignore position)) (vector-push-extend %start positions)))))
+
+(defbinstruct/me (xseq-track (:type (simple-array xseq-event (*))) (:constructor progn) (:conc-name nil)) (end labels)
+  (%positions #() :type (map null (lambda (ignored) (declare (ignore ignored))
+                                   (make-array 0 :element-type 'integer :adjustable t :fill-pointer 0))))
+  (%events #() :type (simple-array (xseq-track-event end %positions) (*)))
+  (%end 0 :type position)
+  (nil #.(make-array 0 :element-type '(unsigned-byte 8))
+       :type (simple-array (satisfies (unsigned-byte 8) #'zerop) ((- end %end))))
+  (values #.(make-array 0 :element-type 'xseq-event)
+          :type (map null (lambda (ignored) (declare (ignore ignored))
+                            (xseq-events-unpack %events %positions labels)))))
+
+(defbinstruct/me xseq-label-entry ()
+  (index 0 :type (map (satisfies reference
+                                 (lambda (reference) (reference-target reference 0 #x1f00)))
+                      #'reference-offset))
+  (length 0 :type (unsigned-byte 32))
+  (name #.(coerce "" 'simple-base-string) :type (simple-base-string length))
+  (nil 0 :type (satisfies (unsigned-byte 8))))
+
+(define-nintendo-ware-section (xseq-labels (:magic "LABL"))
+  ($labels-start 0 :type position)
+  (count 0 :type (unsigned-byte 32))
+  (entries #() :type (simple-array (reference-to #x5100 $labels-start xseq-label-entry) (count))))
+
+(define-nintendo-ware-section (xseq-data (:magic "DATA"))
+  ;; Unlike counted records, this event stream ends at the DATA boundary.
+  (%position 0 :type position)
+  (%size 0 :type nintendo-ware-section-tail-size)
+  (labels nil :type (peek xseq-labels (block-start %header #x5001)))
+  (%little nil :type (map null (lambda (ignored) (declare (ignore ignored))
+                                  (and (string= (header-magic %header) "FSEQ") (eq (header-endian %header) :little)))))
+  (%label-entries #() :type (map null (lambda (ignored) (declare (ignore ignored)) (xseq-labels-entries labels))))
+  (events #.(make-array 0 :element-type 'xseq-event)
+          :type (ecase %little
+                  ((t) (xseq-track/le (+ %position %size) %label-entries))
+                  ((nil) (xseq-track/be (+ %position %size) %label-entries)))))
+
+(define-nintendo-ware-file (xseq (:magic ("CSEQ" "FSEQ")))
+  (data nil :type (peek xseq-data (block-start header #x5000)))
+  (labels nil :type (map null (lambda (ignored) (declare (ignore ignored))
+                               (xseq-data-labels data)))))
+
+(defun xseq-events (sequence)
+  (xseq-data-events (xseq-data sequence)))
+
+(export '(xseq-event xseq-event-child xseq-events
+          xseq xseq-header xseq-data xseq-labels
+          xseq-data-events xseq-labels-entries xseq-label-entry xseq-label-entry-name xseq-label-entry-index))

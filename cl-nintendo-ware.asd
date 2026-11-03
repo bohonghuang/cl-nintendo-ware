@@ -11,14 +11,14 @@
                (:file "container")
                (:module "sound"
                 :serial t
-                :components ((:file "sequence")
-                             (:file "wave")
-                             (:file "wave-archive")
-                             (:file "bank")
-                             (:file "wave-sound-data")
-                             (:file "stream")
-                             (:file "archive")
-                             (:file "group")))
+                :components ((:file "xseq")
+                             (:file "xwav")
+                             (:file "xwar")
+                             (:file "xbnk")
+                             (:file "xwsd")
+                             (:file "xstm")
+                             (:file "xsar")
+                             (:file "xgrp")))
                (:file "file")))
 
 (asdf:defsystem #:cl-nintendo-ware/test

@@ -8,7 +8,7 @@
   (let* ((name (string-upcase (string type)))
          (symbol (find-symbol name :nintendo-ware)))
     (cond ((string= name "AUTO") :auto)
-          ((member symbol '(sound-sequence sound-wave wave-archive sound-bank wave-sound-data sound-stream sound-archive sound-group))
+          ((member symbol '(xseq xwav xwar xbnk xwsd xstm xsar xgrp))
            (intern name :keyword))
           ((and (= (length name) 5) (char= (char name 0) #\B))
            (magic-kind (subseq name 1)))
