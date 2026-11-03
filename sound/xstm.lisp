@@ -75,12 +75,16 @@
 (defbinstruct/me xstm-seek-row (encoding stride channels)
   (entries #() :type (simple-array (xstm-seek-entry encoding stride) (channels))))
 
+;; SEEK and REGN follow the same INFO reference without moving their cursor.
+(defbinstruct/me (xstm-referenced-stream-info (:type (or null xstm-stream-info)) (:constructor progn) (:conc-name nil)) (header)
+  (values nil :type (peek (reference-to #x4100 (+ (block-start header #x4000) 8)
+                                      (xstm-stream-info (header-version-major header)))
+                         (+ (block-start header #x4000) 8))))
+
 (define-nintendo-ware-section (xstm-seek (:magic "SEEK"))
   ;; SEEK row counts come from INFO; only its trailing padding needs the tail.
   (%size 0 :type nintendo-ware-section-tail-size)
-  (%information nil :type (peek (reference-to #x4100 (+ (block-start %header #x4000) 8)
-                                  (xstm-stream-info (header-version-major %header)))
-                                (+ (block-start %header #x4000) 8)))
+  (%information nil :type (xstm-referenced-stream-info %header))
   (%c-type-p nil :type (map null (lambda (ignored) (declare (ignore ignored)) (char= (char (header-magic %header) 0) #\C))))
   (%encoding 2 :type (map null (lambda (ignored) (declare (ignore ignored)) (xstm-stream-info-encoding %information))))
   (%stride 4 :type (map null (lambda (ignored) (declare (ignore ignored))
@@ -104,9 +108,7 @@
 
 (define-nintendo-ware-section (xstm-regions (:magic "REGN"))
   ($regions-start 0 :type position)
-  (%information nil :type (peek (reference-to #x4100 (+ (block-start %header #x4000) 8)
-                                  (xstm-stream-info (header-version-major %header)))
-                                (+ (block-start %header #x4000) 8)))
+  (%information nil :type (xstm-referenced-stream-info %header))
   (%count 0 :type (map null (lambda (ignored) (declare (ignore ignored)) (xstm-stream-info-region-count %information))))
   (%stride 0 :type (map null (lambda (ignored) (declare (ignore ignored))
                               (let ((stride (xstm-region-info-entry-size (xstm-stream-info-region-info %information))))

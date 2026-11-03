@@ -22,10 +22,10 @@ sbcl --non-interactive --eval '(ql:quickload :cl-nintendo-ware :silent t)' \
 
 ## 读取文件
 
-`read-file` 接受 pathname、文件名字符串、二进制流或字节向量。类型可用 `:auto`、规范结构名称或 C/F 格式名称，例如 `:xseq`、`:cseq`、`:bfseq`。
+`read-file` 仿照 cl-nitro，是按文件类型符号和输入类型分派的 generic function。公开入口为 `read-file` 以及 `xseq`、`xwav`、`xwar`、`xbnk`、`xwsd`、`xstm`、`xsar`、`xgrp` 文件符号；类型参数使用带包名的符号，例如 `'nintendo-ware:xseq`，不再接受 `:auto`、关键字或 C/F 格式名称。输入支持 pathname、文件名字符串、二进制流和 octet vector；pathname 打开为流，向量包装为内存输入流，各格式的流方法调用对应的内部 `read-x...` reader。
 
 ```lisp
-(let* ((file (nintendo-ware:read-file :auto #P"/path/to/music.bcseq"))
+(let* ((file (nintendo-ware:read-file 'nintendo-ware:xseq #P"/path/to/music.bcseq"))
        (events (nintendo-ware:xseq-events file)))
   (loop for event across events
         when (typep event 'nintendo-ware:xseq-event-note)
@@ -33,7 +33,7 @@ sbcl --non-interactive --eval '(ql:quickload :cl-nintendo-ware :silent t)' \
                         (nintendo-ware:xseq-event-note-duration event))))
 ```
 
-每个完整文件都从自己的 magic 和 BOM 选择 reader，包括内嵌文件。头中的文件大小、区块范围、引用类型、偏移和数组数量在读取目标前验证；生成的文件读取入口不需要 `limit` 或端序参数。流输入先规范化为字节向量，随后使用 binstruct 的原生向量读取和边界检查。
+每个完整文件都读取自己的 header，通过 magic 校验格式、通过 BOM 选择容器字节序，包括内嵌文件。生成的完整文件 reader 不需要 `limit` 或端序参数。解析直接使用 binstruct 的流后端，不再将整个流复制到字节向量；输入流需要支持二进制读取和 `file-position` 定位。解析失败通过 `read-file` 报告为 `invalid-file`。
 
 | 模块 | 结构 | 文件 magic |
 |---|---|---|

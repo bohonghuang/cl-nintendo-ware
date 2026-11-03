@@ -6,7 +6,7 @@
 
 ## Architecture & Data Flow
 
-- `read-file` normalizes pathnames, filename strings and binary streams to octet vectors. The generated `embedded-file` reader selects each concrete C/F schema from its own magic and BOM, including embedded files.
+- `read-file` follows cl-nitro: dispatch on exported file symbols (`xseq`, `xwav`, `xwar`, `xbnk`, `xwsd`, `xstm`, `xsar`, `xgrp`) and input types. Pathnames open binary streams; filename strings become pathnames; octet vectors become in-memory streams. Each format's stream method invokes its generated `read-x...` reader. Complete and embedded files read their own magic and BOM; input streams must support seeking. Do not restore keyword/magic aliases or `:auto` dispatch.
 - `define-nintendo-ware-file` and `define-nintendo-ware-section` follow Nitro's declaration ergonomics: name/options immediately followed by fields, with no lambda list. Concrete file, section and section-body readers take no arguments. Use native inclusion and section/body composition with forwarded accessors. Modern files locate sections through sized references; do not assume contiguous section order.
 - `defbinstruct/me` defines a default LE reader, a deferred `/le` alias and a `/be` reader sharing the original Lisp type. The BE declaration is macroexpanded under this library's own `*endian*`; reader type expansion propagates endian into nested structures and arrays.
 - Return binstruct structures directly. No post-parse result models, resource views, hand-built object graphs or manual binary decoding.
@@ -29,7 +29,7 @@ sbcl --non-interactive --eval '(ql:quickload :cl-nintendo-ware :silent t)' \
   --eval '(asdf:test-system :cl-nintendo-ware)'
 ```
 
-No configured lint command, application executable or playback command. Smoke the actual library, e.g. `(nintendo-ware:read-file :auto #P"/path/to/music.bcseq")`.
+No configured lint command, application executable or playback command. Smoke the actual library, e.g. `(nintendo-ware:read-file 'nintendo-ware:xseq #P"/path/to/music.bcseq")`.
 
 ## Code Conventions & Common Patterns
 

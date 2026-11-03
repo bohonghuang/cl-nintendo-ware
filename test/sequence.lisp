@@ -316,7 +316,7 @@
 
 (defun run-tests ()
   (let* ((bytes (sequence-fixture #(60 100 #x81 0 #xe1 1 #x2c #xa0 #xc3 #xff #xf4 0 12 #xf0 #x80 3 #xff #xfe #xff)))
-         (sequence (nintendo-ware:read-file :auto bytes))
+         (sequence (nintendo-ware:read-file 'nintendo-ware:xseq bytes))
          (events (nintendo-ware:xseq-events sequence))
          (note (aref events 0)) (tempo (aref events 1))
          (random (aref events 2)) (extended (aref events 3))
@@ -336,14 +336,14 @@
     (assert (= 3 (nintendo-ware:xseq-event-set-variable-variable extended)))
     (assert (= -2 (nintendo-ware:xseq-event-set-variable-value extended)))
     (assert (typep (aref events 4) 'nintendo-ware:xseq-event-finish))
-    (assert (equalp sequence (nintendo-ware:read-file :bcseq (flexi-streams:make-in-memory-input-stream bytes))))
-    (rejects nintendo-ware:invalid-file (nintendo-ware:read-file :xwav bytes))
-    (rejects nintendo-ware:invalid-file (nintendo-ware:read-file :xseq (sequence-fixture #(#xff) :label-offset 24))))
+    (assert (equalp sequence (nintendo-ware:read-file 'nintendo-ware:xseq (flexi-streams:make-in-memory-input-stream bytes))))
+    (rejects nintendo-ware:invalid-file (nintendo-ware:read-file 'nintendo-ware:xwav bytes))
+    (rejects nintendo-ware:invalid-file (nintendo-ware:read-file 'nintendo-ware:xseq (sequence-fixture #(#xff) :label-offset 24))))
   (dolist (case '((#(0) 0) (#(#x7f) 127) (#(#x81 0) 128) (#(#xff #x7f) 16383)
                   (#(#x81 #x80 0) 16384) (#(#xff #xff #x7f) 2097151) (#(#xff #xff #xff #x7f) 268435455)))
     (destructuring-bind (encoded expected) case
       (let ((events (nintendo-ware:xseq-events
-                     (nintendo-ware:read-file :auto (sequence-fixture (concatenate 'vector #(#x80) encoded #(#xff)))))))
+                     (nintendo-ware:read-file 'nintendo-ware:xseq (sequence-fixture (concatenate 'vector #(#x80) encoded #(#xff)))))))
         (assert (= expected (nintendo-ware:xseq-event-wait-value (aref events 0))))
         (assert (typep (aref events 1) 'nintendo-ware:xseq-event-finish)))))
   (dolist (case '((#(#xa0 60 100 #xff #xf4 0 12 #xff) nintendo-ware:xseq-event-random nintendo-ware:xseq-event-note)
@@ -353,13 +353,13 @@
                   (#(#xa4 #xe1 0 120 0 1 0 2 #xff) nintendo-ware:xseq-event-time-random nintendo-ware:xseq-event-tempo)
                   (#(#xa5 #xc0 64 4 #xff) nintendo-ware:xseq-event-time-variable nintendo-ware:xseq-event-pan)))
     (destructuring-bind (body type child-type) case
-      (let* ((events (nintendo-ware:xseq-events (nintendo-ware:read-file :auto (sequence-fixture body))))
+      (let* ((events (nintendo-ware:xseq-events (nintendo-ware:read-file 'nintendo-ware:xseq (sequence-fixture body))))
              (event (aref events 0)))
         (assert (typep event type))
         (assert (typep (nintendo-ware:xseq-event-child event) child-type))
         (assert (typep (aref events 1) 'nintendo-ware:xseq-event-finish)))))
   ;; Byte targets 11 and 10 become event indices 3 and 2, including nested control flow.
-  (let* ((sequence (nintendo-ware:read-file :auto
+  (let* ((sequence (nintendo-ware:read-file 'nintendo-ware:xseq
                      (sequence-fixture #(136 2 0 0 11 162 138 0 0 11 255 137 0 0 10) :label-offset 11)))
          (events (nintendo-ware:xseq-events sequence))
          (label (aref (nintendo-ware:xseq-labels-entries (nintendo-ware:xseq-labels sequence)) 0)))
@@ -368,9 +368,9 @@
     (assert (= 3 (nintendo-ware:xseq-event-call-index (nintendo-ware:xseq-event-if-sub-event (aref events 1)))))
     (assert (= 2 (nintendo-ware:xseq-event-jump-index (aref events 3)))))
   (let ((events (nintendo-ware:xseq-events
-                  (nintendo-ware:read-file :auto (sequence-fixture #(137 0 0 0))))))
+                  (nintendo-ware:read-file 'nintendo-ware:xseq (sequence-fixture #(137 0 0 0))))))
     (assert (= 0 (nintendo-ware:xseq-event-jump-index (aref events 0)))))
   (dolist (body '(#(137 0 0 1) #(60 100 129) #(128 128 128 128 128) #(130)))
     (rejects nintendo-ware:invalid-file
-      (nintendo-ware:read-file :auto (sequence-fixture body :padded nil))))
+      (nintendo-ware:read-file 'nintendo-ware:xseq (sequence-fixture body :padded nil))))
   (format t "Typed SEQ events, embedded partials and indexed control flow passed.~%"))

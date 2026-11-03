@@ -32,7 +32,7 @@
                (payload (if little
                             #(162 225 44 1 160 60 100 244 255 12 0 240 128 3 254 255 240 172 5 255)
                             #(162 225 1 44 160 60 100 255 244 0 12 240 128 3 255 254 240 172 5 255)))
-               (sequence (nintendo-ware:read-file :auto (sequence-fixture payload)))
+               (sequence (nintendo-ware:read-file 'nintendo-ware:xseq (sequence-fixture payload)))
                (header (nintendo-ware:xseq-header sequence))
                (events (nintendo-ware:xseq-events sequence))
                (tempo (nintendo-ware:xseq-event-if-sub-event (aref events 0)))
@@ -47,7 +47,7 @@
           (let* ((body (if little
                            #(136 2 11 0 0 162 138 11 0 0 255 137 10 0 0)
                            #(136 2 0 0 11 162 138 0 0 11 255 137 0 0 10)))
-                 (flow (nintendo-ware:read-file :auto (sequence-fixture body :label-offset 11)))
+                 (flow (nintendo-ware:read-file 'nintendo-ware:xseq (sequence-fixture body :label-offset 11)))
                  (events (nintendo-ware:xseq-events flow)))
             (assert (= 3 (nintendo-ware:xseq-event-open-track-index (aref events 0))))
             (assert (= 3 (nintendo-ware:xseq-event-call-index
@@ -68,7 +68,7 @@
                                       (make-sized-reference-table :count 1 :entries
                                        (vector (make-sized-reference :type #x1f00 :offset 0 :size (length wave))))))
                               (list #x6801 "FILE" wave)))))
-           (parsed (nintendo-ware:read-file :auto archive))
+           (parsed (nintendo-ware:read-file 'nintendo-ware:xwar archive))
            (entry (aref (nintendo-ware:xwar-info-entries (nintendo-ware:xwar-info parsed)) 0))
            (embedded (nintendo-ware:xwar-entry-content entry))
            (channel (aref (nintendo-ware:xwav-info-channels (nintendo-ware:xwav-info embedded)) 0))
