@@ -26,46 +26,47 @@
 (defbinstruct/me sequence-event ())
 (deftype sequence-event-union () 'sequence-event)
 (deftype sequence-event-partial-union (&optional status) (declare (ignore status)) 'sequence-event)
-(deftype sequence-extended-event-union () 'sequence-event)
-(deftype sequence-extended-event-partial-union (&optional status) (declare (ignore status)) 'sequence-event)
 (%define-endian-reader sequence-event-union)
 (%define-endian-reader sequence-event-partial-union)
-(%define-endian-reader sequence-extended-event-union)
-(%define-endian-reader sequence-extended-event-partial-union)
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  (defvar *sequence-events* nil)
-  (defvar *sequence-extended-events* nil))
+  (defparameter *sequence-events* nil))
 
-(defmacro define-sequence-event ((name status &optional extended) &body fields)
+(defmacro define-sequence-event ((name event-bytes) &body fields)
   (let* ((class (alexandria:symbolicate 'sequence-event- name))
          (partial (alexandria:symbolicate class '/partial))
-         (registry (if extended '*sequence-extended-events* '*sequence-events*)))
-    (destructuring-bind (start &optional (end start)) (alexandria:ensure-list status)
-      (alexandria:with-gensyms (arg byte)
-        `(progn
-           (defbinstruct/me (,class (:include sequence-event)) ()
-             (,(when (/= start end) 'key) ,start
-              :type (satisfies (unsigned-byte 8)
-                              ,(if (= start end) `(alexandria:curry #'eql ,start)
-                                   `(lambda (,byte) (<= ,start ,byte ,end)))))
-             ,@fields)
-           (defbinstruct/me (,partial (:type ,class)) (,arg)
-             (,(when (/= start end) 'key) ,start :type (map null (constantly ,arg)))
-             ,@(if (and fields (subtypep (binstruct::lisp-type (getf (cddr (car (last fields))) :type)) 'sequence-event))
-                   fields (butlast fields)))
-           (eval-when (:compile-toplevel :load-toplevel :execute)
-             (loop for code from ,start to ,end do (setf (alexandria:assoc-value ,registry code) ',class)))
-           (export '(,class ,(alexandria:symbolicate 'make- class)
-                     ,(alexandria:symbolicate class '-p)
-                     ,@(loop for field in fields unless (or (null (car field))
-                                                           (char= (char (symbol-name (car field)) 0) #\%))
-                             collect (alexandria:symbolicate class '- (car field)))
-                     ,@(when (/= start end) (list (alexandria:symbolicate class '-key))))))))))
+         (bytes (alexandria:ensure-list event-bytes))
+         (tags (loop for byte in bytes collect
+                 `(nil ,byte :type (satisfies (unsigned-byte 8) (alexandria:curry #'eql ,byte))))))
+    (alexandria:with-gensyms (status)
+      `(progn
+         (defbinstruct/me (,class (:include sequence-event)) () ,@tags ,@fields)
+         (defbinstruct/me (,partial (:type ,class)) (,status)
+           (nil ,(first bytes) :type (satisfies (map null (constantly ,status))
+                                              (alexandria:curry #'eql ,(first bytes))))
+           ,@(rest tags)
+           ,@(if (and fields (subtypep (binstruct::lisp-type (getf (cddr (car (last fields))) :type)) 'sequence-event))
+                 fields (butlast fields)))
+         (eval-when (:compile-toplevel :load-toplevel :execute)
+           (pushnew ',class *sequence-events*))
+         (export '(,class ,(alexandria:symbolicate 'make- class)
+                   ,(alexandria:symbolicate class '-p)
+                   ,@(loop for field in fields unless (or (null (car field))
+                                                         (char= (char (symbol-name (car field)) 0) #\%))
+                           collect (alexandria:symbolicate class '- (car field)))))))))
 
-(define-sequence-event (note (#x00 #x7f))
+;; A note's leading byte is its pitch, not a fixed event tag.
+(defbinstruct/me (sequence-event-note (:include sequence-event)) ()
+  (key 0 :type (satisfies (unsigned-byte 8) (lambda (key) (<= key #x7f))))
   (velocity 0 :type (unsigned-byte 8))
   (duration 0 :type sequence-vlq))
+(defbinstruct/me (sequence-event-note/partial (:type sequence-event-note)) (status)
+  (key 0 :type (satisfies (map null (constantly status)) (lambda (key) (<= 0 key #x7f))))
+  (velocity 0 :type (unsigned-byte 8)))
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (pushnew 'sequence-event-note *sequence-events*))
+(export '(sequence-event-note make-sequence-event-note sequence-event-note-p
+          sequence-event-note-key sequence-event-note-velocity sequence-event-note-duration))
 
 (define-sequence-event (wait #x80)
   (value 0 :type sequence-vlq))
@@ -259,180 +260,160 @@
 
 (define-sequence-event (finish #xff))
 
-(define-sequence-event (set-variable #x80 t)
+(define-sequence-event (set-variable (#xf0 #x80))
   (variable 0 :type (unsigned-byte 8))
   (value 0 :type (signed-byte 16)))
 
-(define-sequence-event (add-variable #x81 t)
+(define-sequence-event (add-variable (#xf0 #x81))
   (variable 0 :type (unsigned-byte 8))
   (value 0 :type (signed-byte 16)))
 
-(define-sequence-event (subtract-variable #x82 t)
+(define-sequence-event (subtract-variable (#xf0 #x82))
   (variable 0 :type (unsigned-byte 8))
   (value 0 :type (signed-byte 16)))
 
-(define-sequence-event (multiply-variable #x83 t)
+(define-sequence-event (multiply-variable (#xf0 #x83))
   (variable 0 :type (unsigned-byte 8))
   (value 0 :type (signed-byte 16)))
 
-(define-sequence-event (divide-variable #x84 t)
+(define-sequence-event (divide-variable (#xf0 #x84))
   (variable 0 :type (unsigned-byte 8))
   (value 0 :type (signed-byte 16)))
 
-(define-sequence-event (shift-variable #x85 t)
+(define-sequence-event (shift-variable (#xf0 #x85))
   (variable 0 :type (unsigned-byte 8))
   (value 0 :type (signed-byte 16)))
 
-(define-sequence-event (random-variable #x86 t)
+(define-sequence-event (random-variable (#xf0 #x86))
   (variable 0 :type (unsigned-byte 8))
   (value 0 :type (signed-byte 16)))
 
-(define-sequence-event (and-variable #x87 t)
+(define-sequence-event (and-variable (#xf0 #x87))
   (variable 0 :type (unsigned-byte 8))
   (value 0 :type (signed-byte 16)))
 
-(define-sequence-event (or-variable #x88 t)
+(define-sequence-event (or-variable (#xf0 #x88))
   (variable 0 :type (unsigned-byte 8))
   (value 0 :type (signed-byte 16)))
 
-(define-sequence-event (xor-variable #x89 t)
+(define-sequence-event (xor-variable (#xf0 #x89))
   (variable 0 :type (unsigned-byte 8))
   (value 0 :type (signed-byte 16)))
 
-(define-sequence-event (not-variable #x8a t)
+(define-sequence-event (not-variable (#xf0 #x8a))
   (variable 0 :type (unsigned-byte 8))
   (value 0 :type (signed-byte 16)))
 
-(define-sequence-event (modulo-variable #x8b t)
+(define-sequence-event (modulo-variable (#xf0 #x8b))
   (variable 0 :type (unsigned-byte 8))
   (value 0 :type (signed-byte 16)))
 
-(define-sequence-event (compare-equal #x90 t)
+(define-sequence-event (compare-equal (#xf0 #x90))
   (variable 0 :type (unsigned-byte 8))
   (value 0 :type (signed-byte 16)))
 
-(define-sequence-event (compare-greater-equal #x91 t)
+(define-sequence-event (compare-greater-equal (#xf0 #x91))
   (variable 0 :type (unsigned-byte 8))
   (value 0 :type (signed-byte 16)))
 
-(define-sequence-event (compare-greater #x92 t)
+(define-sequence-event (compare-greater (#xf0 #x92))
   (variable 0 :type (unsigned-byte 8))
   (value 0 :type (signed-byte 16)))
 
-(define-sequence-event (compare-less-equal #x93 t)
+(define-sequence-event (compare-less-equal (#xf0 #x93))
   (variable 0 :type (unsigned-byte 8))
   (value 0 :type (signed-byte 16)))
 
-(define-sequence-event (compare-less #x94 t)
+(define-sequence-event (compare-less (#xf0 #x94))
   (variable 0 :type (unsigned-byte 8))
   (value 0 :type (signed-byte 16)))
 
-(define-sequence-event (compare-not-equal #x95 t)
+(define-sequence-event (compare-not-equal (#xf0 #x95))
   (variable 0 :type (unsigned-byte 8))
   (value 0 :type (signed-byte 16)))
 
-(define-sequence-event (mod2-curve #xa0 t)
+(define-sequence-event (mod2-curve (#xf0 #xa0))
   (value 0 :type (unsigned-byte 8)))
 
-(define-sequence-event (mod2-phase #xa1 t)
+(define-sequence-event (mod2-phase (#xf0 #xa1))
   (value 0 :type (unsigned-byte 8)))
 
-(define-sequence-event (mod2-depth #xa2 t)
+(define-sequence-event (mod2-depth (#xf0 #xa2))
   (value 0 :type (unsigned-byte 8)))
 
-(define-sequence-event (mod2-speed #xa3 t)
+(define-sequence-event (mod2-speed (#xf0 #xa3))
   (value 0 :type (unsigned-byte 8)))
 
-(define-sequence-event (mod2-type #xa4 t)
+(define-sequence-event (mod2-type (#xf0 #xa4))
   (value 0 :type (unsigned-byte 8)))
 
-(define-sequence-event (mod2-range #xa5 t)
+(define-sequence-event (mod2-range (#xf0 #xa5))
   (value 0 :type (unsigned-byte 8)))
 
-(define-sequence-event (mod3-curve #xa6 t)
+(define-sequence-event (mod3-curve (#xf0 #xa6))
   (value 0 :type (unsigned-byte 8)))
 
-(define-sequence-event (mod3-phase #xa7 t)
+(define-sequence-event (mod3-phase (#xf0 #xa7))
   (value 0 :type (unsigned-byte 8)))
 
-(define-sequence-event (mod3-depth #xa8 t)
+(define-sequence-event (mod3-depth (#xf0 #xa8))
   (value 0 :type (unsigned-byte 8)))
 
-(define-sequence-event (mod3-speed #xa9 t)
+(define-sequence-event (mod3-speed (#xf0 #xa9))
   (value 0 :type (unsigned-byte 8)))
 
-(define-sequence-event (mod3-type #xaa t)
+(define-sequence-event (mod3-type (#xf0 #xaa))
   (value 0 :type (unsigned-byte 8)))
 
-(define-sequence-event (mod3-range #xab t)
+(define-sequence-event (mod3-range (#xf0 #xab))
   (value 0 :type (unsigned-byte 8)))
 
-(define-sequence-event (mod4-curve #xac t)
+(define-sequence-event (mod4-curve (#xf0 #xac))
   (value 0 :type (unsigned-byte 8)))
 
-(define-sequence-event (mod4-phase #xad t)
+(define-sequence-event (mod4-phase (#xf0 #xad))
   (value 0 :type (unsigned-byte 8)))
 
-(define-sequence-event (mod4-depth #xae t)
+(define-sequence-event (mod4-depth (#xf0 #xae))
   (value 0 :type (unsigned-byte 8)))
 
-(define-sequence-event (mod4-speed #xaf t)
+(define-sequence-event (mod4-speed (#xf0 #xaf))
   (value 0 :type (unsigned-byte 8)))
 
-(define-sequence-event (mod4-type #xb0 t)
+(define-sequence-event (mod4-type (#xf0 #xb0))
   (value 0 :type (unsigned-byte 8)))
 
-(define-sequence-event (mod4-range #xb1 t)
+(define-sequence-event (mod4-range (#xf0 #xb1))
   (value 0 :type (unsigned-byte 8)))
 
-(define-sequence-event (user-call #xe0 t)
+(define-sequence-event (user-call (#xf0 #xe0))
   (value 0 :type (signed-byte 16)))
 
-(define-sequence-event (mod2-delay #xe1 t)
+(define-sequence-event (mod2-delay (#xf0 #xe1))
   (value 0 :type (signed-byte 16)))
 
-(define-sequence-event (mod2-period #xe2 t)
+(define-sequence-event (mod2-period (#xf0 #xe2))
   (value 0 :type (signed-byte 16)))
 
-(define-sequence-event (mod3-delay #xe3 t)
+(define-sequence-event (mod3-delay (#xf0 #xe3))
   (value 0 :type (signed-byte 16)))
 
-(define-sequence-event (mod3-period #xe4 t)
+(define-sequence-event (mod3-period (#xf0 #xe4))
   (value 0 :type (signed-byte 16)))
 
-(define-sequence-event (mod4-delay #xe5 t)
+(define-sequence-event (mod4-delay (#xf0 #xe5))
   (value 0 :type (signed-byte 16)))
 
-(define-sequence-event (mod4-period #xe6 t)
+(define-sequence-event (mod4-period (#xf0 #xe6))
   (value 0 :type (signed-byte 16)))
-
-;; F0 is a wire envelope, not a separate consumer-visible event.
-(defbinstruct/me (sequence-event-extended (:type sequence-event) (:constructor progn) (:conc-name nil)) ()
-  (nil #xf0 :type (satisfies (unsigned-byte 8) (alexandria:curry #'eql #xf0)))
-  (values nil :type sequence-extended-event-union))
-(defbinstruct/me (sequence-event-extended/partial (:type sequence-event) (:constructor progn) (:conc-name nil)) (status)
-  (%status 0 :type (unsigned-byte 8))
-  (values nil :type (sequence-extended-event-partial-union %status)))
 
 (defmacro define-sequence-event-unions ()
   `(progn
      (defbinstruct/me (sequence-event-union (:type sequence-event) (:constructor progn) (:conc-name nil)) ()
-       (values nil :type (or ,@(mapcar (lambda (type) (list type))
-                                      (delete-duplicates (mapcar #'cdr *sequence-events*)))
-                             (sequence-event-extended))))
-     (defbinstruct/me (sequence-extended-event-union (:type sequence-event) (:constructor progn) (:conc-name nil)) ()
-       (values nil :type (or ,@(mapcar (lambda (type) (list type))
-                                      (delete-duplicates (mapcar #'cdr *sequence-extended-events*))))))
-     ,@(loop for (name registry) in '((sequence-event-partial-union *sequence-events*)
-                                      (sequence-extended-event-partial-union *sequence-extended-events*))
-             collect `(defbinstruct/me (,name (:type sequence-event) (:constructor progn) (:conc-name nil)) (status)
-                        (values nil :type
-                                (ecase ,(if (eq name 'sequence-event-partial-union) '(max status #x7f) 'status)
-                                  ,@(loop for (code . type) in (symbol-value registry)
-                                          unless (< code #x7f)
-                                          collect `((,code) (,(alexandria:symbolicate type '/partial) status)))
-                                  ,@(when (eq name 'sequence-event-partial-union)
-                                      '(((#xf0) (sequence-event-extended/partial status))))))))))
+       (values nil :type (or ,@(loop for type in *sequence-events* collect `(,type)))))
+     (defbinstruct/me (sequence-event-partial-union (:type sequence-event) (:constructor progn) (:conc-name nil)) (status)
+       (values nil :type (or ,@(loop for type in *sequence-events*
+                                    collect `(,(alexandria:symbolicate type '/partial) status)))))))
 (define-sequence-event-unions)
 
 ;; These walkers operate on semantic events; binary positions stay local to
