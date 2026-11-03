@@ -31,22 +31,19 @@
 
 (defbinstruct/me sound-wave-channel (codec sample-count header)
   (%start 0 :type position)
-  (%upper 0 :type (map null (lambda (ignored) (declare (ignore ignored)) (block-end header #x7000))))
   (%data-start 0 :type (map null (lambda (ignored) (declare (ignore ignored)) (+ 8 (block-start header #x7001)))))
-  (%data-end 0 :type (map null (lambda (ignored) (declare (ignore ignored)) (block-end header #x7001))))
   (samples-reference (make-reference) :type reference)
   (codec-reference (make-reference) :type reference)
   (reserved 0 :type (unsigned-byte 32))
   (codec-info nil :type (ecase codec
                           ((0 1) null)
                           (2 (peek dsp-adpcm-info
-                                   (reference-target codec-reference %start 0 %upper #x0300 46)))
+                                   (reference-target codec-reference %start #x0300)))
                           (3 (peek ima-adpcm-info
-                                   (reference-target codec-reference %start 0 %upper #x0301 8)))))
+                                   (reference-target codec-reference %start #x0301)))))
   (encoded-data #.(make-array 0 :element-type '(unsigned-byte 8))
                 :type (peek (simple-array (unsigned-byte 8) ((sound-wave-encoded-size codec sample-count)))
-                            (reference-target samples-reference %data-start %data-start %data-end
-                                              #x1f00 (sound-wave-encoded-size codec sample-count)))))
+                            (reference-target samples-reference %data-start #x1f00))))
 
 (define-nintendo-ware-section (sound-wave-info (:magic "INFO"))
   (codec 0 :type (satisfies (unsigned-byte 8) (lambda (codec) (<= codec 3))))
@@ -57,17 +54,17 @@
   (loop-end 0 :type (unsigned-byte 32))
   (reserved 0 :type (unsigned-byte 32))
   ($channels-start 0 :type position)
-  (channel-count 0 :type (satisfies (unsigned-byte 32) (lambda (count) (and (plusp count) (<= (+ $channels-start 4 (* 8 count)) %upper)))))
+  (channel-count 0 :type (satisfies (unsigned-byte 32) (lambda (count) (plusp count))))
   (channels #() :type (simple-array
-                       (reference-to #x7100 $channels-start (bounded %upper 20 (sound-wave-channel codec loop-end %header))) (channel-count))))
+                       (reference-to #x7100 $channels-start (sound-wave-channel codec loop-end %header)) (channel-count))))
 
 (define-nintendo-ware-file (sound-wave (:magic ("CWAV" "FWAV")))
   (info nil :type (peek sound-wave-info (block-start header #x7000)))
   (data nil :type (peek (raw-block "DATA" (sized-reference-size (block-reference header #x7001)))
                         (block-start header #x7001))))
 
-(defbinstruct (bounded-wave (:type sound-wave) (:constructor progn) (:conc-name nil)
-                            (:include (file-span upper))) (upper)
+(defbinstruct (sized-wave (:type sound-wave) (:constructor progn) (:conc-name nil)
+                          (:include (file-span size))) (size)
   (values nil :type (ecase %endian (:little sound-wave/le) (:big sound-wave/be))))
 
 (export '(sound-wave sound-wave-header sound-wave-info sound-wave-data sound-wave-info-codec sound-wave-info-loop sound-wave-info-sample-rate

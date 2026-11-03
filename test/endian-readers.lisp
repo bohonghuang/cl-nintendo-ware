@@ -1,5 +1,19 @@
 (in-package #:cl-nintendo-ware.test)
 
+;; A complete synthetic file tests the tail type after consuming a field,
+;; rather than only at the beginning of a production section body.
+(nintendo-ware:define-nintendo-ware-section (tail-probe-info (:magic "INFO"))
+  (value 0 :type (unsigned-byte 32))
+  (%size 0 :type nintendo-ware:nintendo-ware-section-tail-size)
+  (tail #.(make-array 0 :element-type '(unsigned-byte 8))
+        :type (simple-array (unsigned-byte 8) (%size))))
+
+(nintendo-ware:define-nintendo-ware-file (tail-probe (:magic ("CTST" "FTST")))
+  (info nil :type (peek tail-probe-info (nintendo-ware::block-start nintendo-ware::header #x1000))))
+
+(defbinio tail-probe (simple-array (unsigned-byte 8) (*)))
+(defbinio tail-probe/be (simple-array (unsigned-byte 8) (*)))
+
 (defun run-endian-tests ()
   ;; Consumers see the same concrete classes in either byte order.
   (dolist (family '(:c :f))
@@ -7,6 +21,14 @@
       (let ((*fixture-family* family) (*fixture-endian* endian))
         (run-format-tests)
         (run-archive-tests)
+        (let* ((tail #(20 19 18 17 16 15 14 13 12 11 10 9 8 7 6 5 4 3 2 1))
+               (payload (octets-join (if (eq endian :little) #(4 3 2 1) #(1 2 3 4)) tail))
+               (file (funcall (if (eq endian :little) #'read-tail-probe #'read-tail-probe/be)
+                              (coerce (container-fixture "CTST" (list (list #x1000 "INFO" payload)))
+                                      '(simple-array (unsigned-byte 8) (*)))))
+               (info (tail-probe-info file)))
+          (assert (= #x01020304 (tail-probe-info-value info)))
+          (assert (equalp tail (tail-probe-info-tail info))))
         (let* ((little (and (eq family :f) (eq endian :little)))
                (payload (if little
                             #(162 225 44 1 160 60 100 244 255 12 0 240 128 3 254 255 240 172 5 255)
@@ -57,4 +79,4 @@
     (rejects nintendo-ware:invalid-file
       (nintendo-ware:read-file :auto (sound-group-fixture sequence :declared-size (1- (length sequence))))))
   (assert (not (boundp 'nintendo-ware:*endian*)))
-  (format t "Shared-type ME, bounded pointers, C/F containers, event endian and mixed embedded files passed.~%"))
+  (format t "Shared-type ME, sized embedded files, C/F containers, event endian and mixed embedded files passed.~%"))

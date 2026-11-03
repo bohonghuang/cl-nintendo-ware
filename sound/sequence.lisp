@@ -477,31 +477,31 @@
           :type (map null (lambda (ignored) (declare (ignore ignored))
                             (sequence-events-unpack %events %positions labels)))))
 
-(defbinstruct/me label-entry (data-size upper)
-  (%start 0 :type position)
+(defbinstruct/me label-entry ()
   (index 0 :type (map (satisfies reference
-                                 (lambda (reference) (reference-target reference 0 0 data-size #x1f00)))
+                                 (lambda (reference) (reference-target reference 0 #x1f00)))
                       #'reference-offset))
-  (length 0 :type (satisfies (unsigned-byte 32) (lambda (length) (<= (+ %start 13 length) upper))))
+  (length 0 :type (unsigned-byte 32))
   (name #.(coerce "" 'simple-base-string) :type (simple-base-string length))
   (nil 0 :type (satisfies (unsigned-byte 8))))
 
 (define-nintendo-ware-section (sound-sequence-labels (:magic "LABL"))
-  (%data-size 0 :type (map null (lambda (ignored) (declare (ignore ignored))
-                                     (- (block-end %header #x5000) (block-start %header #x5000) 8))))
   ($labels-start 0 :type position)
-  (count 0 :type (satisfies (unsigned-byte 32) (lambda (count) (<= (+ $labels-start 4 (* 8 count)) %upper))))
-  (entries #() :type (simple-array (reference-to #x5100 $labels-start (bounded %upper 13 (label-entry %data-size %upper))) (count))))
+  (count 0 :type (unsigned-byte 32))
+  (entries #() :type (simple-array (reference-to #x5100 $labels-start label-entry) (count))))
 
 (define-nintendo-ware-section (sound-sequence-data (:magic "DATA"))
+  ;; Unlike counted records, this event stream ends at the DATA boundary.
+  (%position 0 :type position)
+  (%size 0 :type nintendo-ware-section-tail-size)
   (labels nil :type (peek sound-sequence-labels (block-start %header #x5001)))
   (%little nil :type (map null (lambda (ignored) (declare (ignore ignored))
                                   (and (string= (header-magic %header) "FSEQ") (eq (header-endian %header) :little)))))
   (%label-entries #() :type (map null (lambda (ignored) (declare (ignore ignored)) (sound-sequence-labels-entries labels))))
   (events #.(make-array 0 :element-type 'sequence-event)
           :type (ecase %little
-                  ((t) (sequence-track/le %upper %label-entries))
-                  ((nil) (sequence-track/be %upper %label-entries)))))
+                  ((t) (sequence-track/le (+ %position %size) %label-entries))
+                  ((nil) (sequence-track/be (+ %position %size) %label-entries)))))
 
 (define-nintendo-ware-file (sound-sequence (:magic ("CSEQ" "FSEQ")))
   (data nil :type (peek sound-sequence-data (block-start header #x5000)))

@@ -37,38 +37,21 @@
   (values -1 :type (satisfies (signed-byte 32)
                              (lambda (offset) (valid-reference-offset-p offset %tag tag)))))
 
-(defun reference-target (reference base lower upper &optional expected-type (size 1))
+(defun reference-target (reference base &optional expected-type)
   (let ((offset (reference-offset reference)))
     (unless (= offset -1)
       (when (and expected-type (/= expected-type (reference-type reference)))
         (fail-file "Reference tag #x~X; expected #x~X" (reference-type reference) expected-type))
       (when (minusp offset) (fail-file "Invalid relative offset ~D" offset))
-      (check-span (+ base offset) size lower upper))))
+      (+ base offset))))
 
-(defun sized-reference-target (reference base lower upper &optional expected-type)
+(defun sized-reference-target (reference base &optional expected-type)
   (let ((offset (sized-reference-offset reference)))
     (unless (= offset -1)
       (when (and expected-type (/= expected-type (sized-reference-type reference)))
         (fail-file "Sized reference tag mismatch"))
       (when (minusp offset) (fail-file "Invalid sized relative offset ~D" offset))
-      (check-span (+ base offset) (sized-reference-size reference) lower upper))))
-
-;; These are compile-time type operators, not parameterized parser functions.
-;; Expand concrete targets directly; only file/section containers use INLINE.
-
-(eval-when (:compile-toplevel :load-toplevel :execute)
-  (defmethod binstruct::lisp-type-expr ((name (eql 'bounded)) &rest arguments)
-    (binstruct::lisp-type (third arguments)))
-  (defmethod binstruct::expand-reader-type-expr ((name (eql 'bounded)) &rest arguments)
-    (destructuring-bind (upper minimum-size content) arguments
-      (alexandria:with-gensyms (start)
-        `(let ((,start (position)))
-           (constantly (check-span ,start ,minimum-size 0 ,upper))
-           ,(binstruct::expand-reader-type content)))))
-
-  (defmethod binstruct::expand-writer-type-expr ((name (eql 'bounded)) &rest arguments)
-    (binstruct::expand-writer-type (third arguments))))
-
+      (+ base offset))))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defmethod binstruct::lisp-type-expr ((name (eql 'reference-to)) &rest arguments)
@@ -116,8 +99,9 @@
 
 (defun validate-header (start header-size file-size references)
   (loop :for index :below (length references) :for current := (aref references index)
-        :for offset := (sized-reference-target current start (+ start header-size) (+ start file-size))
+        :for offset := (sized-reference-target current start)
         :do (unless (and offset (>= (sized-reference-size current) 8)) (fail-file "Null or short block"))
+            (check-span offset (sized-reference-size current) (+ start header-size) (+ start file-size))
             (loop :for previous-index :below index :for previous := (aref references previous-index)
                   :do (when (= (sized-reference-type current) (sized-reference-type previous))
                         (fail-file "Duplicate block tag"))
@@ -134,8 +118,6 @@
 (defun block-start (header type)
   (+ (header-start header) (sized-reference-offset (block-reference header type))))
 
-(defun block-end (header type)
-  (+ (block-start header type) (sized-reference-size (block-reference header type))))
 
 (defun flag-value (flags bit &optional default)
   (let ((mask (flag-values-mask flags)))
@@ -145,32 +127,28 @@
 (defun flag-position (flags bit start)
   (+ start 4 (* 4 (logcount (logand (flag-values-mask flags) (1- (expt 2 bit)))))))
 
-(defun flag-target (flags bit base lower upper)
+(defun flag-target (flags bit base)
   (let ((offset (flag-value flags bit #xffffffff)))
-    (unless (= offset #xffffffff) (check-span (+ base offset) 1 lower upper))))
+    (unless (= offset #xffffffff) (+ base offset))))
 
-(defbinstruct/me flag-values (upper)
-  (%start 0 :type position)
-  (mask 0 :type (satisfies (unsigned-byte 32) (lambda (mask) (<= (+ %start 4 (* 4 (logcount mask))) upper))))
+(defbinstruct/me flag-values ()
+  (mask 0 :type (unsigned-byte 32))
   (values #.(make-array 0 :element-type '(unsigned-byte 32)) :type (simple-array (unsigned-byte 32) ((logcount mask)))))
 
-(defbinstruct/me integer-table (upper)
-  (%start 0 :type position)
-  (count 0 :type (satisfies (unsigned-byte 32) (lambda (count) (<= (+ %start 4 (* 4 count)) upper))))
+(defbinstruct/me integer-table ()
+  (count 0 :type (unsigned-byte 32))
   (entries #.(make-array 0 :element-type '(unsigned-byte 32)) :type (simple-array (unsigned-byte 32) (count))))
 
-(defbinstruct/me byte-table (upper)
-  (%start 0 :type position)
-  (count 0 :type (satisfies (unsigned-byte 32) (lambda (count) (<= (+ %start 4 count) upper))))
+(defbinstruct/me byte-table ()
+  (count 0 :type (unsigned-byte 32))
   (entries #.(make-array 0 :element-type '(unsigned-byte 8)) :type (simple-array (unsigned-byte 8) (count))))
 
 (defbinstruct/me wave-id ()
   (archive-id 0 :type (unsigned-byte 32))
   (index 0 :type (unsigned-byte 32)))
 
-(defbinstruct/me wave-id-table (upper)
-  (%start 0 :type position)
-  (count 0 :type (satisfies (unsigned-byte 32) (lambda (count) (<= (+ %start 4 (* 8 count)) upper))))
+(defbinstruct/me wave-id-table ()
+  (count 0 :type (unsigned-byte 32))
   (entries #() :type (simple-array wave-id (count))))
 
 (defbinstruct/me raw-block (expected-magic expected-size)
@@ -222,17 +200,17 @@
   (%start 0 :type position)
   (values 0 :type (peek (unsigned-byte 32) (+ %start 12))))
 
-;; A complete embedded file has its own BOM. Check its declared span before
-;; following any of its references, without adding arguments to file readers.
-(defbinstruct (file-span (:type null) (:constructor progn) (:conc-name nil)) (upper)
+;; A sized reference carries the embedded file's available byte count. This
+;; checks that count against its own header, without propagating an end offset.
+(defbinstruct (file-span (:type null) (:constructor progn) (:conc-name nil)) (size)
   (%start 0 :type position)
   (%endian :little :type (peek file-byte-order (+ %start 4)))
   (%size 0 :type (ecase %endian (:little file-size-probe/le) (:big file-size-probe/be)))
   (%valid nil :type (map null (lambda (ignored) (declare (ignore ignored))
-                                (check-span %start %size %start upper)))))
+                                (unless (<= %size size) (fail-file "Embedded file exceeds sized reference"))))))
 
-(defbinstruct (bounded-file (:type nintendo-ware-file-union) (:constructor progn) (:conc-name nil)
-                            (:include (file-span upper))) (upper)
+(defbinstruct (sized-file (:type nintendo-ware-file-union) (:constructor progn) (:conc-name nil)
+                          (:include (file-span size))) (size)
   (values nil :type embedded-file))
 
 (export '(read-file invalid-file invalid-file-reason header header-start header-magic header-endian header-version-major

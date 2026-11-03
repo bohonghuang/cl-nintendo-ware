@@ -4,27 +4,40 @@
   (values nil :type (pointer header (map null (constantly 0)) $nintendo-ware-file-start)))
 
 (defbinstruct/me nintendo-ware-section (expected-magic content)
+  ($nintendo-ware-section-start 0 :type position)
   (magic #.(coerce "" 'simple-base-string)
          :type (satisfies (simple-base-string 4) (lambda (magic) (string= magic expected-magic))))
   (size 8 :type (satisfies (unsigned-byte 32) (lambda (size) (>= size 8))))
   (body nil :type (inline content)))
 
-;; Like Nitro's tail-size alias, obtain container context through native
-;; positional references, not arguments on each concrete section reader.
+(defbinstruct/me (nintendo-ware-section-start-magic-size (:type list)
+                                                      (:constructor progn) (:conc-name nil)) ()
+  (values nil :type (pointer (list position (simple-base-string 4) (unsigned-byte 32))
+                            (map null (constantly 0) (constantly nil)) $nintendo-ware-section-start)))
+
+;; Like Nitro: observe the section header and current position without
+;; consuming input. Only layouts with an uncounted tail need this type.
+(defbinstruct/me (nintendo-ware-section-tail-size (:type (unsigned-byte 32))
+                                                (:constructor progn) (:conc-name nil)) ()
+  (%position 0 :type position)
+  (%header (list 0 #.(coerce "" 'simple-base-string) 0)
+           :type nintendo-ware-section-start-magic-size)
+  (values 0 :type (map null (lambda (ignored) (declare (ignore ignored))
+                             (- (third %header) (- %position (first %header)))))))
+
 (defbinstruct/me nintendo-ware-section-body ()
   (%header (make-header) :type nintendo-ware-file-header-at-start)
-  (%section-start 0 :type (map position (lambda (position) (- position 8))))
-  (%size 8 :type (peek (unsigned-byte 32) (+ %section-start 4)))
-  (%upper 0 :type (map null (lambda (ignored) (declare (ignore ignored))
-                             (+ %section-start %size))))
-  (%valid nil :type (map null (lambda (ignored) (declare (ignore ignored))
-                               (unless (find-if
-                                        (lambda (reference)
-                                          (and (= %section-start
-                                                  (+ (header-start %header) (sized-reference-offset reference)))
-                                               (= %size (sized-reference-size reference))))
-                                        (header-references %header))
-                                 (fail-file "Section span differs from file directory"))))))
+  (%body-start 0 :type position)
+  (nil 0 :type (peek (satisfies (unsigned-byte 32)
+                              (lambda (size)
+                                (or (find-if
+                                     (lambda (reference)
+                                       (and (= (- %body-start 8)
+                                               (+ (header-start %header) (sized-reference-offset reference)))
+                                            (= size (sized-reference-size reference))))
+                                     (header-references %header))
+                                    (fail-file "Section span differs from file directory"))))
+                    (- %body-start 4))))
 
 (defmacro define-nintendo-ware-section (name-and-options &body slots)
   (destructuring-bind (name &rest options) (alexandria:ensure-list name-and-options)
@@ -54,4 +67,5 @@
                                 (defun (setf ,accessor) (,value ,instance)
                                   (setf (,inner (,(alexandria:symbolicate name '-body) ,instance)) ,value)))))))))
 
-(export '(nintendo-ware-section nintendo-ware-section-magic nintendo-ware-section-size))
+(export '(nintendo-ware-section nintendo-ware-section-magic nintendo-ware-section-size
+          nintendo-ware-section-tail-size))

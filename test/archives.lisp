@@ -274,7 +274,7 @@
     (assert (= #x05000002 (aref (nintendo-ware:integer-table-entries (nintendo-ware:sound-archive-bank-wave-archives (aref (nintendo-ware:sound-archive-banks-table-entries (nintendo-ware:sound-archive-info-banks information)) 0))) 0)))
     (assert (= 4 (nintendo-ware:sound-archive-player-sound-limit (aref (nintendo-ware:sound-archive-players-table-entries (nintendo-ware:sound-archive-info-players information)) 0))))
     (assert (typep (nintendo-ware:sound-archive-internal-file-content (nintendo-ware:sound-archive-file-location file)) 'nintendo-ware:sound-sequence))
-    (assert (string= "audio/example.bcstm" (nintendo-ware:bounded-string-text (nintendo-ware:sound-archive-file-location external)))))
+    (assert (string= "audio/example.bcstm" (nintendo-ware:sound-archive-external-file-text (nintendo-ware:sound-archive-file-location external)))))
   (dolist (major '(2 3 4 6))
     (let* ((stream (nintendo-ware:read-file :sound-stream (sound-stream-fixture major)))
            (information (nintendo-ware:sound-stream-info stream))

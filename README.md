@@ -74,7 +74,9 @@ CSTM SEEK 上下文固定小端；当前 FSTM SEEK 布局按 Citric 的参考实
   (info nil :type (peek sample-info (block-start header #x1000))))
 ```
 
-区块通过原生 pointer／peek 获取自己的大小和所属文件头，校验区块跨度与目录一致，再读取正文；版本与跨区块边界在正文的 bookkeeping 字段中取得。每个文件字段读取前恢复本文件的位置锚点，避免内嵌文件影响外层后续区块。高阶 parser（`inline` 等）仅用于 file／section 容器，不用于具体记录、引用、表或事件。
+区块容器校验自身大小与文件目录一致，正文通过原生位置引用取得所属文件头与版本；普通记录、表、字符串和引用按声明的字段及数量读取，不接收或传递区块结束位置。每个文件字段读取前恢复本文件的位置锚点，避免内嵌文件影响外层后续区块。高阶 parser（`inline` 等）仅用于 file／section 容器，不用于具体记录、引用、表或事件。
+
+只有确实需要剩余长度的布局使用零宽类型 `nintendo-ware-section-tail-size`，保存在 `%size`：它返回“区块大小 −（当前位置 − 区块起点）”，不消费输入，并遵循区块头端序。需要绝对结束位置时，就地用 `%position + %size` 计算。目前仅 SEQ 的无计数事件流需要结束位置，SEEK 需要剩余长度来读取尾部 padding；不向其他布局注入尾部上下文。
 
 ```lisp
 (defbinstruct/me sample-point
@@ -94,7 +96,7 @@ CSTM SEEK 上下文固定小端；当前 FSTM SEEK 布局按 Citric 的参考实
 
 也接受 binstruct 风格的可选参数列表；生产 schema 最多三个参数。递归类型需先声明端序分派，见 `sequence-event-union`。打包进一个整数的子字段若在两端字节位置不同，则显式声明共享 Lisp 类型的两种布局，不假装字段顺序相同。
 
-相对引用使用 `reference-to`、`bounded` 和原生 `pointer`。前两者只是编译期类型展开，直接生成具体读取表达式，没有接收 parser 参数的运行时 reader 或 `inline`；引用 tag、空偏移、最小目标跨度均先验证，不为每个格式生成一套长参数引用包装。
+相对引用使用 `reference-to` 和原生 `pointer`；前者只在编译期展开具体读取表达式，不引入接收 parser 参数的运行时 reader。保留引用 tag、空偏移、文件目录跨度与内嵌文件声明大小检查；普通记录不再逐目标校验区块跨度或依据区块尾部限制数组计数，不将这些 reader 宣称为具有逐区块隔离的恶意输入沙箱。归档外部路径通过 `sound-archive-external-file-text` 访问，仍不自动打开。
 
 **本库只保证 reader。** 不为 writer 增加端序钩子，不测试、不保证自动生成的 writer 正确性；保留正常 binstruct 声明与指针信息，方便将来实现。
 
