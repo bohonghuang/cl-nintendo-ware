@@ -75,8 +75,5 @@
     (assert (eq :big (nintendo-ware:header-endian (nintendo-ware:wave-archive-header parsed))))
     (assert (eq :little (nintendo-ware:header-endian (nintendo-ware:sound-wave-header embedded))))
     (assert (= -123 (aref coefficients 0))))
-  (let ((sequence (sequence-fixture #(255))))
-    (rejects nintendo-ware:invalid-file
-      (nintendo-ware:read-file :auto (sound-group-fixture sequence :declared-size (1- (length sequence))))))
   (assert (not (boundp 'nintendo-ware:*endian*)))
-  (format t "Shared-type ME, sized embedded files, C/F containers, event endian and mixed embedded files passed.~%"))
+  (format t "Shared-type ME, C/F containers, event endian and mixed embedded files passed.~%"))

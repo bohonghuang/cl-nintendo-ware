@@ -171,6 +171,10 @@
         (assert (= 32 (nintendo-ware:bank-pan-flag-surround-pan pan)))
         (assert (= 4 (nintendo-ware:adshr-curve-hold (nintendo-ware:bank-velocity-envelope velocity)))))))
   (rejects nintendo-ware:invalid-file (nintendo-ware:read-file :sound-bank (bank-fixture #x6000 #x6000 1)))
+  ;; Removing size/overlap validation must not remove section identification.
+  (rejects nintendo-ware:invalid-file
+    (nintendo-ware:read-file :sound-wave
+      (container-fixture "CWAV" (list (list #x7000 "JUNK" #()) (list #x7001 "DATA" #())))))
   (let* ((first (wave-fixture 2))
          (second (wave-fixture 3))
          (table (encode-record 'sized-reference-table
@@ -187,12 +191,4 @@
     (assert (= -200 (nintendo-ware:ima-adpcm-context-predictor
                      (nintendo-ware:ima-adpcm-info-initial-context
                       (nintendo-ware:sound-wave-channel-codec-info (aref (nintendo-ware:sound-wave-info-channels (nintendo-ware:sound-wave-info second-wave)) 0)))))))
-  (let* ((bytes (wave-fixture 2))
-         (table (encode-record 'sized-reference-table
-                  (make-sized-reference-table :count 1
-                   :entries (vector (make-sized-reference :type #x1f00 :offset 0 :size (length bytes)))))))
-    (rotatef (aref bytes 4) (aref bytes 5))
-    (rejects nintendo-ware:invalid-file
-      (nintendo-ware:read-file :wave-archive (container-fixture "CWAR"
-                            (list (list #x6800 "INFO" table) (list #x6801 "FILE" bytes))))))
   (format t "Direct WAV/WAR/BNK graph scenarios passed.~%"))

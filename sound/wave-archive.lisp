@@ -4,7 +4,7 @@
   (reference (make-sized-reference) :type sized-reference)
   (content nil :type (ecase (= (sized-reference-offset reference) -1)
                       ((t) null)
-                      ((nil) (peek (sized-wave (sized-reference-size reference))
+                      ((nil) (peek embedded-wave
                                    (sized-reference-target reference (+ data-start 8) #x1f00))))))
 
 (define-nintendo-ware-section (wave-archive-info (:magic "INFO"))
@@ -14,7 +14,7 @@
 
 (define-nintendo-ware-file (wave-archive (:magic ("CWAR" "FWAR")))
   (info nil :type (peek wave-archive-info (block-start header #x6800)))
-  (file nil :type (peek (raw-block "FILE" (sized-reference-size (block-reference header #x6801)))
+  (file nil :type (peek (raw-block "FILE")
                         (block-start header #x6801))))
 
 (export '(wave-archive wave-archive-header wave-archive-info wave-archive-file wave-archive-info-entries wave-archive-entry wave-archive-entry-reference wave-archive-entry-content))

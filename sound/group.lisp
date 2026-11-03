@@ -5,7 +5,7 @@
   (reference (make-sized-reference) :type sized-reference)
   (content nil :type (ecase (= (sized-reference-offset reference) -1)
                       ((t) null)
-                      ((nil) (peek (sized-file (sized-reference-size reference))
+                      ((nil) (peek embedded-file
                                    (sized-reference-target reference (+ data-start 8) #x1f00))))))
 
 (defbinstruct/me sound-group-dependency ()
@@ -27,7 +27,7 @@
   (infx nil :type (ecase (not (null (block-reference header #x7802 nil))) ((nil) null) ((t) (peek sound-group-infx (block-start header #x7802)))))
   (file nil :type (ecase (not (null (block-reference header #x7801 nil)))
                      ((nil) null)
-                     ((t) (peek (raw-block "FILE" (sized-reference-size (block-reference header #x7801)))
+                     ((t) (peek (raw-block "FILE")
                                 (block-start header #x7801))))))
 
 (export '(sound-group sound-group-header sound-group-info sound-group-infx sound-group-file sound-group-info-entries sound-group-infx-entries sound-group-entry-file-id sound-group-entry-reference sound-group-entry-content

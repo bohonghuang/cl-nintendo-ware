@@ -74,7 +74,7 @@ CSTM SEEK 上下文固定小端；当前 FSTM SEEK 布局按 Citric 的参考实
   (info nil :type (peek sample-info (block-start header #x1000))))
 ```
 
-区块容器校验自身大小与文件目录一致，正文通过原生位置引用取得所属文件头与版本；普通记录、表、字符串和引用按声明的字段及数量读取，不接收或传递区块结束位置。每个文件字段读取前恢复本文件的位置锚点，避免内嵌文件影响外层后续区块。高阶 parser（`inline` 等）仅用于 file／section 容器，不用于具体记录、引用、表或事件。
+正文通过原生位置引用取得所属文件头与版本；普通记录、表、字符串和引用按声明的字段及数量读取，不接收或传递区块结束位置。每个文件字段读取前恢复本文件的位置锚点，避免内嵌文件影响外层后续区块。高阶 parser（`inline` 等）仅用于 file／section 容器，不用于具体记录、引用、表或事件。
 
 只有确实需要剩余长度的布局使用零宽类型 `nintendo-ware-section-tail-size`，保存在 `%size`：它返回“区块大小 −（当前位置 − 区块起点）”，不消费输入，并遵循区块头端序。需要绝对结束位置时，就地用 `%position + %size` 计算。目前仅 SEQ 的无计数事件流需要结束位置，SEEK 需要剩余长度来读取尾部 padding；不向其他布局注入尾部上下文。
 
@@ -96,13 +96,13 @@ CSTM SEEK 上下文固定小端；当前 FSTM SEEK 布局按 Citric 的参考实
 
 也接受 binstruct 风格的可选参数列表；生产 schema 最多三个参数。递归类型需先声明端序分派，见 `sequence-event-union`。打包进一个整数的子字段若在两端字节位置不同，则显式声明共享 Lisp 类型的两种布局，不假装字段顺序相同。
 
-相对引用使用 `reference-to` 和原生 `pointer`；前者只在编译期展开具体读取表达式，不引入接收 parser 参数的运行时 reader。保留引用 tag、空偏移、文件目录跨度与内嵌文件声明大小检查；普通记录不再逐目标校验区块跨度或依据区块尾部限制数组计数，不将这些 reader 宣称为具有逐区块隔离的恶意输入沙箱。归档外部路径通过 `sound-archive-external-file-text` 访问，仍不自动打开。
+相对引用使用 `reference-to` 和原生 `pointer`；前者只在编译期展开具体读取表达式，不引入接收 parser 参数的运行时 reader。保留 magic、opcode、引用 tag、BOM／布局分派、空引用处理及其他非大小相关检查；不检查文件／区块声明大小的一致性、目录跨度或区块重叠，不用 sized reference 的长度约束内嵌文件。大小字段仍用于实际 payload 和 padding 的读取，不提供完整格式校验或受限输入沙箱。归档外部路径通过 `sound-archive-external-file-text` 访问，仍不自动打开。
 
 **本库只保证 reader。** 不为 writer 增加端序钩子，不测试、不保证自动生成的 writer 正确性；保留正常 binstruct 声明与指针信息，方便将来实现。
 
 ## 验证范围与参考
 
-测试使用 Common Lisp assertions 和独立 binstruct 输入夹具，检查实际字段、引用目标、可空引用、大小端、嵌套事件、文件边界及版本分支，不断言生成源码或测试库的 writer。
+测试使用 Common Lisp assertions 和独立 binstruct 输入夹具，检查实际字段、引用目标、可空引用、magic／opcode 识别、大小端、嵌套事件及版本分支，不断言生成源码或测试库的 writer。
 
 新事件接口通过 [OoT3D-Custom-Sequences](https://github.com/Kewlan/OoT3D-Custom-Sequences) 的 63 个 BCSEQ 文件，共读取 401,232 个顶层事件并完成目标索引转换。此数量包含声明式事件流读取到的非静态可达事件，不等同于旧 reader 的静态遍历计数。另已用实际 `closynth:event-emit` 验证解析所得 note/tempo 对象的类型分派，未接入播放。Citric 的 `guts.bcseq` 有一个开轨目标落在扩展指令内部，索引化时拒绝，不擅自重定位。其他格式与平台主要依赖合成夹具验证，不能据此宣称所有商业游戏兼容。
 

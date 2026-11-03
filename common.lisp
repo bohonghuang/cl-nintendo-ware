@@ -7,11 +7,6 @@
 (defun fail-file (control &rest arguments)
   (error 'invalid-file :reason (apply #'format nil control arguments)))
 
-(defun check-span (start size lower upper)
-  (unless (and (integerp start) (integerp size) (<= lower start upper) (<= 0 size (- upper start)))
-    (fail-file "Range ~S + ~S outside [~D, ~D)" start size lower upper))
-  start)
-
 (defun valid-reference-offset-p (offset type expected-type)
   (or (= offset -1)
       (and (not (minusp offset)) (or (null expected-type) (= type expected-type)))))
@@ -83,32 +78,23 @@
   (start 0 :type position)
   (magic #.(coerce "" 'simple-base-string) :type (simple-base-string 4))
   (endian :little :type file-byte-order)
-  (header-size 20 :type (satisfies (unsigned-byte 16) (lambda (size) (>= size 20))))
+  (header-size 20 :type (unsigned-byte 16))
   (version 0 :type (unsigned-byte 32))
-  (file-size 20 :type (satisfies (unsigned-byte 32) (lambda (size) (<= header-size size))))
-  ;; Reject a physically truncated file before allocating its reference table.
-  (%last-byte 0 :type (peek (unsigned-byte 8) (+ start file-size -1)))
-  (block-count 0 :type (satisfies (unsigned-byte 16) (lambda (count) (<= (+ 20 (* 12 count)) header-size))))
+  (file-size 20 :type (unsigned-byte 32))
+  (block-count 0 :type (unsigned-byte 16))
   (padding 0 :type (unsigned-byte 16))
   (references #() :type (simple-array sized-reference (block-count)))
   (%valid nil :type (map null (lambda (ignored) (declare (ignore ignored))
-                                (validate-header start header-size file-size references)))))
+                                (validate-header references)))))
 
 (defun header-version-major (header)
   (mod (floor (header-version header) (if (char= (char (header-magic header) 0) #\C) #x1000000 #x10000)) 256))
 
-(defun validate-header (start header-size file-size references)
+(defun validate-header (references)
   (loop :for index :below (length references) :for current := (aref references index)
-        :for offset := (sized-reference-target current start)
-        :do (unless (and offset (>= (sized-reference-size current) 8)) (fail-file "Null or short block"))
-            (check-span offset (sized-reference-size current) (+ start header-size) (+ start file-size))
-            (loop :for previous-index :below index :for previous := (aref references previous-index)
+        :do (loop :for previous-index :below index :for previous := (aref references previous-index)
                   :do (when (= (sized-reference-type current) (sized-reference-type previous))
-                        (fail-file "Duplicate block tag"))
-                      (when (< (max (sized-reference-offset current) (sized-reference-offset previous))
-                               (min (+ (sized-reference-offset current) (sized-reference-size current))
-                                    (+ (sized-reference-offset previous) (sized-reference-size previous))))
-                        (fail-file "Overlapping blocks"))))
+                        (fail-file "Duplicate block tag"))))
   nil)
 
 (defun block-reference (header type &optional (required t))
@@ -151,9 +137,9 @@
   (count 0 :type (unsigned-byte 32))
   (entries #() :type (simple-array wave-id (count))))
 
-(defbinstruct/me raw-block (expected-magic expected-size)
+(defbinstruct/me raw-block (expected-magic)
   (magic #.(coerce "" 'simple-base-string) :type (satisfies (simple-base-string 4) (lambda (magic) (string= magic expected-magic))))
-  (size 0 :type (satisfies (unsigned-byte 32) (lambda (size) (= size expected-size))))
+  (size 0 :type (unsigned-byte 32))
   (bytes #.(make-array 0 :element-type '(unsigned-byte 8)) :type (simple-array (unsigned-byte 8) ((- size 8)))))
 
 (deftype nintendo-ware-file-union () '(or null sound-sequence sound-wave wave-archive sound-bank wave-sound-data sound-stream sound-archive sound-group))
@@ -195,23 +181,6 @@
                                 (:sound-archive sound-archive/be)
                                 (:sound-group sound-group/be)))
 )))
-
-(defbinstruct/me (file-size-probe (:type (unsigned-byte 32)) (:constructor progn) (:conc-name nil)) ()
-  (%start 0 :type position)
-  (values 0 :type (peek (unsigned-byte 32) (+ %start 12))))
-
-;; A sized reference carries the embedded file's available byte count. This
-;; checks that count against its own header, without propagating an end offset.
-(defbinstruct (file-span (:type null) (:constructor progn) (:conc-name nil)) (size)
-  (%start 0 :type position)
-  (%endian :little :type (peek file-byte-order (+ %start 4)))
-  (%size 0 :type (ecase %endian (:little file-size-probe/le) (:big file-size-probe/be)))
-  (%valid nil :type (map null (lambda (ignored) (declare (ignore ignored))
-                                (unless (<= %size size) (fail-file "Embedded file exceeds sized reference"))))))
-
-(defbinstruct (sized-file (:type nintendo-ware-file-union) (:constructor progn) (:conc-name nil)
-                          (:include (file-span size))) (size)
-  (values nil :type embedded-file))
 
 (export '(read-file invalid-file invalid-file-reason header header-start header-magic header-endian header-version-major
           header-header-size header-version header-file-size header-block-count header-references

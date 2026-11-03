@@ -64,7 +64,7 @@
                     (cl-nintendo-ware.test::make-wave-sound-data-envelope :attack 11 :decay 22 :sustain 33 :hold 44 :release 55)))))))
     (container-fixture "CWSD" (list (list #x6800 "INFO" body)))))
 
-(defun sound-group-fixture (embedded &key (declared-size (length embedded)))
+(defun sound-group-fixture (embedded)
   (let ((info
           (layout-fixture
            (list
@@ -73,7 +73,7 @@
             (list 'entry 'cl-nintendo-ware.test::sound-group-file-record
                   (lambda (address) (declare (ignore address))
                     (cl-nintendo-ware.test::make-sound-group-file-record :file-id 7
-                     :file-reference (cl-nintendo-ware.test::make-sized-reference :type #x1f00 :offset 0 :size declared-size)))))))
+                     :file-reference (cl-nintendo-ware.test::make-sized-reference :type #x1f00 :offset 0 :size (length embedded))))))))
         (extra
           (layout-fixture
            (list

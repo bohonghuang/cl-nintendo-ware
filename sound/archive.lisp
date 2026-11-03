@@ -128,7 +128,7 @@
   (reference (make-sized-reference) :type sized-reference)
   (content nil :type (ecase (= (sized-reference-offset reference) -1)
                       ((t) null)
-                      ((nil) (peek (sized-file (sized-reference-size reference))
+                      ((nil) (peek embedded-file
                                    (sized-reference-target reference (+ data-start 8) #x1f00))))))
 
 (defbinstruct/me sound-archive-file (data-start)
@@ -195,7 +195,7 @@
   (info nil :type (peek sound-archive-info (block-start header #x2001)))
   (file nil :type (ecase (not (null (block-reference header #x2002 nil)))
                      ((nil) null)
-                     ((t) (peek (raw-block "FILE" (sized-reference-size (block-reference header #x2002)))
+                     ((t) (peek (raw-block "FILE")
                                 (block-start header #x2002))))))
 
 (export '(sound-archive sound-archive-header sound-archive-strg sound-archive-info sound-archive-file sound-archive-strg-strings sound-archive-strg-tree sound-archive-string-table-entries sound-archive-string-text

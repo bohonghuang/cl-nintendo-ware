@@ -7,7 +7,7 @@
   ($nintendo-ware-section-start 0 :type position)
   (magic #.(coerce "" 'simple-base-string)
          :type (satisfies (simple-base-string 4) (lambda (magic) (string= magic expected-magic))))
-  (size 8 :type (satisfies (unsigned-byte 32) (lambda (size) (>= size 8))))
+  (size 8 :type (unsigned-byte 32))
   (body nil :type (inline content)))
 
 (defbinstruct/me (nintendo-ware-section-start-magic-size (:type list)
@@ -26,18 +26,7 @@
                              (- (third %header) (- %position (first %header)))))))
 
 (defbinstruct/me nintendo-ware-section-body ()
-  (%header (make-header) :type nintendo-ware-file-header-at-start)
-  (%body-start 0 :type position)
-  (nil 0 :type (peek (satisfies (unsigned-byte 32)
-                              (lambda (size)
-                                (or (find-if
-                                     (lambda (reference)
-                                       (and (= (- %body-start 8)
-                                               (+ (header-start %header) (sized-reference-offset reference)))
-                                            (= size (sized-reference-size reference))))
-                                     (header-references %header))
-                                    (fail-file "Section span differs from file directory"))))
-                    (- %body-start 4))))
+  (%header (make-header) :type nintendo-ware-file-header-at-start))
 
 (defmacro define-nintendo-ware-section (name-and-options &body slots)
   (destructuring-bind (name &rest options) (alexandria:ensure-list name-and-options)

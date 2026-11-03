@@ -60,11 +60,12 @@
 
 (define-nintendo-ware-file (sound-wave (:magic ("CWAV" "FWAV")))
   (info nil :type (peek sound-wave-info (block-start header #x7000)))
-  (data nil :type (peek (raw-block "DATA" (sized-reference-size (block-reference header #x7001)))
+  (data nil :type (peek (raw-block "DATA")
                         (block-start header #x7001))))
 
-(defbinstruct (sized-wave (:type sound-wave) (:constructor progn) (:conc-name nil)
-                          (:include (file-span size))) (size)
+(defbinstruct (embedded-wave (:type sound-wave) (:constructor progn) (:conc-name nil)) ()
+  (%start 0 :type position)
+  (%endian :little :type (peek file-byte-order (+ %start 4)))
   (values nil :type (ecase %endian (:little sound-wave/le) (:big sound-wave/be))))
 
 (export '(sound-wave sound-wave-header sound-wave-info sound-wave-data sound-wave-info-codec sound-wave-info-loop sound-wave-info-sample-rate
