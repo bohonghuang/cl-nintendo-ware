@@ -1,0 +1,270 @@
+# Nintendo Sequence and Audio Container Endianness from NDS to Switch
+
+## Executive summary
+
+Nintendo’s audio formats form three clear endian eras: **Nintendo DS/Nitro is little-endian**, **Wii/NW4R is normally big-endian**, and the later **C/F NintendoWare family is BOM-driven**, with 3DS `C*` files normally little-endian, Wii U `F*` files normally big-endian, and Switch `F*` files normally little-endian. citeturn479574search37turn939951search1turn537446search6
+
+The important exception is **3DS CSEQ**: its **container is normally little-endian (`FF FE`) but its raw sequence instruction stream is explicitly big-endian**; Wii U FSEQ is big/big, while Switch FSEQ is little/little. Citric Composer documents this distinction directly, so a parser must not derive sequence-bytecode endian solely from the container BOM. citeturn939951search0
+
+## Endianness map
+
+In the table below, **BOM bytes are the literal bytes at file offset `0x04`**, not a host-endian integer interpretation. This avoids the common ambiguity where documentation says "`0xFEFF`" while displaying raw bytes `FF FE`. Citric Composer explicitly defines raw `FE FF` as big-endian and raw `FF FE` as little-endian. citeturn939951search1
+
+| Format | Magic | Typical platform | Container endian / raw BOM bytes | Sequence instruction endian | Version field | Notable exceptions / remarks | Primary evidence |
+|---|---|---|---|---|---|---|---|
+| **SSEQ** | `SSEQ` | Nintendo DS | **LE**, `FF FE` | **LE for fixed-width multibyte operands**; VLQ itself is endian-neutral | `u16`, normally semantic `0x0100`; retail example stores bytes `00 01` | Nitro format, not NW4R/C/F common header | Real SSEQ hex dump shows `SSEQ FF FE 00 01`; DS is explicitly little-endian in Nintendo DSi developer material. citeturn762530search9turn479574search37 |
+| **BRSEQ / RSEQ** | `RSEQ` | Wii | **BE**, normally `FE FF` | **BE** for fixed-width operands | `u16`, interpreted in container endian | Header has fixed DATA/LABL offset-size pairs rather than modern `SizedReference[]` | MKWii BRSEQ spec. citeturn638721search0 |
+| **BCSEQ / CSEQ** | `CSEQ` | 3DS | **typically LE**, `FF FE` | **BE — important exception** | `u32`; after endian-aware read, C-type encoding is `0xMMIIRR00` | Container endian and bytecode endian differ | Citric: C/F common header plus explicit “3DS sequence data always big endian.” citeturn939951search0turn939951search1 |
+| **BFSEQ / FSEQ** | `FSEQ` | Wii U | **typically BE**, `FE FF` | **BE** | `u32`; F-type encoding `0x00MMIIRR` | Mario Kart 8 FSEQ is explicitly big-endian | Citric + MK8 FSEQ docs. citeturn939951search0turn638721search4 |
+| **BFSEQ / FSEQ** | `FSEQ` | Switch | **typically LE**, `FF FE` | **LE** | `u32`; F-type encoding `0x00MMIIRR` after LE read | Same magic/layout family as Wii U, opposite usual endian | Citric explicitly distinguishes Switch sequence data as little-endian; SequenceConvert exposes `-endian big/little` for BFSEQ. citeturn939951search0turn842248search3 |
+| **SDAT** | `SDAT` | Nintendo DS | **LE**, `FF FE` | N/A | `u16`, normally `0x0100`, bytes `00 01` | Nitro archive; embedded SSEQ/SBNK/SWAR use Nitro structures | ndspy-derived structural documentation and retail/header examples. citeturn762530search0turn762530search5 |
+| **BRSAR** | `RSAR` | Wii | **BE**, normally `FE FF` | N/A | `u16`, container-endian; e.g. MKWii `01 04` | NW4R archive | BRSAR format documentation. citeturn638721search1 |
+| **BCSAR** | `CSAR` | 3DS | **typically LE**, `FF FE` | N/A | `u32`, C-type convention `0xMMIIRR00` | 3dbrew describes BOM field; a real Apollo Justice BCSAR begins `43 53 41 52 FF FE 40 00` | 3dbrew + real-file header report. citeturn373076search0turn333671search2 |
+| **BFSAR** | `FSAR` | Wii U | **typically BE**, `FE FF` | N/A | `u32`, F-type `0x00MMIIRR` | Same modern common-header family | BFSAR format docs + Citric common header. citeturn537446search0turn939951search1 |
+| **BFSAR** | `FSAR` | Switch | **typically LE**, `FF FE` | N/A | `u32`, F-type `0x00MMIIRR` | Same magic as Wii U; platform is not sufficient reason to hard-code endian | NintendoWare common BOM design; Switch F-family tools routinely require LE conversion. citeturn537446search1turn537446search6 |
+| **BRBNK / RBNK** | `RBNK` | Wii | **BE**, normally `FE FF` | N/A | `u16`, container-endian | NW4R bank | BRBNK header spec. citeturn343144search0 |
+| **BCBNK / CBNK** | `CBNK` | 3DS | **typically LE**, `FF FE` | N/A | `u32`, C-type `0xMMIIRR00` | Uses modern common `FileHeader`; one INFO block | Citric BNK explicitly says CBNK uses the standard common header. citeturn122485search2turn939951search1 |
+| **BFBNK / FBNK** | `FBNK` | Wii U | **typically BE**, `FE FF` | N/A | `u32`, F-type `0x00MMIIRR` | Same binary layout family as CBNK | Citric BNK + common header. citeturn122485search2turn939951search1 |
+| **BFBNK / FBNK** | `FBNK` | Switch | **typically LE**, `FF FE` | N/A | `u32`, F-type `0x00MMIIRR` | BOM should win over platform assumptions | Citric common-header architecture; Switch F-family LE behavior is corroborated by conversion tooling. citeturn939951search1turn537446search6 |
+| **BRWAR / RWAR** | `RWAR` | Wii | **BE**, normally `FE FF` | N/A | `u16`, container-endian | NW4R wave archive | BRWAR header spec. citeturn343144search1 |
+| **BCWAR / CWAR** | `CWAR` | 3DS | **typically LE**, `FF FE` | N/A | `u32`, C-type `0xMMIIRR00` | Uses standard modern header; embeds CWAV | Citric WAR + common header. citeturn122485search3turn939951search1 |
+| **BFWAR / FWAR** | `FWAR` | Wii U | **typically BE**, `FE FF` | N/A | `u32`, F-type `0x00MMIIRR` | Same structure family as CWAR | Citric WAR + common header. citeturn122485search3turn939951search1 |
+| **BFWAR / FWAR** | `FWAR` | Switch | **typically LE**, `FF FE` | N/A | `u32`, F-type `0x00MMIIRR` | Embedded FWAV files should each still be parsed from their own header/BOM | Citric common-header model; F-family endianness is a field rather than a magic invariant. citeturn939951search1turn537446search7 |
+| **BRWAV / RWAV** | `RWAV` | Wii | **BE**, normally `FE FF` | N/A | `u16`, container-endian | DSP-ADPCM payload coefficients/state use Wii/NW4R representation | BRWAV header spec; real RWAV corpus exists in `rv_forest.brsar`. citeturn343144search2turn343144search6 |
+| **BCWAV / CWAV** | `CWAV` | 3DS | **typically LE**, `FF FE` | N/A | `u32`, C-type; common retail version example `0x02010000` after appropriate interpretation | 3dbrew wording on numeric BOM is confusing; real raw file header `CWAV FF FE ...` establishes the actual byte order unambiguously | 3dbrew + real theme CWAV hex header. citeturn373076search1turn723376search0 |
+| **BFWAV / FWAV** | `FWAV` | Wii U | **typically BE**, `FE FF` | N/A | `u32`, F-type `0x00MMIIRR` | Wii U-generated FWAV commonly needs endian conversion before Switch use | MK8 FWAV + BCFSTM/BCFWAV converter. citeturn537446search2turn537446search6 |
+| **BFWAV / FWAV** | `FWAV` | Switch | **typically LE**, `FF FE` | N/A | `u32`, F-type `0x00MMIIRR` | BotW Switch modding documentation shows original files literally begin `FWAV FF FE` | Real-world Switch FWAV workflow + converter documentation. citeturn537446search5turn537446search6 |
+
+A crucial distinction is that **the raw BOM bytes and the numeric value obtained by prematurely reading those bytes as a host-endian `uint16_t` are not the same thing**. For example, a 3DS file beginning `43 57 41 56 FF FE ...` is a little-endian `CWAV`; therefore the safest parser logic is literally `bytes[4:6] == {0xFF,0xFE} → LE`, `{0xFE,0xFF} → BE`. citeturn723376search0turn939951search1
+
+## The sequence-specific anomaly
+
+The most useful result for a unified XSEQ parser is that **file-container endian and instruction-stream endian must be modeled separately**. Citric Composer’s sequence specification says plainly that raw sequence data is **always big-endian on Wii U and 3DS, but little-endian on Switch**. citeturn939951search0
+
+That yields the following practical matrix:
+
+| Sequence | Header/container | DATA instruction stream | Parser implication |
+|---|---:|---:|---|
+| SSEQ / NDS | LE | LE | One LE reader is generally sufficient for fixed-width fields |
+| RSEQ / Wii | BE | BE | One BE reader is generally sufficient |
+| CSEQ / 3DS | **LE** | **BE** | **Must switch reader endian when entering sequence DATA** |
+| FSEQ / Wii U | BE | BE | Same endian throughout |
+| FSEQ / Switch | LE | LE | Same endian throughout |
+
+The CSEQ row is why a generalized parser such as `Reader(endian_from_bom)` is insufficient if that same reader is handed directly to the bytecode decoder. The container parser should return an explicit `sequenceEndian` field rather than assuming `sequenceEndian == containerEndian`. citeturn939951search0turn939951search1
+
+For SSEQ, the public Nitro documentation describes operands such as `s16` and `u24`, while the file itself and DS platform are little-endian; Nintendo’s own DSi developer-conference material explicitly warns that **DS/DSi is little-endian whereas Wii is big-endian**. citeturn479574search6turn479574search37
+
+## Version representation and BOM semantics
+
+The Nitro and NW4R families use a **16-bit version field**, while the later C/F common header uses a **32-bit version field**. SSEQ/SDAT retail headers commonly contain semantic version `0x0100`; because the file is little-endian the literal bytes are `00 01`. Wii R-family headers likewise carry a 16-bit version but are normally big-endian, so values are serialized in big-endian order. citeturn762530search9turn638721search0turn638721search1
+
+The modern NintendoWare header is different. Citric Composer specifies:
+
+```text
+offset 0x00: char[4] magic
+offset 0x04: u16 BOM
+offset 0x06: u16 header_size
+offset 0x08: u32 version
+offset 0x0C: u32 file_size
+offset 0x10: u16 block_count
+offset 0x12: u16 padding
+offset 0x14: SizedReference[block_count]
+```
+
+After the 32-bit value is read using the BOM-selected endian, **F-type files use `0x00MMIIRR` while C-type files use `0xMMIIRR00`**, where `MM`, `II`, and `RR` are major, minor and revision. This is a semantic version-layout difference, not merely an endian difference. citeturn939951search1
+
+Therefore this is correct:
+
+```cpp
+Endian parse_bom(std::span<const uint8_t> b) {
+    if (b[4] == 0xFE && b[5] == 0xFF)
+        return Endian::Big;
+    if (b[4] == 0xFF && b[5] == 0xFE)
+        return Endian::Little;
+    throw invalid_bom{};
+}
+
+Version decode_modern_version(uint32_t raw, char family) {
+    if (family == 'C')
+        return {
+            uint8_t(raw >> 24),
+            uint8_t(raw >> 16),
+            uint8_t(raw >> 8)
+        };
+
+    // F type
+    return {
+        uint8_t(raw >> 16),
+        uint8_t(raw >> 8),
+        uint8_t(raw)
+    };
+}
+```
+
+The `raw` argument above means **already decoded according to the BOM**; applying an additional byte swap inside `decode_modern_version()` would be wrong. citeturn939951search1
+
+## Code and repository evidence
+
+Evidence type **A** means executable parser/writer code, conversion code, a real-file hex dump, or a repository whose behavior directly demonstrates byte order. **B** means reverse-engineered format documentation or a project README describing behavior.
+
+| Project / file or page | Direct link | Evidence | What it demonstrates |
+|---|---|---:|---|
+| Citric Composer — `specs/common.html` | https://gota7.github.io/Citric-Composer/specs/common.html | **B** | Modern C/F standard header; raw BOM convention; C/F version encoding. citeturn939951search1 |
+| Citric Composer — `specs/seq.html` | https://gota7.github.io/Citric-Composer/specs/seq.html | **B** | Explicit rule: 3DS/Wii U sequence DATA BE, Switch sequence DATA LE. citeturn939951search0 |
+| Citric Composer — `specs/bnk.html` | https://gota7.github.io/Citric-Composer/specs/bnk.html | **B** | CBNK/FBNK both use the standard modern header. citeturn122485search2 |
+| Citric Composer — `specs/war.html` | https://gota7.github.io/Citric-Composer/specs/war.html | **B** | CWAR/FWAR both use the standard modern header. citeturn122485search3 |
+| Citric Composer — `specs/wav.html` | https://gota7.github.io/Citric-Composer/specs/wav.html | **B** | CWAV/FWAV are modern common-header wave formats. citeturn122485search4 |
+| SequenceConvert README | https://github.com/Gota7/SequenceConvert | **A/B** | Supports DS/Wii/3DS/Wii U/Switch sequences; BFSEQ writer accepts explicit `-endian big/little`. citeturn842248search3 |
+| GotaSequenceLib | https://github.com/Gota7/GotaSequenceLib | **A** | Shared sequence abstraction used by SequenceConvert/Nitro tooling; useful for opcode/parser cross-checks. SequenceConvert declares it as the heavy-lifting dependency. citeturn939951search2 |
+| Nitro Studio 2 — `docs/specs/sequence.md` | https://github.com/Gota7/NitroStudio2/blob/master/docs/specs/sequence.md | **B** | SSEQ operand widths including `s16`, `u24`, VLQ and command structure. citeturn479574search6 |
+| ndspy | https://github.com/RoadrunnerWMC/ndspy | **A** | Production-quality NDS SSEQ/SDAT read/write library. citeturn671460search4 |
+| ndspy SDAT appendix | https://github.com/RoadrunnerWMC/ndspy/blob/master/docs/source/appendices/sdat-structure.rst | **B** | SDAT/SSEQ/SBNK/SWAR relationships. citeturn671460search3 |
+| DualRip — `dualrip/formats/sdat/` | https://github.com/TetraSsky/DualRip/tree/main/dualrip/formats/sdat | **A** | Independent NDS SDAT/SSEQ parser used by an actual renderer. citeturn312166search0 |
+| DualRip — `dualrip/formats/ctr/` | https://github.com/TetraSsky/DualRip/tree/main/dualrip/formats/ctr | **A** | Independent 3DS CSAR/CSEQ/CBNK/CWAR parser; useful to cross-check C-family assumptions. citeturn312166search0 |
+| DualRip — `dualrip/engine/ctr/` | https://github.com/TetraSsky/DualRip/tree/main/dualrip/engine/ctr | **A** | Independent CSEQ executor, separate from container parsing. citeturn939951search4 |
+| 3dbrew — BCSAR | https://3dbrew.org/wiki/BCSAR | **B** | CSAR header, BOM, version and partition layout. citeturn373076search0 |
+| 3dbrew — BCWAV | https://www.3dbrew.org/wiki/BCWAV | **B** | CWAV header, blocks, sample metadata. Note its BOM wording should be reconciled against raw bytes rather than copied literally. citeturn373076search1 |
+| 3DSUSoundArchiveTool | https://github.com/soneek/3DSUSoundArchiveTool | **A** | BCSAR/BFSAR extraction; source includes `BNK.h`, `SEQ.h`, `WAR.h`, `WAV.h`, `sar.h`. citeturn333671search0 |
+| BCFSTM-BCFWAV-Converter | https://github.com/aboood40091/BCFSTM-BCFWAV-Converter | **A** | Explicit endianness option: `0 = Big Endian (Wii U)`, `1 = Little Endian (3DS/Switch)`. citeturn537446search6 |
+| MKWii BRSEQ spec | https://www.mkwiiki.org/wiki/BRSEQ | **B** | RSEQ BOM, version, header, DATA/LABL layout. citeturn638721search0 |
+| MKWii BRSAR spec | https://old.tockdom.com/wiki/BRSAR_%28File_Format%29 | **B** | RSAR BOM and big-endian Wii examples. citeturn638721search1 |
+| MKWii BRBNK spec | https://mkwiiki.org/wiki/BRBNK | **B** | RBNK common Wii header and BOM. citeturn343144search0 |
+| MKWii BRWAR spec | https://mkwiiki.org/wiki/BRWAR_%28File_Format%29 | **B** | RWAR common Wii header and BOM. citeturn343144search1 |
+| MKWii BRWAV spec | https://www.mkwiiki.org/wiki/BRWAV | **B** | RWAV common Wii header and BOM. citeturn343144search2 |
+| MK8 BFSEQ spec | https://mk8.tockdom.com/wiki/BFSEQ_%28File_Format%29 | **B** | Wii U FSEQ BOM and big-endian MK8 example. citeturn638721search4 |
+| MK8 BFSAR spec | https://mk8.tockdom.com/wiki/BFSAR_%28File_Format%29 | **B** | FSAR modern BOM field. citeturn537446search0 |
+| MK8 BFWAV spec | https://mk8.tockdom.com/wiki/BFWAV_%28File_Format%29 | **B** | FWAV BOM field. citeturn537446search2 |
+| M8 `mrst` | https://github.com/em-eight/mrst | **A** | Independent Wii NW4R parser supporting BRSAR/BRWAR/BRWAV/BRBNK/BRSEQ. citeturn122485search0 |
+| Wii-Kaitai | https://github.com/quatric/Wii-Kaitai | **A** | Definitions checked against real RWAVs; reports a corpus carved from `rv_forest.brsar`. citeturn343144search6 |
+| libnx | https://github.com/switchbrew/libnx | **A, contextual only** | Documents Switch audio services (`audren` etc.), **not** FSEQ/FSAR/FBNK/FWAR/FWAV file containers; therefore it is not primary evidence for file endian. citeturn518350search1turn518350search2 |
+
+There is no publicly available NintendoWare SDK file-format specification I could identify that is suitable to cite directly for these proprietary container layouts. The best public evidence is therefore a combination of independent parsers, raw retail headers, Nintendo platform-endian documentation, and reverse-engineered structural specifications. citeturn479574search37turn939951search1
+
+## Samples and empirical confirmations
+
+The research found several concrete files or corpora that provide more useful evidence than format naming conventions alone.
+
+| Sample / corpus | Platform / format | What was confirmed |
+|---|---|---|
+| `SEQ_BGM_C_01.sseq` | NDS SSEQ | Hex dump begins `53 53 45 51 FF FE 00 01`; sizes and DATA offset decode correctly as little-endian. citeturn762530search9 |
+| `sound_data.sdat` signatures found in retail DS binaries | NDS SDAT | Raw signature `53 44 41 54 FF FE 00 01` confirms Nitro LE BOM/version bytes. citeturn762530search5 |
+| `revo_kart.brsar` | Wii BRSAR | Documentation records Wii big-endian header and version `01 04`; used as the canonical MKWii example. citeturn638721search1 |
+| BRSEQ files from Mario Kart Wii | Wii RSEQ | Documentation says files are nearly always BE and uses `FE FF` BOM. citeturn638721search0 |
+| Four RWAV files carved from `rv_forest.brsar` | Wii RWAV | Wii-Kaitai reports these real files were used to validate the RWAV parser and offsets. citeturn343144search6 |
+| `GSB43DS.bcsar` from Apollo Justice: Ace Attorney | 3DS BCSAR | Reported first 8 bytes are `43 53 41 52 FF FE 40 00`, directly confirming typical 3DS CSAR LE container. citeturn333671search2 |
+| 3DS theme BCWAV | 3DS CWAV | Published hex example begins `43 57 41 56 FF FE 40 00 ...`, confirming LE CWAV container. citeturn723376search0 |
+| Mario Kart 8 BFSEQ/BFSAR/BFWAV | Wii U | Tockdom documentation explicitly treats MK8 F files as big-endian. citeturn638721search4turn537446search2 |
+| Breath of the Wild Switch BFWAV | Switch FWAV | Modding documentation says original Switch files begin `FWAV FF FE`; Wii U-generated big-endian FWAV must be converted to LE. citeturn537446search5 |
+| DualRip golden-test inputs | NDS + 3DS | Repository supports externally supplied `DUALRIP_TEST_SDAT` and `DUALRIP_TEST_CTR` corpora and bit-for-bit golden renders, but copyrighted samples are not bundled. citeturn939951search4 |
+
+I did **not** find a redistributable public retail Switch FSEQ/FBNK/FWAR/FSAR sample corpus in the prioritized repositories. For those formats, the strongest currently available public evidence is Citric’s common-header/sequence specification, SequenceConvert’s BFSEQ endian option, BCFSTM-BCFWAV-Converter’s explicit Wii-U-vs-3DS/Switch endian modes, and real Switch FWAV observations. citeturn939951search0turn842248search3turn537446search6turn537446search5
+
+```mermaid
+timeline
+    title Nintendo audio-container endianness evolution
+    Nintendo DS / Nitro : SSEQ, SDAT
+                         : Little-endian container
+                         : raw BOM FF FE
+    Wii / NW4R          : RSEQ, RSAR, RBNK, RWAR, RWAV
+                         : Normally big-endian
+                         : raw BOM FE FF
+    Nintendo 3DS / NW4C : CSEQ, CSAR, CBNK, CWAR, CWAV
+                         : Normally little-endian containers
+                         : raw BOM FF FE
+                         : CSEQ DATA bytecode remains BIG-endian
+    Wii U / NW4F        : FSEQ, FSAR, FBNK, FWAR, FWAV
+                         : Normally big-endian
+                         : raw BOM FE FF
+    Nintendo Switch     : FSEQ, FSAR, FBNK, FWAR, FWAV
+                         : Normally little-endian
+                         : raw BOM FF FE
+                         : FSEQ DATA bytecode little-endian
+```
+
+The timeline’s platform tendencies are supported by Nintendo’s DS-vs-Wii endian documentation, Citric’s C/F common-header specification, its explicit CSEQ/FSEQ bytecode rule, and Switch/Wii U conversion tooling. citeturn479574search37turn939951search0turn939951search1turn537446search6
+
+## Parser recommendations
+
+A robust implementation should treat **magic, container endian, version encoding, and payload endian as four distinct properties** rather than deriving one from another. The following rules are supported by the sources above. citeturn939951search0turn939951search1
+
+1. **Inspect BOM as two raw bytes before reading any multibyte header field.** Use `FE FF → Big`, `FF FE → Little`. Do not read it with the host endian and then compare against a numeric constant; that is the source of much contradictory documentation. citeturn939951search1turn723376search0
+2. **Honor the BOM even when a platform has a usual convention.** Wii files are normally BE, 3DS C files normally LE, Wii U F files normally BE, Switch F files normally LE, but modern NintendoWare structurally represents byte order in the file itself. citeturn537446search1turn343144search8
+3. **Special-case sequence DATA endian by dialect.** Use SSEQ=LE, RSEQ=BE, CSEQ=BE, Wii-U FSEQ=BE, Switch FSEQ=LE. In particular, never propagate a 3DS CSEQ container’s LE reader directly into its sequence-instruction decoder. citeturn939951search0turn479574search37
+4. **Decode modern versions only after BOM-aware `u32` reading.** For C-type files, interpret the result as `0xMMIIRR00`; for F-type files, `0x00MMIIRR`. Do not infer version-byte placement from endian alone. citeturn939951search1
+5. **Treat Nitro and NW4R versions separately.** SSEQ/SDAT and R-family Wii files use a 16-bit version field; the modern C/F common header uses 32 bits. citeturn762530search9turn638721search0turn939951search1
+6. **Re-read embedded files from their own headers.** A CWAR/FWAR or CSAR/FSAR may contain other NintendoWare files; do not blindly inherit the parent archive endian into an embedded child if that child has its own magic/BOM. This follows naturally from the fact that WARs embed complete WAV files and each WAV uses a standard file header. citeturn122485search3turn122485search4
+7. **Separate encoded audio payload rules from metadata endian.** DSP-ADPCM bitstreams, IMA state, PCM16 samples and coefficient tables should be decoded according to the codec/format definition, not simply byte-swapped because the outer container changed endian. BCWAV, for example, distinguishes encoding types and ADPCM-specific structures inside the BOM-governed metadata container. citeturn373076search1
+8. **Preserve an `unknown` state rather than guessing.** For any F-family file whose provenance is unavailable, parse the BOM first; if it is invalid, reject or run structural validation against both candidates rather than assuming Wii U or Switch from the extension. This is especially important because both platforms use `FSEQ/FSAR/FBNK/FWAR/FWAV`. citeturn373076search3turn537446search1
+
+A useful normalized descriptor for a cross-generation implementation would therefore be:
+
+```cpp
+struct NintendoAudioFormat {
+    FourCC magic;
+
+    Endian container_endian;
+    Endian payload_endian;      // meaningful for SEQ and some codec payloads
+
+    enum class HeaderFamily {
+        Nitro,      // SSEQ / SDAT
+        NW4R,       // R*
+        ModernC,    // C*
+        ModernF     // F*
+    } header_family;
+
+    Version version;
+};
+```
+
+For sequence files specifically, the parser should produce something like:
+
+```cpp
+SeqFile parse_xseq(span<const uint8_t> file)
+{
+    auto magic = read_fourcc(file, 0);
+    auto bom   = parse_raw_bom(file);
+
+    switch (magic) {
+    case "SSEQ"_4cc:
+        return parse_nitro_seq(file,
+            /*container=*/Endian::Little,
+            /*bytecode=*/Endian::Little);
+
+    case "RSEQ"_4cc:
+        return parse_rseq(file,
+            /*container=*/bom,
+            /*bytecode=*/bom); // normally Big
+
+    case "CSEQ"_4cc:
+        return parse_modern_seq(file,
+            /*container=*/bom,
+            /*bytecode=*/Endian::Big);
+
+    case "FSEQ"_4cc:
+        return parse_modern_seq(file,
+            /*container=*/bom,
+            /*bytecode=*/bom); // Wii U BE, Switch LE
+
+    default:
+        throw unsupported_format{};
+    }
+}
+```
+
+That design captures the strongest finding from the research: **for modern Nintendo audio, BOM is authoritative for the container, but CSEQ is a documented case where the instruction stream deliberately does not follow that container endian.** citeturn939951search0turn939951search1
+
+## Implementation in cl-nintendo-ware
+
+The library shares the modern **C/F** container layouts only. Nitro `S*` and Wii `R*` headers remain separate formats, not alternate endians of these schemas. The shared header/reference/flag layouts are specified by [Citric Common Structures](https://gota7.github.io/Citric-Composer/specs/common.html); [SEQ](https://gota7.github.io/Citric-Composer/specs/seq.html), [BNK](https://gota7.github.io/Citric-Composer/specs/bnk.html) and [WAR](https://gota7.github.io/Citric-Composer/specs/war.html) explicitly describe both C/F magics. Wave, stream, WSD, archive and group declarations are cross-checked against the corresponding readers in [Citric Composer](https://github.com/Gota7/Citric-Composer).
+
+- `binary.lisp`: `defbinstruct/me` emits the default LE definition, macroexpands the shared-type BE definition under the library's own `*endian*`, leaves the LE alias deferred, and installs reader-only type dispatch. Nested schemas and arrays select `/le` or `/be` without runtime endian arguments. Recursive declarations forward-declare their reader dispatch.
+- `section.lisp` and `container.lisp`: `define-nintendo-ware-section` / `define-nintendo-ware-file` reuse headers through native binstruct inclusion, following the Nitro declaration pattern. Modern section positions come from sized references.
+- `common.lisp`: each file's BOM selects the concrete reader. Embedded files validate their own declared span before following references, then read their own BOM. WAR entries admit complete WAV files, not arbitrary archive formats.
+- `sound/sequence.lisp`: one opcode vocabulary serves both event readers. CSEQ and Wii U events use `/be`; Switch FSEQ events use `/le`. Known later commands are not rejected merely because the containing file uses C magic.
+- `sound/stream.lisp`: SEEK context endian is distinct from the section header. Citric's `SoundNStreamSeekBlock` reader selects LE contexts for C magic and BE contexts for F magic, restoring the container byte order afterward. The implementation follows this rule; synthetic tests include F/little containers with BE SEEK payloads. This is not a claim of verification against every retail Switch stream/version.
+- Packed integer flag subfields are not identical byte-field layouts in LE and BE. Their explicit variants reverse byte-field positions as required while reusing one Lisp type; they are not blindly duplicated with `defbinstruct/me`.
+
+The reader regression suite exercises both C/F identifiers in both container endians, independent embedded BOMs, metadata floats and references, event operand endian, and stream version branches. These synthetic profiles verify the declared layouts, not universal game compatibility. The 63-file public BCSEQ corpus supplies separate real-data evidence; other platform families lack equivalent retail-corpus coverage here.
+
+`defbinio` entry points have no extra schema arguments. Bounds remain internal; no caller-supplied file `limit` or endian is required. Writer expansion is not customized, writer correctness is not guaranteed, and library writers are not tested. Independent fixture emitters only create test input bytes.
