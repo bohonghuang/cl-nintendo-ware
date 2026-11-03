@@ -53,14 +53,8 @@
       (when (minusp offset) (fail-file "Invalid sized relative offset ~D" offset))
       (check-span (+ base offset) (sized-reference-size reference) lower upper))))
 
-;; Keep ordinary binstruct declarations as the native emitter blueprints.
-;; Reader type expansion specializes targets in-place, retaining their lexical
-;; bounds and the enclosing ME endian without higher-order parser closures.
-(defbinstruct (bounded (:type t) (:constructor progn) (:conc-name nil)) (upper minimum-size content)
-  (%start 0 :type position)
-  (%valid nil :type (map null (lambda (ignored) (declare (ignore ignored))
-                                (check-span %start minimum-size 0 upper))))
-  (values nil :type (inline content)))
+;; These are compile-time type operators, not parameterized parser functions.
+;; Expand concrete targets directly; only file/section containers use INLINE.
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defmethod binstruct::lisp-type-expr ((name (eql 'bounded)) &rest arguments)
@@ -70,14 +64,11 @@
       (alexandria:with-gensyms (start)
         `(let ((,start (position)))
            (constantly (check-span ,start ,minimum-size 0 ,upper))
-           ,(binstruct::expand-reader-type content))))))
+           ,(binstruct::expand-reader-type content)))))
 
-(defbinstruct (reference-to (:type t) (:constructor progn) (:conc-name nil)) (tag base content)
-  (%offset -1 :type (peek (reference-offset-value tag)))
-  (values nil :type
-          (ecase (= %offset -1)
-            ((t) (map (reference-offset-value tag) (constantly nil) (constantly -1)))
-            ((nil) (pointer (inline content) (reference-offset-value tag) base)))))
+  (defmethod binstruct::expand-writer-type-expr ((name (eql 'bounded)) &rest arguments)
+    (binstruct::expand-writer-type (third arguments))))
+
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defmethod binstruct::lisp-type-expr ((name (eql 'reference-to)) &rest arguments)
@@ -92,7 +83,13 @@
                 ((nil) (pointer (map ,content
                                      (the (function (t) (or null ,(binstruct::lisp-type content))) #'identity))
                                 (reference-offset-value ,tag)
-                                ,base)))))))))
+                                ,base))))))))
+  (defmethod binstruct::expand-writer-type-expr ((name (eql 'reference-to)) &rest arguments)
+    (destructuring-bind (tag base content) arguments
+      (binstruct::expand-writer-type
+       `(ecase (null ,binstruct::*value*)
+          ((t) (map (reference-offset-value ,tag) (constantly nil) (constantly -1)))
+          ((nil) (pointer ,content (reference-offset-value ,tag) ,base)))))))
 
 (defbinstruct (file-byte-order (:type (member :little :big)) (:constructor progn) (:conc-name nil) (:endian :big)) ()
   (%value #xfffe :type (satisfies (unsigned-byte 16) (lambda (value) (member value '(#xfffe #xfeff)))))

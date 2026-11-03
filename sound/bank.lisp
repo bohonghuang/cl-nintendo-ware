@@ -155,21 +155,20 @@
   (entries #() :type (simple-array (reference-to #x5900 $table-start (bounded upper 8 (bank-instrument upper wave-count))) (count))))
 
 (define-nintendo-ware-section (sound-bank-info (:magic "INFO"))
-    (upper)
   ($info-start 0 :type position)
   (waves-reference (make-reference) :type reference)
   (instruments-reference (make-reference) :type reference)
   (waves nil :type (ecase (= (reference-offset waves-reference) -1)
                      ((t) null)
-                     ((nil) (peek (wave-id-table upper)
-                                  (reference-target waves-reference $info-start $nintendo-ware-section-start upper #x0100 4)))))
+                     ((nil) (peek (wave-id-table %upper)
+                                  (reference-target waves-reference $info-start %section-start %upper #x0100 4)))))
   (instruments nil :type (ecase (= (reference-offset instruments-reference) -1)
                            ((t) null)
-                           ((nil) (peek (bank-instrument-table upper (if waves (wave-id-table-count waves) 0))
-                                        (reference-target instruments-reference $info-start $nintendo-ware-section-start upper #x0101 4))))))
+                           ((nil) (peek (bank-instrument-table %upper (if waves (wave-id-table-count waves) 0))
+                                        (reference-target instruments-reference $info-start %section-start %upper #x0101 4))))))
 
 (define-nintendo-ware-file (sound-bank (:magic ("CBNK" "FBNK")))
-  (info nil :type (peek (sound-bank-info (block-end header #x5800)) (block-start header #x5800))))
+  (info nil :type (peek sound-bank-info (block-start header #x5800))))
 
 (export '(sound-bank sound-bank-header sound-bank-info sound-bank-info-waves sound-bank-info-instruments bank-instrument-table-entries
           bank-instrument bank-instrument-reference bank-instrument-definition bank-key bank-key-reference bank-key-definition

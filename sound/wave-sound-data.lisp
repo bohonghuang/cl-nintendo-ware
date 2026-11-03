@@ -74,14 +74,13 @@
   (entries #() :type (simple-array (reference-to #x4900 $table-start (bounded upper 4 (wave-sound-data-item upper))) (count))))
 
 (define-nintendo-ware-section (wave-sound-data-info (:magic "INFO"))
-    (upper)
   ($info-start 0 :type position)
-  (waves nil :type (reference-to #x0100 $info-start (bounded upper 4 (wave-id-table upper))))
-  (items nil :type (reference-to #x0101 $info-start (bounded upper 4 (wave-sound-data-item-table upper)))))
+  (waves nil :type (reference-to #x0100 $info-start (bounded %upper 4 (wave-id-table %upper))))
+  (items nil :type (reference-to #x0101 $info-start (bounded %upper 4 (wave-sound-data-item-table %upper)))))
 
 (define-nintendo-ware-file (wave-sound-data (:magic ("CWSD" "FWSD")))
   (%tag #x6800 :type (map null (lambda (ignored) (declare (ignore ignored)) (if (block-reference header #x6800 nil) #x6800 #x4800))))
-  (info nil :type (peek (wave-sound-data-info (block-end header %tag)) (block-start header %tag))))
+  (info nil :type (peek wave-sound-data-info (block-start header %tag))))
 
 (export '(wave-sound-data wave-sound-data-header wave-sound-data-info wave-sound-data-info-waves wave-sound-data-info-items wave-sound-data-item-table-entries wave-sound-data-item
           wave-sound-data-item-parameters wave-sound-data-item-tracks wave-sound-data-item-notes wave-sound-data-track-table-entries wave-sound-data-note-table-entries

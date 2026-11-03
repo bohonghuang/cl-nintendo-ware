@@ -64,7 +64,17 @@ CSTM SEEK 上下文固定小端；当前 FSTM SEEK 布局按 Citric 的参考实
 
 ## 声明模式
 
-`define-nintendo-ware-file`、`define-nintendo-ware-section` 参考 `cl-nitro`，复用公共文件／区块头；现代容器按 sized reference 定位区块，而非假设区块连续排列。
+`define-nintendo-ware-file`、`define-nintendo-ware-section` 按 `cl-nitro` 的声明方式，名称／选项后直接写字段，不带参数表；具体 file、section 及 section body 的 reader 均无参数。公共头用原生 include 复用，section 用 `inline` 组合 body，并生成直接字段访问器。现代容器仍按 sized reference 定位区块，而非假设区块连续排列。
+
+```lisp
+(define-nintendo-ware-section (sample-info (:magic "INFO"))
+  (value 0 :type (unsigned-byte 32)))
+
+(define-nintendo-ware-file (sample-file (:magic "CSMP"))
+  (info nil :type (peek sample-info (block-start header #x1000))))
+```
+
+区块通过原生 pointer／peek 获取自己的大小和所属文件头，校验区块跨度与目录一致，再读取正文；版本与跨区块边界在正文的 bookkeeping 字段中取得。每个文件字段读取前恢复本文件的位置锚点，避免内嵌文件影响外层后续区块。高阶 parser（`inline` 等）仅用于 file／section 容器，不用于具体记录、引用、表或事件。
 
 ```lisp
 (defbinstruct/me sample-point
@@ -84,7 +94,7 @@ CSTM SEEK 上下文固定小端；当前 FSTM SEEK 布局按 Citric 的参考实
 
 也接受 binstruct 风格的可选参数列表；生产 schema 最多三个参数。递归类型需先声明端序分派，见 `sequence-event-union`。打包进一个整数的子字段若在两端字节位置不同，则显式声明共享 Lisp 类型的两种布局，不假装字段顺序相同。
 
-相对引用使用 `reference-to`、`bounded` 和原生 `pointer`。引用 tag、空偏移、最小目标跨度均先验证；不为每个格式生成一套长参数引用包装。
+相对引用使用 `reference-to`、`bounded` 和原生 `pointer`。前两者只是编译期类型展开，直接生成具体读取表达式，没有接收 parser 参数的运行时 reader 或 `inline`；引用 tag、空偏移、最小目标跨度均先验证，不为每个格式生成一套长参数引用包装。
 
 **本库只保证 reader。** 不为 writer 增加端序钩子，不测试、不保证自动生成的 writer 正确性；保留正常 binstruct 声明与指针信息，方便将来实现。
 

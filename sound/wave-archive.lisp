@@ -9,13 +9,14 @@
                                    (sized-reference-target reference (+ data-lower 8) (+ data-lower 8) data-upper #x1f00))))))
 
 (define-nintendo-ware-section (wave-archive-info (:magic "INFO"))
-    (upper data-lower data-upper)
+  (%data-lower 0 :type (map null (lambda (ignored) (declare (ignore ignored)) (block-start %header #x6801))))
+  (%data-upper 0 :type (map null (lambda (ignored) (declare (ignore ignored)) (block-end %header #x6801))))
   (%start 0 :type position)
-  (count 0 :type (satisfies (unsigned-byte 32) (lambda (count) (<= (+ %start 4 (* 12 count)) upper))))
-  (entries #() :type (simple-array (wave-archive-entry upper data-lower data-upper) (count))))
+  (count 0 :type (satisfies (unsigned-byte 32) (lambda (count) (<= (+ %start 4 (* 12 count)) %upper))))
+  (entries #() :type (simple-array (wave-archive-entry %upper %data-lower %data-upper) (count))))
 
 (define-nintendo-ware-file (wave-archive (:magic ("CWAR" "FWAR")))
-  (info nil :type (peek (wave-archive-info (block-end header #x6800) (block-start header #x6801) (block-end header #x6801)) (block-start header #x6800)))
+  (info nil :type (peek wave-archive-info (block-start header #x6800)))
   (file nil :type (peek (raw-block "FILE" (sized-reference-size (block-reference header #x6801)))
                         (block-start header #x6801))))
 

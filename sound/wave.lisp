@@ -49,7 +49,6 @@
                                               #x1f00 (sound-wave-encoded-size codec sample-count)))))
 
 (define-nintendo-ware-section (sound-wave-info (:magic "INFO"))
-    (upper header)
   (codec 0 :type (satisfies (unsigned-byte 8) (lambda (codec) (<= codec 3))))
   (loop 0 :type (unsigned-byte 8))
   (padding 0 :type (unsigned-byte 16))
@@ -58,12 +57,12 @@
   (loop-end 0 :type (unsigned-byte 32))
   (reserved 0 :type (unsigned-byte 32))
   ($channels-start 0 :type position)
-  (channel-count 0 :type (satisfies (unsigned-byte 32) (lambda (count) (and (plusp count) (<= (+ $channels-start 4 (* 8 count)) upper)))))
+  (channel-count 0 :type (satisfies (unsigned-byte 32) (lambda (count) (and (plusp count) (<= (+ $channels-start 4 (* 8 count)) %upper)))))
   (channels #() :type (simple-array
-                       (reference-to #x7100 $channels-start (bounded upper 20 (sound-wave-channel codec loop-end header))) (channel-count))))
+                       (reference-to #x7100 $channels-start (bounded %upper 20 (sound-wave-channel codec loop-end %header))) (channel-count))))
 
 (define-nintendo-ware-file (sound-wave (:magic ("CWAV" "FWAV")))
-  (info nil :type (peek (sound-wave-info (block-end header #x7000) header) (block-start header #x7000)))
+  (info nil :type (peek sound-wave-info (block-start header #x7000)))
   (data nil :type (peek (raw-block "DATA" (sized-reference-size (block-reference header #x7001)))
                         (block-start header #x7001))))
 

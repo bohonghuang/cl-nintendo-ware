@@ -11,6 +11,11 @@
       `(defbinstruct/me (,name (:include (nintendo-ware-file ',magic))
                               ,@(remove :magic options :key #'car))
            ()
-         ,@sections))))
+         ;; Native embedded readers may change the file anchor. Re-establish
+         ;; this file's origin before each subsequent field, not just once.
+         ,@(loop for section in sections
+                 append `(($nintendo-ware-file-start 0
+                             :type (peek position (header-start header)))
+                          ,section))))))
 
 (export '(nintendo-ware-file nintendo-ware-file-header))

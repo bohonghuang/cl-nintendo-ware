@@ -283,7 +283,7 @@
 (defun emit-octets (output octets)
   (write-sequence (coerce octets '(simple-array (unsigned-byte 8) (*))) output))
 
-(defun sequence-fixture (body &key (padded t) (label-offset 0) (data-offset 64) (header-size 64))
+(defun sequence-fixture (body &key (padded t) (label-offset 0) (data-offset 64) (header-size 64) data-block-size)
   (let* ((data-size (if padded 32 (+ 8 (length body))))
          (references (vector (cl-nintendo-ware.test::make-sized-reference :type #x5000 :offset data-offset :size data-size)
                              (cl-nintendo-ware.test::make-sized-reference :type #x5001 :offset 96 :size 64)))
@@ -293,7 +293,7 @@
     (flexi-streams:with-output-to-sequence (output)
       (emit-octets output (encode-record 'header-record header))
       (emit-octets output (make-array 20 :initial-element 0))
-      (emit-octets output (encode-record 'block-record (cl-nintendo-ware.test::make-block-record :magic #.(coerce "DATA" 'simple-base-string) :size data-size)))
+      (emit-octets output (encode-record 'block-record (cl-nintendo-ware.test::make-block-record :magic #.(coerce "DATA" 'simple-base-string) :size (or data-block-size data-size))))
       (emit-octets output body)
       (emit-octets output (make-array (- 24 (length body)) :initial-element 0))
       (emit-octets output (encode-record 'block-record (cl-nintendo-ware.test::make-block-record :magic #.(coerce "LABL" 'simple-base-string) :size 64)))
@@ -342,6 +342,9 @@
     (rejects nintendo-ware:invalid-file (nintendo-ware:read-file :sound-sequence (sequence-fixture #(#xff) :data-offset 140)))
     (rejects nintendo-ware:invalid-file (nintendo-ware:read-file :sound-sequence (sequence-fixture #(#xff) :header-size 43)))
     (rejects nintendo-ware:invalid-file (nintendo-ware:read-file :sound-sequence (sequence-fixture #(#xff) :label-offset 24))))
+  (dolist (size '(31 #xffffffff))
+    (rejects nintendo-ware:invalid-file
+      (nintendo-ware:read-file :auto (sequence-fixture #(#xff) :data-block-size size))))
   (dolist (case '((#(0) 0) (#(#x7f) 127) (#(#x81 0) 128) (#(#xff #x7f) 16383)
                   (#(#x81 #x80 0) 16384) (#(#xff #xff #x7f) 2097151) (#(#xff #xff #xff #x7f) 268435455)))
     (destructuring-bind (encoded expected) case
