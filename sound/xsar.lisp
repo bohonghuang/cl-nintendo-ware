@@ -188,7 +188,7 @@
   (groups nil :type (reference-to #x2105 $info-start xsar-groups-table))
   (players nil :type (reference-to #x2102 $info-start xsar-players-table))
   (files nil :type (reference-to #x2106 $info-start (xsar-files-table %data-start)))
-  (project-info nil :type (reference-to #x2107 $info-start xsar-project-info)))
+  (project-info nil :type (reference-to #x220b $info-start xsar-project-info)))
 
 (define-nintendo-ware-file (xsar (:magic ("CSAR" "FSAR")))
   (strg nil :type (ecase (not (null (block-reference header #x2000 nil))) ((nil) null) ((t) (peek xsar-strg (block-start header #x2000)))))

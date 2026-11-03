@@ -83,6 +83,7 @@
   (xstm-dsp-seek-context ())
   (xstm-region-record (channel-count))
   (xsar-info-references ())
+  (xsar-project-info-record ())
   (xsar-patricia-node ())
   (xsar-patricia-tree ())
   (xsar-sound-record ())

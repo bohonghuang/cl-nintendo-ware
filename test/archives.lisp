@@ -42,7 +42,23 @@
                      :second (fixture-reference address #x0101 'tracks 'item)
                      :third (fixture-reference address #x0101 'notes 'item))))
             (list 'parameters 'cl-nintendo-ware.test::flag-values
-                  (lambda (address) (declare (ignore address)) (flags 7 #x2040 #x3fc00000 #x030201)))
+                  (lambda (address)
+                    (flags #x307 #x2040 #x3fc00000 #x030201
+                           (- (funcall address 'item-sends) (funcall address 'parameters))
+                           (- (funcall address 'item-envelope-reference) (funcall address 'parameters)))))
+            (list 'item-sends 'cl-nintendo-ware.test::xwsd-send-values
+                  (lambda (address) (declare (ignore address))
+                    (cl-nintendo-ware.test::make-xwsd-send-values
+                     :main-send 93 :count 2
+                     :auxiliary-sends (make-array 2 :element-type '(unsigned-byte 8) :initial-contents '(17 29)))))
+            (list 'item-envelope-reference 'cl-nintendo-ware.test::reference
+                  (lambda (address) (fixture-reference address 0 'item-envelope 'item-envelope-reference)))
+            (list 'item-envelope 'cl-nintendo-ware.test::xwsd-envelope
+                  (lambda (address) (declare (ignore address))
+                    (cl-nintendo-ware.test::make-xwsd-envelope :attack 6 :decay 7 :sustain 8 :hold 9 :release 10)))
+            (list 'item-padding 'cl-nintendo-ware.test::byte-payload
+                  (lambda (address) (declare (ignore address))
+                    (cl-nintendo-ware.test::make-byte-payload :bytes (make-array 3 :element-type '(unsigned-byte 8) :initial-element 0))) 3)
             (list 'tracks 'cl-nintendo-ware.test::reference-table
                   (lambda (address) (cl-nintendo-ware.test::make-reference-table :count 1 :entries (vector (fixture-reference address #x4903 'track 'tracks)))))
             (list 'track 'cl-nintendo-ware.test::reference (lambda (address) (fixture-reference address 0 'events 'track)))
@@ -117,7 +133,8 @@
                      :sounds (fixture-reference address #x2100 'sounds 'info)
                      :banks (fixture-reference address #x2101 'banks 'info)
                      :players (fixture-reference address #x2102 'players 'info)
-                     :files (fixture-reference address #x2106 'files 'info))))
+                     :files (fixture-reference address #x2106 'files 'info)
+                     :project-info (fixture-reference address #x220b 'project 'info))))
             (list 'sounds 'cl-nintendo-ware.test::reference-table
                   (lambda (address) (cl-nintendo-ware.test::make-reference-table :count 1 :entries (vector (fixture-reference address #x2200 'sound 'sounds)))))
             (list 'banks 'cl-nintendo-ware.test::reference-table
@@ -146,6 +163,12 @@
             (list 'wave-ids 'cl-nintendo-ware.test::integer-table
                   (lambda (address) (declare (ignore address))
                     (cl-nintendo-ware.test::make-integer-table :count 1 :entries (make-array 1 :element-type '(unsigned-byte 32) :initial-element #x05000002))))
+            (list 'project 'cl-nintendo-ware.test::xsar-project-info-record
+                  (lambda (address) (declare (ignore address))
+                    (cl-nintendo-ware.test::make-xsar-project-info-record
+                     :maximum-sequences 12 :maximum-sequence-tracks 24
+                     :maximum-stream-sounds 3 :maximum-stream-tracks 6 :maximum-stream-channels 8
+                     :maximum-wave-sounds 16 :maximum-wave-tracks 32 :stream-buffer-times 2 :options #x12345678)))
             (list 'player 'cl-nintendo-ware.test::xsar-player-record
                   (lambda (address) (declare (ignore address))
                     (cl-nintendo-ware.test::make-xsar-player-record :sound-limit 4 :flags (flags 0))))
@@ -246,6 +269,10 @@
     (assert (= 64 (nintendo-ware::packed-pan-pan pan)))
     (assert (= 32 (nintendo-ware::packed-pan-surround-pan pan)))
     (assert (= 1.5f0 (nintendo-ware:xwsd-parameters-pitch parameters)))
+    (assert (= 93 (nintendo-ware:xwsd-sends-main-send (nintendo-ware:xwsd-parameters-sends parameters))))
+    (assert (equalp #(17 29) (nintendo-ware:xwsd-sends-auxiliary-sends (nintendo-ware:xwsd-parameters-sends parameters))))
+    (assert (= 6 (nintendo-ware::xwsd-envelope-attack (nintendo-ware:xwsd-parameters-envelope parameters))))
+    (assert (= 10 (nintendo-ware:xwsd-envelope-release (nintendo-ware:xwsd-parameters-envelope parameters))))
     (assert (= 1 (nintendo-ware::packed-filter-low-pass filter)))
     (assert (= 2 (nintendo-ware::packed-filter-biquad-type filter)))
     (assert (= 3 (nintendo-ware::packed-filter-biquad-value filter)))
@@ -273,8 +300,23 @@
     (assert (= #x03000000 (aref (nintendo-ware:integer-table-entries (nintendo-ware:xsar-sequence-info-banks sequence)) 0)))
     (assert (= #x05000002 (aref (nintendo-ware:integer-table-entries (nintendo-ware:xsar-bank-wave-archives (aref (nintendo-ware:xsar-banks-table-entries (nintendo-ware:xsar-info-banks information)) 0))) 0)))
     (assert (= 4 (nintendo-ware:xsar-player-sound-limit (aref (nintendo-ware:xsar-players-table-entries (nintendo-ware:xsar-info-players information)) 0))))
+    (assert (= 12 (nintendo-ware:xsar-project-info-maximum-sequences (nintendo-ware:xsar-info-project-info information))))
+    (assert (= 24 (nintendo-ware::xsar-project-info-maximum-sequence-tracks (nintendo-ware:xsar-info-project-info information))))
+    (assert (= #x12345678 (nintendo-ware::xsar-project-info-options (nintendo-ware:xsar-info-project-info information))))
     (assert (typep (nintendo-ware:xsar-internal-file-content (nintendo-ware:xsar-file-location file)) 'nintendo-ware:xseq))
     (assert (string= "audio/example.bcstm" (nintendo-ware:xsar-external-file-text (nintendo-ware:xsar-file-location external)))))
+  ;; An embedded CWSD traverses its own tables before the next SAR file entry.
+  (let* ((archive (nintendo-ware:read-file 'nintendo-ware:xsar (xsar-fixture (xwsd-fixture))))
+         (files (nintendo-ware:xsar-files-table-entries
+                 (nintendo-ware:xsar-info-files (nintendo-ware:xsar-info archive))))
+         (embedded (nintendo-ware:xsar-internal-file-content
+                    (nintendo-ware:xsar-file-location (aref files 0))))
+         (item (aref (nintendo-ware:xwsd-item-table-entries
+                      (nintendo-ware:xwsd-info-items (nintendo-ware:xwsd-info embedded))) 0)))
+    (assert (= 1.5f0 (nintendo-ware:xwsd-parameters-pitch (nintendo-ware:xwsd-item-parameters item))))
+    (assert (string= "audio/example.bcstm"
+                     (nintendo-ware:xsar-external-file-text
+                      (nintendo-ware:xsar-file-location (aref files 1))))))
   (dolist (major '(2 3 4 6))
     (let* ((stream (nintendo-ware:read-file 'nintendo-ware:xstm (xstm-fixture major)))
            (information (nintendo-ware:xstm-info stream))

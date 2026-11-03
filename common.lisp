@@ -73,7 +73,10 @@
                 ((nil) (pointer (map ,content
                                      (the (function (t) (or null ,(binstruct::lisp-type content))) #'identity))
                                 (reference-offset-value ,tag)
-                                ,base))))))))
+                                ;; These anchors have already been read. Use
+                                ;; their lexical value, not a global $ alias
+                                ;; overwritten by nested reference targets.
+                                (progn ,base)))))))))
   (defmethod binstruct::expand-writer-type-expr ((name (eql 'reference-to)) &rest arguments)
     (destructuring-bind (tag base content) arguments
       (binstruct::expand-writer-type

@@ -26,12 +26,13 @@
   (filter-info nil :type (ecase (logbitp (if note-p 4 2) (flag-values-mask flags))
                            ((nil) null) ((t) (peek packed-filter
                                                   (flag-position flags (if note-p 4 2) %start)))))
-  (sends nil :type (ecase (not (null (flag-target flags 8 base)))
-                     ((nil) null) ((t) (peek xwsd-sends (flag-target flags 8 base)))))
-  (envelope nil :type (ecase (not (null (flag-target flags 9 base)))
+  ;; Item effects are relative to these flags; note effects include wave-index.
+  (sends nil :type (ecase (not (null (flag-target flags 8 (if note-p base %start))))
+                     ((nil) null) ((t) (peek xwsd-sends (flag-target flags 8 (if note-p base %start))))))
+  (envelope nil :type (ecase (not (null (flag-target flags 9 (if note-p base %start))))
                         ((nil) null)
-                        ((t) (peek (reference-to 0 (flag-target flags 9 base) (xwsd-envelope))
-                                   (flag-target flags 9 base))))))
+                        ((t) (peek (reference-to 0 (flag-target flags 9 (if note-p base %start)) (xwsd-envelope))
+                                   (flag-target flags 9 (if note-p base %start)))))))
 
 (defbinstruct/me xwsd-note ()
   (%start 0 :type position)

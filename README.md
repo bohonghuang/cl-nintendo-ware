@@ -106,7 +106,15 @@ file body 直接接收容器已读取的 header；section body 通过原生位�
 
 测试使用 Common Lisp assertions 和独立 binstruct 输入夹具，检查实际字段、引用目标、可空引用、magic／opcode 识别、大小端、嵌套事件及版本分支，不断言生成源码或测试库的 writer。
 
-新事件接口通过 [OoT3D-Custom-Sequences](https://github.com/Kewlan/OoT3D-Custom-Sequences) 的 63 个 BCSEQ 文件，共读取 401,232 个顶层事件并完成目标索引转换。此数量包含声明式事件流读取到的非静态可达事件，不等同于旧 reader 的静态遍历计数。另已用实际 `closynth:event-emit` 验证解析所得 note/tempo 对象的类型分派，未接入播放。Citric 的 `guts.bcseq` 有一个开轨目标落在扩展指令内部，索引化时拒绝，不擅自重定位。其他格式与平台主要依赖合成夹具验证，不能据此宣称所有商业游戏兼容。
+新事件接口通过 [OoT3D-Custom-Sequences](https://github.com/Kewlan/OoT3D-Custom-Sequences) 的 63 个 BCSEQ 文件，共读取 401,232 个顶层事件并完成目标索引转换。此数量包含声明式事件流读取到的非静态可达事件，不等同于旧 reader 的静态遍历计数。另已用实际 `closynth:event-emit` 验证解析所得 note/tempo 对象的类型分派，未接入播放。Citric 的 `guts.bcseq` 有一个开轨目标落在扩展指令内部，索引化时拒绝，不擅自重定位。除下面的 BCSAR 样本外，其他格式与平台主要依赖合成夹具验证，不能据此宣称所有商业游戏兼容。
+
+已通过公开 `read-file` 接口完整读取 [pmee 的 `mset.bcsar`](https://github.com/bohonghuang/pmee/blob/01f93480dea5e3e99a2e0d658381fd3a2052423d/mset.bcsar)（383,408 字节，CSAR／小端）。pathname、二进制流、octet vector 三种输入均通过；67 个字符串、50 个声音的名称与文件／播放器 ID、音量、序列 bank／起始偏移／优先级，以及 5 个 CWSD item／note 的字段与 [DualRip](https://github.com/TetraSsky/DualRip) 独立解析结果交叉核对。19 个内嵌文件全部解析：5 个 CSEQ（35,225 个顶层事件）、2 个 CWSD、5 个 CBNK、7 个 CWAR；CWAR 中共读取 34 个 CWAV／34 个声道，保留 273,362 字节编码音频，不进行解码或播放。
+
+样本 SHA-256：`e96097ab77e70837cee31acd2c3c132da56a262add4aa8e1fa27d623ecdf7323`。样本未纳入测试仓库；独立合成回归覆盖此样本揭示的 CWSD item 效果偏移基址、内嵌文件后的 table 基址隔离，以及 SAR project-info 的 `#x220b` 引用 tag。
+
+```lisp
+(nintendo-ware:read-file 'nintendo-ware:xsar #P"/path/to/pmee/mset.bcsar")
+```
 
 - [ENDIAN.md](ENDIAN.md)：各平台、容器及事件流的端序证据。
 - [BCSEQ.md](BCSEQ.md)：3DS 音序、引用和格式资料。

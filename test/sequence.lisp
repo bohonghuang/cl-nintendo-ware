@@ -232,6 +232,18 @@
   (files (make-reference) :type reference)
   (project-info (make-reference) :type reference))
 
+(defbinstruct xsar-project-info-record ()
+  (maximum-sequences 0 :type (unsigned-byte 16))
+  (maximum-sequence-tracks 0 :type (unsigned-byte 16))
+  (maximum-stream-sounds 0 :type (unsigned-byte 16))
+  (maximum-stream-tracks 0 :type (unsigned-byte 16))
+  (maximum-stream-channels 0 :type (unsigned-byte 16))
+  (maximum-wave-sounds 0 :type (unsigned-byte 16))
+  (maximum-wave-tracks 0 :type (unsigned-byte 16))
+  (stream-buffer-times 0 :type (unsigned-byte 8))
+  (padding 0 :type (unsigned-byte 8))
+  (options 0 :type (unsigned-byte 32)))
+
 (defbinstruct xsar-patricia-node ()
   (leaf-flag 0 :type (unsigned-byte 16))
   (bit-index 0 :type (unsigned-byte 16))
