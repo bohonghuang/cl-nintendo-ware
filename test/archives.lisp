@@ -101,7 +101,7 @@
     (container-fixture "CGRP"
                        (list (list #x7800 "INFO" info) (list #x7801 "FILE" embedded) (list #x7802 "INFX" extra)))))
 
-(defun xsar-fixture (embedded)
+(defun xsar-fixture (embedded &key (named-p t) (available-p t))
   (let ((strings
           (layout-fixture
            (list
@@ -177,7 +177,7 @@
                                      :location-reference (fixture-reference address #x220c 'file-data 'internal) :flags (flags 0))))
             (list 'file-data 'cl-nintendo-ware.test::sized-reference
                   (lambda (address) (declare (ignore address))
-                    (cl-nintendo-ware.test::make-sized-reference :type #x1f00 :offset 0 :size (length embedded))))
+                    (cl-nintendo-ware.test::make-sized-reference :type #x1f00 :offset (if available-p 0 -1) :size (length embedded))))
             (list 'external 'cl-nintendo-ware.test::xsar-file-record
                   (lambda (address) (cl-nintendo-ware.test::make-xsar-file-record
                                      :location-reference (fixture-reference address #x220d 'path 'external) :flags (flags 0))))
@@ -185,7 +185,8 @@
                   (lambda (address) (declare (ignore address))
                     (cl-nintendo-ware.test::make-terminated-text :text #.(coerce "audio/example.bcstm" 'simple-base-string))))))))
     (container-fixture "CSAR"
-                       (list (list #x2000 "STRG" strings) (list #x2001 "INFO" info) (list #x2002 "FILE" embedded)))))
+                       (append (when named-p (list (list #x2000 "STRG" strings)))
+                               (list (list #x2001 "INFO" info) (list #x2002 "FILE" embedded))))))
 
 (defun xstm-fixture (&optional (major-version 2))
   (let* ((codec-info (cl-nintendo-ware.test::make-xwav-dsp-adpcm-info
@@ -287,7 +288,7 @@
          (sound (aref (nintendo-ware:xsar-sounds-table-entries (nintendo-ware:xsar-info-sounds information)) 0))
          (sequence (nintendo-ware:xsar-sound-detail sound))
          (priority (nintendo-ware:xsar-sequence-info-priority sequence))
-         (file (aref (nintendo-ware:xsar-files-table-entries (nintendo-ware:xsar-info-files information)) 0))
+         (files (nintendo-ware:xsar-files archive))
          (external (aref (nintendo-ware:xsar-files-table-entries (nintendo-ware:xsar-info-files information)) 1)))
     (assert (= 7 (nintendo-ware:xgrp-entry-file-id (aref (nintendo-ware:xgrp-info-entries (nintendo-ware:xgrp-info group)) 0))))
     (assert (typep (nintendo-ware:xgrp-entry-content (aref (nintendo-ware:xgrp-info-entries (nintendo-ware:xgrp-info group)) 0)) 'nintendo-ware:xseq))
@@ -303,20 +304,52 @@
     (assert (= 12 (nintendo-ware:xsar-project-info-maximum-sequences (nintendo-ware:xsar-info-project-info information))))
     (assert (= 24 (nintendo-ware::xsar-project-info-maximum-sequence-tracks (nintendo-ware:xsar-info-project-info information))))
     (assert (= #x12345678 (nintendo-ware::xsar-project-info-options (nintendo-ware:xsar-info-project-info information))))
-    (assert (typep (nintendo-ware:xsar-internal-file-content (nintendo-ware:xsar-file-location file)) 'nintendo-ware:xseq))
+    (assert (equalp (cons "song" embedded) (aref files 0)))
+    (assert (equal '(nil) (aref files 1)))
+    (assert (typep (aref (nintendo-ware:xseq-events
+                          (nintendo-ware:read-file 'nintendo-ware:xseq
+                                                  (nintendo-ware:xsar-file-data (aref files 0)))) 0)
+                   'nintendo-ware:xseq-event-finish))
     (assert (string= "audio/example.bcstm" (nintendo-ware:xsar-external-file-text (nintendo-ware:xsar-file-location external)))))
-  ;; An embedded CWSD traverses its own tables before the next SAR file entry.
-  (let* ((archive (nintendo-ware:read-file 'nintendo-ware:xsar (xsar-fixture (xwsd-fixture))))
-         (files (nintendo-ware:xsar-files-table-entries
-                 (nintendo-ware:xsar-info-files (nintendo-ware:xsar-info archive))))
-         (embedded (nintendo-ware:xsar-internal-file-content
-                    (nintendo-ware:xsar-file-location (aref files 0))))
-         (item (aref (nintendo-ware:xwsd-item-table-entries
-                      (nintendo-ware:xwsd-info-items (nintendo-ware:xwsd-info embedded))) 0)))
-    (assert (= 1.5f0 (nintendo-ware:xwsd-parameters-pitch (nintendo-ware:xwsd-item-parameters item))))
-    (assert (string= "audio/example.bcstm"
-                     (nintendo-ware:xsar-external-file-text
-                      (nintendo-ware:xsar-file-location (aref files 1))))))
+  ;; A known-format child with an invalid opcode must remain opaque to XSAR.
+  (let* ((bad-child (sequence-fixture #(130) :padded nil))
+         (archive (nintendo-ware:read-file 'nintendo-ware:xsar (xsar-fixture bad-child)))
+         (file (aref (nintendo-ware:xsar-files archive) 0)))
+    (assert (string= "song" (nintendo-ware:xsar-file-name file)))
+    (assert (equalp bad-child (nintendo-ware:xsar-file-data file)))
+    (rejects nintendo-ware:invalid-file
+      (nintendo-ware:read-file 'nintendo-ware:xseq (nintendo-ware:xsar-file-data file))))
+  ;; Unknown payloads require no magic/BOM, and STRG is optional.
+  (let* ((bytes (make-array 3 :element-type '(unsigned-byte 8) :initial-contents '(1 2 3)))
+         (archive (nintendo-ware:read-file 'nintendo-ware:xsar (xsar-fixture bytes :named-p nil)))
+         (file (aref (nintendo-ware:xsar-files archive) 0)))
+    (assert (null (nintendo-ware:xsar-file-name file)))
+    (assert (equalp bytes (nintendo-ware:xsar-file-data file))))
+  ;; Empty data is an octet vector, not a null reference or a dropped file ID.
+  (let* ((archive (nintendo-ware:read-file 'nintendo-ware:xsar
+                                        (xsar-fixture (make-array 0 :element-type '(unsigned-byte 8)))))
+         (files (nintendo-ware:xsar-files archive))
+         (data (nintendo-ware:xsar-file-data (aref files 0))))
+    (assert (= 2 (length files)))
+    (assert (typep data '(simple-array (unsigned-byte 8) (0)))))
+  (let* ((archive (nintendo-ware:read-file 'nintendo-ware:xsar
+                                        (xsar-fixture #(1 2 3) :available-p nil)))
+         (files (nintendo-ware:xsar-files archive)))
+    (assert (= 2 (length files)))
+    (assert (equal '("song") (aref files 0))))
+  ;; The caller, not XSAR, selects the child reader and its independent BOM.
+  (let* ((child-endian (if (eq *fixture-endian* :little) :big :little))
+         (child (let ((*fixture-family* :c) (*fixture-endian* child-endian))
+                  (sequence-fixture #(60 100 12 255))))
+         (archive (nintendo-ware:read-file 'nintendo-ware:xsar (xsar-fixture child)))
+         (sequence (nintendo-ware:read-file 'nintendo-ware:xseq
+                                          (nintendo-ware:xsar-file-data
+                                           (aref (nintendo-ware:xsar-files archive) 0))))
+         (note (aref (nintendo-ware:xseq-events sequence) 0)))
+    (assert (eq child-endian (nintendo-ware:header-endian (nintendo-ware:xseq-header sequence))))
+    (assert (= 60 (nintendo-ware:xseq-event-note-key note)))
+    (assert (= 100 (nintendo-ware:xseq-event-note-velocity note)))
+    (assert (= 12 (nintendo-ware:xseq-event-note-duration note))))
   (dolist (major '(2 3 4 6))
     (let* ((stream (nintendo-ware:read-file 'nintendo-ware:xstm (xstm-fixture major)))
            (information (nintendo-ware:xstm-info stream))
@@ -336,4 +369,4 @@
           (assert (= -321 (nintendo-ware:xwav-dsp-adpcm-context-history-1 (aref (nintendo-ware:xstm-region-contexts region) 0))))))
       (when (>= major 4) (assert (= 28 (nintendo-ware:xstm-original-loop-info-end (nintendo-ware:xstm-stream-info-original-loop-info metadata)))))
       (when (>= major 6) (assert (= 42 (nintendo-ware:xstm-secret-info-value (nintendo-ware:xstm-stream-info-secret-info metadata)))))))
-  (format t "Direct SAR/GRP/WSD/STM graph scenarios passed.~%"))
+  (format t "SAR extraction and GRP/WSD/STM reader scenarios passed.~%"))

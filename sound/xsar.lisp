@@ -126,10 +126,10 @@
 
 (defbinstruct/me xsar-internal-file (data-start)
   (reference (make-sized-reference) :type sized-reference)
-  (content nil :type (ecase (= (sized-reference-offset reference) -1)
-                      ((t) null)
-                      ((nil) (peek embedded-file
-                                   (sized-reference-target reference (+ data-start 8) #x1f00))))))
+  (data nil :type (ecase (= (sized-reference-offset reference) -1)
+                   ((t) null)
+                   ((nil) (peek (simple-array (unsigned-byte 8) ((sized-reference-size reference)))
+                                (sized-reference-target reference (+ data-start 8) #x1f00))))))
 
 (defbinstruct/me xsar-file (data-start)
   (%start 0 :type position)
@@ -198,11 +198,54 @@
                      ((t) (peek (raw-block "FILE")
                                 (block-start header #x2002))))))
 
-(export '(xsar xsar-header xsar-strg xsar-info xsar-file xsar-strg-strings xsar-strg-tree xsar-string-table-entries xsar-string-text
+(defun xsar-files (xsar)
+  "Return a simple vector of (NAME . DATA) conses indexed by file ID.
+DATA is an octet vector for internal files and NIL for absent/external files.
+Names come from resource metadata; later named aliases overwrite earlier ones,
+as in cl-nitro: sounds, banks, wave archives, then groups. No files are parsed."
+  (let* ((info (xsar-info xsar))
+         (table (xsar-info-files info))
+         (files (map 'simple-vector
+                     (lambda (entry)
+                       (cons nil
+                             (when entry
+                               (let ((location (xsar-file-location entry)))
+                                 (when (typep location 'xsar-internal-file)
+                                   (xsar-internal-file-data location))))))
+                     (when table (xsar-files-table-entries table))))
+         (strg (xsar-strg xsar))
+         (string-table (when strg (xsar-strg-strings strg)))
+         (strings (when string-table (xsar-string-table-entries string-table))))
+    (when strings
+      (flet ((fill-names (entries file-id flags)
+               (when entries
+                 (loop for entry across entries when entry do
+                   (let ((index (flag-value (funcall flags entry) 0)))
+                     (when index
+                       (setf (car (aref files (funcall file-id entry)))
+                             (xsar-string-text (aref strings index)))))))))
+        (fill-names (when (xsar-info-sounds info)
+                      (xsar-sounds-table-entries (xsar-info-sounds info)))
+                    #'xsar-sound-file-id #'xsar-sound-flags)
+        (fill-names (when (xsar-info-banks info)
+                      (xsar-banks-table-entries (xsar-info-banks info)))
+                    #'xsar-bank-file-id #'xsar-bank-flags)
+        (fill-names (when (xsar-info-wave-archives info)
+                      (xsar-wave-archives-table-entries (xsar-info-wave-archives info)))
+                    #'xsar-wave-archive-file-id #'xsar-wave-archive-flags)
+        (fill-names (when (xsar-info-groups info)
+                      (xsar-groups-table-entries (xsar-info-groups info)))
+                    #'xsar-group-file-id #'xsar-group-flags)))
+    files))
+
+(setf (fdefinition 'xsar-file-name) (fdefinition 'car)
+      (fdefinition 'xsar-file-data) (fdefinition 'cdr))
+
+(export '(xsar xsar-header xsar-strg xsar-info xsar-file xsar-files xsar-file-name xsar-file-data xsar-strg-strings xsar-strg-tree xsar-string-table-entries xsar-string-text
           xsar-patricia-tree-root-index xsar-patricia-tree-nodes xsar-patricia-node-resource-id xsar-patricia-node-string-index
           xsar-info-sounds xsar-info-sound-groups xsar-info-banks xsar-info-wave-archives xsar-info-groups xsar-info-players xsar-info-files xsar-info-project-info
           xsar-sounds-table-entries xsar-sound-groups-table-entries xsar-banks-table-entries xsar-wave-archives-table-entries
           xsar-groups-table-entries xsar-players-table-entries xsar-files-table-entries xsar-sound-file-id xsar-sound-player-id xsar-sound-detail
           xsar-sequence-info xsar-sequence-info-banks xsar-sequence-info-start-offset xsar-sequence-info-priority
-          xsar-bank-file-id xsar-bank-wave-archives xsar-player-sound-limit xsar-file-location xsar-internal-file-reference xsar-internal-file-content
+          xsar-bank-file-id xsar-bank-wave-archives xsar-player-sound-limit xsar-file-location xsar-internal-file-reference xsar-internal-file-data
           xsar-external-file-text xsar-project-info-maximum-sequences))

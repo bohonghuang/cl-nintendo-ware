@@ -10,24 +10,46 @@
          (strings (nintendo-ware:xsar-string-table-entries
                    (nintendo-ware:xsar-strg-strings (nintendo-ware:xsar-strg archive))))
          (sounds (nintendo-ware:xsar-sounds-table-entries (nintendo-ware:xsar-info-sounds info)))
-         (files (nintendo-ware:xsar-files-table-entries (nintendo-ware:xsar-info-files info)))
+         (files (nintendo-ware:xsar-files archive))
+         ;; This test chooses to parse every file. XSAR only returned bytes.
          (contents (map 'vector
-                        (lambda (file)
-                          (nintendo-ware:xsar-internal-file-content
-                           (nintendo-ware:xsar-file-location file)))
-                        files))
+                        (lambda (file type)
+                          (nintendo-ware:read-file type (nintendo-ware:xsar-file-data file)))
+                        files
+                        '#(nintendo-ware:xseq nintendo-ware:xseq nintendo-ware:xseq nintendo-ware:xseq nintendo-ware:xseq
+                           nintendo-ware:xwsd nintendo-ware:xwsd
+                           nintendo-ware:xbnk nintendo-ware:xbnk nintendo-ware:xbnk nintendo-ware:xbnk nintendo-ware:xbnk
+                           nintendo-ware:xwar nintendo-ware:xwar nintendo-ware:xwar nintendo-ware:xwar
+                           nintendo-ware:xwar nintendo-ware:xwar nintendo-ware:xwar)))
          (project (nintendo-ware:xsar-info-project-info info)))
     (assert (string= "CSAR" (nintendo-ware:header-magic (nintendo-ware:xsar-header archive))))
     (assert (eq :little (nintendo-ware:header-endian (nintendo-ware:xsar-header archive))))
     (assert (= 67 (length strings)))
     (assert (= 50 (length sounds)))
-    ;; Every file ID must retain its type after nested tables and files return.
-    (assert (equal '(nintendo-ware:xseq nintendo-ware:xseq nintendo-ware:xseq nintendo-ware:xseq nintendo-ware:xseq
-                     nintendo-ware:xwsd nintendo-ware:xwsd
-                     nintendo-ware:xbnk nintendo-ware:xbnk nintendo-ware:xbnk nintendo-ware:xbnk nintendo-ware:xbnk
-                     nintendo-ware:xwar nintendo-ware:xwar nintendo-ware:xwar nintendo-ware:xwar
-                     nintendo-ware:xwar nintendo-ware:xwar nintendo-ware:xwar)
-                   (map 'list #'type-of contents)))
+    ;; cl-nitro naming semantics: the last named alias for a file ID wins;
+    ;; unnamed WARs keep NIL rather than receiving invented filenames.
+    (assert (equal '("BGM_CTR_MSET_FIRST"
+                     "BGM_CTR_MSET_TWL"
+                     "SE_CTR_MSET_SLIDE_BTN_EDGE"
+                     "SE_CTR_COMMON_SYSAPPLET_END"
+                     "SE_TWL_SET_USER_COLOR_BOTTOM"
+                     "SE_CTR_MSET_PEN"
+                     "SE_CTR_COMMON_TOGGLE"
+                     "BANK_CTR_MSET_BGM"
+                     "BANK_TWL_SETTING"
+                     "BANK_CTR_MSET_SE"
+                     "BANK_TWL_SE"
+                     "BANK_CTR_COMMON"
+                     nil
+                     nil
+                     nil
+                     nil
+                     nil
+                     nil
+                     nil)
+                   (map 'list #'nintendo-ware:xsar-file-name files)))
+    (assert (equal '(68640 8800 2176 1760 352 216 664 2324 264 464 200 1024 10368 2800 230616 7118 7776 488 25232)
+                   (map 'list (lambda (file) (length (nintendo-ware:xsar-file-data file))) files)))
     ;; Non-null project-info requires the real #x220b reference tag.
     (assert (= 32 (nintendo-ware:xsar-project-info-maximum-sequences project)))
     (assert (= 64 (nintendo-ware::xsar-project-info-maximum-sequence-tracks project)))
