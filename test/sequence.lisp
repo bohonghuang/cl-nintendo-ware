@@ -357,7 +357,8 @@
     (rejects nintendo-ware::invalid-file (nintendo-ware::read-file 'nintendo-ware::xwav bytes))
     (rejects nintendo-ware::invalid-file (nintendo-ware::read-file 'nintendo-ware::xseq (sequence-fixture #(#xff) :label-offset 24))))
   (dolist (case '((#(0) 0) (#(#x7f) 127) (#(#x81 0) 128) (#(#xff #x7f) 16383)
-                  (#(#x81 #x80 0) 16384) (#(#xff #xff #x7f) 2097151) (#(#xff #xff #xff #x7f) 268435455)))
+                  (#(#x81 #x80 0) 16384) (#(#xff #xff #x7f) 2097151) (#(#xff #xff #xff #x7f) 268435455)
+                  (#(#x81 #x80 #x80 #x80 0) 268435456) (#(#x8f #xff #xff #xff #x7f) 4294967295)))
     (destructuring-bind (encoded expected) case
       (let ((events (nintendo-ware::xseq-events
                      (nintendo-ware::read-file 'nintendo-ware::xseq (sequence-fixture (concatenate 'vector #(#x80) encoded #(#xff)))))))
