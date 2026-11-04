@@ -1,5 +1,5 @@
 (defpackage #:cl-nintendo-ware
-  (:use #:cl #:parsonic #:binstruct)
+  (:use #:cl #:alexandria #:parsonic #:binstruct)
   (:nicknames #:nintendo-ware)
   (:export
    #:read-file

@@ -54,10 +54,10 @@
     (assert (= 32 (nintendo-ware::xsar-project-info-maximum-sequences project)))
     (assert (= 64 (nintendo-ware::xsar-project-info-maximum-sequence-tracks project)))
     (assert (= 64 (nintendo-ware::xsar-project-info-maximum-wave-sounds project)))
-    (flet ((name (flags)
+    (flet ((name (string-index)
              (string-right-trim '(#\Null)
                (nintendo-ware::xsar-string-text
-                (aref strings (nintendo-ware::flag-value flags 0))))))
+                (aref strings string-index)))))
       ;; Names, file IDs and volumes independently cross-checked with DualRip.
       (loop for sound across sounds
             for (expected-name file-id volume) in
@@ -111,7 +111,7 @@
               ("SE_CTR_COMMON_SCROLL_END" 3 16)
               ("SE_CTR_COMMON_DIALOG" 3 110)
               ("SE_CTR_COMMON_SYSAPPLET_END" 3 90)) do
-              (assert (string= expected-name (name (nintendo-ware::xsar-sound-flags sound))))
+              (assert (string= expected-name (name (nintendo-ware::xsar-sound-string-index sound))))
               (assert (= file-id (nintendo-ware::xsar-sound-file-id sound)))
               (assert (= volume (nintendo-ware::xsar-sound-volume sound))))
       (let ((banks (nintendo-ware::xsar-banks-table-entries (nintendo-ware::xsar-info-banks info))))
@@ -122,7 +122,7 @@
               ("BANK_CTR_MSET_SE" 9)
               ("BANK_TWL_SE" 10)
               ("BANK_CTR_COMMON" 11)) do
-                (assert (string= expected-name (name (nintendo-ware::xsar-bank-flags bank))))
+                (assert (string= expected-name (name (nintendo-ware::xsar-bank-string-index bank))))
                 (assert (= file-id (nintendo-ware::xsar-bank-file-id bank))))))
     ;; Read the whole event stream, including events after finish/return commands.
     (loop for id from 0 below 5 for expected in '(31747 2443 506 481 48) do

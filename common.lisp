@@ -65,7 +65,7 @@
     `(or null ,(binstruct::lisp-type (third arguments))))
   (defmethod binstruct::expand-reader-type-expr ((name (eql 'reference-to)) &rest arguments)
     (destructuring-bind (tag base content) arguments
-      (alexandria:with-gensyms (offset)
+      (with-gensyms (offset)
         `(let ((,offset ,(binstruct::expand-reader-type-unit `(peek (reference-offset-value ,tag)))))
            ,(binstruct::expand-reader-type
              `(ecase (= ,offset -1)
@@ -128,21 +128,6 @@
   (+ (header-start header) (sized-reference-offset (block-reference header type))))
 
 
-(defun flag-value (flags bit &optional default)
-  (let ((mask (flag-values-mask flags)))
-    (if (logbitp bit mask)
-        (aref (flag-values-values flags) (logcount (logand mask (1- (expt 2 bit))))) default)))
-
-(defun flag-position (flags bit start)
-  (+ start 4 (* 4 (logcount (logand (flag-values-mask flags) (1- (expt 2 bit)))))))
-
-(defun flag-target (flags bit base)
-  (let ((offset (flag-value flags bit #xffffffff)))
-    (unless (= offset #xffffffff) (+ base offset))))
-
-(defbinstruct/me flag-values ()
-  (mask 0 :type (unsigned-byte 32))
-  (values #.(make-array 0 :element-type '(unsigned-byte 32)) :type (simple-array (unsigned-byte 32) ((logcount mask)))))
 
 (defbinstruct/me integer-table ()
   (count 0 :type (unsigned-byte 32))
@@ -223,12 +208,14 @@
 
 (defbinstruct packed-priority ()
   (channel-priority 0 :type (unsigned-byte 8))
-  (release-priority 0 :type (unsigned-byte 8))
+  (release-priority-p nil :type (boolean bit))
+  (release-reserved 0 :type (unsigned-byte 7))
   (reserved 0 :type (unsigned-byte 16)))
 
 (defbinstruct (packed-priority/be (:type packed-priority) (:endian :big)) ()
   (reserved 0 :type (unsigned-byte 16))
-  (release-priority 0 :type (unsigned-byte 8))
+  (release-priority-p nil :type (boolean bit))
+  (release-reserved 0 :type (unsigned-byte 7))
   (channel-priority 0 :type (unsigned-byte 8)))
 
 (defbinalias packed-priority/le () packed-priority)

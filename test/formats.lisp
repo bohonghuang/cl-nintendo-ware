@@ -94,8 +94,8 @@
 (defun xbnk-fixture (instrument-tag key-tag &optional (wave-index 0))
   (let* ((leaf (octets-join
                 (encode-record 'cl-nintendo-ware.test::xbnk-velocity-data (cl-nintendo-ware.test::make-xbnk-velocity-data :wave-index wave-index))
-                (encode-record 'cl-nintendo-ware.test::flag-values
-                               (cl-nintendo-ware.test::make-flag-values :mask #x21f
+                (encode-record 'cl-nintendo-ware.test::fixture-parameter-words
+                               (cl-nintendo-ware.test::make-fixture-parameter-words :mask #x21f
                                  :values (make-array 6 :element-type '(unsigned-byte 32)
                                                      :initial-contents '(60 100 #x2040 #x3fc00000 #x10001 32))))
                 (encode-record 'cl-nintendo-ware.test::reference (cl-nintendo-ware.test::make-reference :type 0 :offset 8))
@@ -169,6 +169,10 @@
         (assert (= 1.5f0 (nintendo-ware::xbnk-velocity-pitch velocity)))
         (assert (= 64 (nintendo-ware::xbnk-pan-flag-pan pan)))
         (assert (= 32 (nintendo-ware::xbnk-pan-flag-surround-pan pan)))
+        (let ((note (nintendo-ware::xbnk-velocity-note-info velocity)))
+          (assert (nintendo-ware::xbnk-note-flag-percussion-p note))
+          (assert (= 0 (nintendo-ware::xbnk-note-flag-key-group note)))
+          (assert (= 1 (nintendo-ware::xbnk-note-flag-interpolation-type note))))
         (assert (= 4 (nintendo-ware::xbnk-adshr-curve-hold (nintendo-ware::xbnk-velocity-envelope velocity)))))))
   (rejects nintendo-ware::invalid-file (nintendo-ware::read-file 'nintendo-ware::xbnk (xbnk-fixture #x6000 #x6000 1)))
   ;; Removing size/overlap validation must not remove section identification.

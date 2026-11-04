@@ -18,10 +18,10 @@
   (cl-nintendo-ware.test::make-reference :type type :offset (- (funcall address target) (funcall address base))))
 
 (defun flags (mask &rest values)
-  (cl-nintendo-ware.test::make-flag-values :mask mask
+  (cl-nintendo-ware.test::make-fixture-parameter-words :mask mask
                           :values (make-array (length values) :element-type '(unsigned-byte 32) :initial-contents values)))
 
-(defun xwsd-fixture ()
+(defun xwsd-fixture (&key item-flags note-flags)
   (let ((body
           (layout-fixture
            (list
@@ -41,11 +41,12 @@
                      :first (fixture-reference address #x4901 'parameters 'item)
                      :second (fixture-reference address #x0101 'tracks 'item)
                      :third (fixture-reference address #x0101 'notes 'item))))
-            (list 'parameters 'cl-nintendo-ware.test::flag-values
+            (list 'parameters 'cl-nintendo-ware.test::fixture-parameter-words
                   (lambda (address)
-                    (flags #x307 #x2040 #x3fc00000 #x030201
-                           (- (funcall address 'item-sends) (funcall address 'parameters))
-                           (- (funcall address 'item-envelope-reference) (funcall address 'parameters)))))
+                    (or item-flags
+                        (flags #x307 #x2040 #x3fc00000 #x030201
+                               (- (funcall address 'item-sends) (funcall address 'parameters))
+                               (- (funcall address 'item-envelope-reference) (funcall address 'parameters))))))
             (list 'item-sends 'cl-nintendo-ware.test::xwsd-send-values
                   (lambda (address) (declare (ignore address))
                     (cl-nintendo-ware.test::make-xwsd-send-values
@@ -72,7 +73,7 @@
             (list 'note 'cl-nintendo-ware.test::xwsd-note-record
                   (lambda (address)
                     (cl-nintendo-ware.test::make-xwsd-note-record :wave-index 0
-                     :flags (flags #x20f 64 127 #x3048 #x3f400000 (- (funcall address 'envelope-reference) (funcall address 'note))))))
+                     :flags (or note-flags (flags #x20f 64 127 #x3048 #x3f400000 (- (funcall address 'envelope-reference) (funcall address 'note)))))))
             (list 'envelope-reference 'cl-nintendo-ware.test::reference
                   (lambda (address) (fixture-reference address 0 'envelope 'envelope-reference)))
             (list 'envelope 'cl-nintendo-ware.test::xwsd-envelope
@@ -101,7 +102,7 @@
     (container-fixture "CGRP"
                        (list (list #x7800 "INFO" info) (list #x7801 "FILE" embedded) (list #x7802 "INFX" extra)))))
 
-(defun xsar-fixture (embedded &key (named-p t) (available-p t))
+(defun xsar-fixture (embedded &key (named-p t) (available-p t) sound-flags sequence-flags)
   (let ((strings
           (layout-fixture
            (list
@@ -149,11 +150,11 @@
             (list 'sound 'cl-nintendo-ware.test::xsar-sound-record
                   (lambda (address)
                     (cl-nintendo-ware.test::make-xsar-sound-record :file-id 0 :player-id #x04000000 :volume 100
-                     :detail-reference (fixture-reference address #x2203 'sequence 'sound) :flags (flags 1 0))))
+                     :detail-reference (fixture-reference address #x2203 'sequence 'sound) :flags (or sound-flags (flags 1 0)))))
             (list 'sequence 'cl-nintendo-ware.test::xsar-sequence-record
                   (lambda (address)
                     (cl-nintendo-ware.test::make-xsar-sequence-record :banks-reference (fixture-reference address #x0100 'xbnk-ids 'sequence)
-                     :allocate-track-flags 3 :flags (flags 3 4 #x0150))))
+                     :allocate-track-flags 3 :flags (or sequence-flags (flags 3 4 #x0150)))))
             (list 'xbnk-ids 'cl-nintendo-ware.test::integer-table
                   (lambda (address) (declare (ignore address))
                     (cl-nintendo-ware.test::make-integer-table :count 1 :entries (make-array 1 :element-type '(unsigned-byte 32) :initial-element #x03000000))))
@@ -255,6 +256,40 @@
                        :version (* major-version #x1000000))))
 
 (defun run-archive-tests ()
+  ;; Sparse sets must not shift later values; unknown bits retain their words.
+  (let* ((archive (nintendo-ware::read-file 'nintendo-ware::xsar
+                    (xsar-fixture (sequence-fixture #(#xff))
+                      :sound-flags (flags #x90020009 0 #x10203040 1 #x55667788 #xaabbccdd)
+                      :sequence-flags (flags 2 #x0147))))
+         (sound (aref (nintendo-ware::xsar-sounds-table-entries
+                       (nintendo-ware::xsar-info-sounds (nintendo-ware::xsar-info archive))) 0))
+         (sequence (nintendo-ware::xsar-sound-detail sound)))
+    (assert (nintendo-ware::xsar-sound-flag-set-user-parameter-0-p
+              (nintendo-ware::xsar-sound-flags sound)))
+    (assert (not (nintendo-ware::xsar-sound-flag-set-pan-mode-info-p
+                   (nintendo-ware::xsar-sound-flags sound))))
+    (assert (equalp #(#x10203040) (nintendo-ware::xsar-sound-reserved-3-7-values sound)))
+    (assert (nintendo-ware::xsar-front-bypass-info-front-bypass-p
+              (nintendo-ware::xsar-sound-front-bypass sound)))
+    (assert (= #x55667788 (nintendo-ware::xsar-sound-user-parameter-3 sound)))
+    (assert (= #xaabbccdd (nintendo-ware::xsar-sound-user-parameter-0 sound)))
+    (assert (null (nintendo-ware::xsar-sequence-info-start-offset sequence)))
+    (assert (= 71 (nintendo-ware::packed-priority-channel-priority
+                   (nintendo-ware::xsar-sequence-info-priority sequence)))))
+  (let* ((file (nintendo-ware::read-file 'nintendo-ware::xwsd
+                 (xwsd-fixture :item-flags (flags #x302 #x40000000 #xffffffff #xffffffff)
+                               :note-flags (flags 0))))
+         (item (aref (nintendo-ware::xwsd-item-table-entries
+                      (nintendo-ware::xwsd-info-items (nintendo-ware::xwsd-info file))) 0))
+         (parameters (nintendo-ware::xwsd-item-parameters item))
+         (note (aref (nintendo-ware::xwsd-note-table-entries
+                      (nintendo-ware::xwsd-item-notes item)) 0)))
+    (assert (= 2.0f0 (nintendo-ware::xwsd-parameters-pitch parameters)))
+    (assert (null (nintendo-ware::xwsd-parameters-pan-info parameters)))
+    (assert (null (nintendo-ware::xwsd-parameters-sends parameters)))
+    (assert (null (nintendo-ware::xwsd-parameters-envelope parameters)))
+    (assert (null (nintendo-ware::xwsd-parameters-pitch
+                   (nintendo-ware::xwsd-note-parameters note)))))
   (let* ((sound (nintendo-ware::read-file 'nintendo-ware::xwsd (xwsd-fixture)))
          (information (nintendo-ware::xwsd-info sound))
          (item (aref (nintendo-ware::xwsd-item-table-entries (nintendo-ware::xwsd-info-items information)) 0))
@@ -297,7 +332,7 @@
     (assert (= #x01000000 (nintendo-ware::xsar-patricia-node-resource-id (aref (nintendo-ware::xsar-patricia-tree-nodes (nintendo-ware::xsar-strg-tree (nintendo-ware::xsar-strg archive))) 0))))
     (assert (= 4 (nintendo-ware::xsar-sequence-info-start-offset sequence)))
     (assert (= 80 (nintendo-ware::packed-priority-channel-priority priority)))
-    (assert (= 1 (nintendo-ware::packed-priority-release-priority priority)))
+    (assert (nintendo-ware::packed-priority-release-priority-p priority))
     (assert (= #x03000000 (aref (nintendo-ware::integer-table-entries (nintendo-ware::xsar-sequence-info-banks sequence)) 0)))
     (assert (= #x05000002 (aref (nintendo-ware::integer-table-entries (nintendo-ware::xsar-bank-wave-archives (aref (nintendo-ware::xsar-banks-table-entries (nintendo-ware::xsar-info-banks information)) 0))) 0)))
     (assert (= 4 (nintendo-ware::xsar-player-sound-limit (aref (nintendo-ware::xsar-players-table-entries (nintendo-ware::xsar-info-players information)) 0))))

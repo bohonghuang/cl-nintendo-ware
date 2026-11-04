@@ -38,17 +38,17 @@
   (defparameter *xseq-events* nil))
 
 (defmacro define-xseq-event ((name event-bytes) &body fields)
-  (let* ((class (alexandria:symbolicate 'xseq-event- name))
-         (partial (alexandria:symbolicate class '/partial))
-         (bytes (alexandria:ensure-list event-bytes))
+  (let* ((class (symbolicate 'xseq-event- name))
+         (partial (symbolicate class '/partial))
+         (bytes (ensure-list event-bytes))
          (tags (loop for byte in bytes collect
-                 `(nil ,byte :type (satisfies (unsigned-byte 8) (alexandria:curry #'eql ,byte))))))
-    (alexandria:with-gensyms (status)
+                 `(nil ,byte :type (satisfies (unsigned-byte 8) (curry #'eql ,byte))))))
+    (with-gensyms (status)
       `(progn
          (defbinstruct/me (,class (:include xseq-event)) () ,@tags ,@fields)
          (defbinstruct/me (,partial (:type ,class)) (,status)
            (nil ,(first bytes) :type (satisfies (map null (constantly ,status))
-                                              (alexandria:curry #'eql ,(first bytes))))
+                                              (curry #'eql ,(first bytes))))
            ,@(rest tags)
            ,@(if (and fields (subtypep (binstruct::lisp-type (getf (cddr (car (last fields))) :type)) 'xseq-event))
                  fields (butlast fields)))
@@ -411,7 +411,7 @@
        (values nil :type (or ,@(loop for type in *xseq-events* collect `(,type)))))
      (defbinstruct/me (xseq-event-partial-union (:type xseq-event) (:constructor progn) (:conc-name nil)) (status)
        (values nil :type (or ,@(loop for type in *xseq-events*
-                                    collect `(,(alexandria:symbolicate type '/partial) status)))))))
+                                    collect `(,(symbolicate type '/partial) status)))))))
 (define-xseq-event-unions)
 
 ;; These walkers operate on semantic events; binary positions stay local to

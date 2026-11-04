@@ -1,5 +1,5 @@
 (defpackage #:cl-nintendo-ware.test
-  (:use #:cl #:parsonic #:binstruct)
+  (:use #:cl #:alexandria #:parsonic #:binstruct)
   (:export #:run-tests #:run-format-tests #:run-archive-tests #:run-endian-tests #:run-pmee-tests))
 (in-package #:cl-nintendo-ware.test)
 (defvar *record-start* 0)
@@ -38,9 +38,9 @@
   (count 0 :type (satisfies (unsigned-byte 32) (lambda (count) (count-fits-p count 8))))
   (entries #() :type (simple-array wave-id (count))))
 
-(defbinstruct flag-values ()
+(defbinstruct fixture-parameter-words ()
   (mask 0 :type (unsigned-byte 32))
-  (values #.(make-array 0 :element-type '(unsigned-byte 32)) :type (simple-array (unsigned-byte 32) ((logcount mask)))))
+  (values #.(make-array 0 :element-type '(unsigned-byte 32)) :type (simple-array (unsigned-byte 32) (*))))
 
 (defbinstruct reference-pair ()
   (first (make-reference) :type reference)
@@ -168,7 +168,7 @@
 
 (defbinstruct xwsd-note-record ()
   (wave-index 0 :type (unsigned-byte 32))
-  (flags (make-flag-values) :type flag-values))
+  (flags (make-fixture-parameter-words) :type fixture-parameter-words))
 
 (defbinstruct xwsd-event ()
   (position 0.0 :type single-float)
@@ -264,25 +264,25 @@
   (remote-filter 0 :type (signed-byte 8))
   (padding 0 :type (unsigned-byte 16))
   (detail-reference (make-reference) :type reference)
-  (flags (make-flag-values) :type flag-values))
+  (flags (make-fixture-parameter-words) :type fixture-parameter-words))
 
 (defbinstruct xsar-sequence-record ()
   (banks-reference (make-reference) :type reference)
   (allocate-track-flags 0 :type (unsigned-byte 32))
-  (flags (make-flag-values) :type flag-values))
+  (flags (make-fixture-parameter-words) :type fixture-parameter-words))
 
 (defbinstruct xsar-bank-record ()
   (file-id 0 :type (unsigned-byte 32))
   (wave-archives-reference (make-reference) :type reference)
-  (flags (make-flag-values) :type flag-values))
+  (flags (make-fixture-parameter-words) :type fixture-parameter-words))
 
 (defbinstruct xsar-player-record ()
   (sound-limit 0 :type (unsigned-byte 32))
-  (flags (make-flag-values) :type flag-values))
+  (flags (make-fixture-parameter-words) :type fixture-parameter-words))
 
 (defbinstruct xsar-file-record ()
   (location-reference (make-reference) :type reference)
-  (flags (make-flag-values) :type flag-values))
+  (flags (make-fixture-parameter-words) :type fixture-parameter-words))
 
 (defbinstruct xgrp-file-record ()
   (file-id 0 :type (unsigned-byte 32))

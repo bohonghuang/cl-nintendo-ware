@@ -263,8 +263,32 @@ The library shares the modern **C/F** container layouts only. Nitro `S*` and Wii
 - `common.lisp`: the file-header parser reads the common magic/BOM prefix and selects the fixed-endian header remainder. GRP embedded dispatch selects only the file kind by magic; each selected file container handles its own BOM, without BOM lookahead or sized-reference-length validation wrappers. WAR entries directly use the single WAV reader, not arbitrary archive formats. XSAR does neither: it extracts raw file bytes, and callers explicitly select a complete-file reader whose BOM is independent of the archive's endian.
 - `sound/xseq.lisp`: one set of concrete event declarations generates complete and `/partial` layouts in both endians. CSEQ and Wii U event streams use `/be`; Switch FSEQ uses `/le`. Native binstruct unions select events, child events are embedded, and flow/label targets become event indices before returning to consumers. Known later commands are not rejected merely because the containing file uses C magic.
 - `sound/xstm.lisp`: SEEK context endian is distinct from the section header. Citric's `SoundNStreamSeekBlock` reader selects LE contexts for C magic and BE contexts for F magic, restoring the container byte order afterward. The implementation follows this rule; synthetic tests include F/little containers with BE SEEK payloads. This is not a claim of verification against every retail Switch stream/version.
-- Packed integer flag subfields are not identical byte-field layouts in LE and BE. Their explicit variants reverse byte-field positions as required while reusing one Lisp type; they are not blindly duplicated with `defbinstruct/me`.
+- Byte-aligned packed numeric subfields retain explicit LE/BE variants. Native 32-bit bitfields use `defbinstruct/me` with `(:bitfield t)`: binstruct ends an integer group whenever a field ends on a byte boundary, so the macro reverses these groups for BE while preserving low-bit-first fields within each group. All extraction remains native binstruct bitfield parsing; no mask decoding runs after parsing.
 
 The reader regression suite exercises both C/F identifiers in both container endians, independent embedded BOMs, metadata floats and references, event operand endian, and stream version branches. These synthetic profiles verify the declared layouts, not universal game compatibility. The 63-file public BCSEQ corpus supplies separate real-data evidence; other platform families lack equivalent retail-corpus coverage here.
 
 `defbinio` is used only at complete-file level, after all schemas, with no extra schema arguments. Event streams are native binstruct declarations, not manually driven leaf readers. `reference-to` expands concrete reader/writer types at compile time rather than defining a higher-order parser function. Magic/opcode identification and non-size-related checks remain; file/section size consistency, span and overlap validation are deliberately omitted. Length fields still drive payload and padding reads. This is not an isolated section-bounded sandbox. No writer endian dispatch is installed; writer correctness is not guaranteed, and library writers are not tested. Independent fixture emitters only create test input bytes.
+
+### Optional-parameter flag sets
+
+Each record owns its flag-set type; every presence bit is `(boolean bit)` with a `-p` accessor. Optional fields are read directly in ascending bit order. Absent fields remain `NIL`; unknown/reserved bits retain their corresponding u32 words in the owning record, without assigning unsupported meanings.
+
+| Record / flag set | Defined bit numbers and optional values |
+|---|---|
+| BNK velocity | 0 original key; 1 volume; 2 pan; 3 float pitch; 4 note information; 8 send; 9 envelope-reference offset; 10 randomizer; 11 low-pass information |
+| WSD item | 0 pan; 1 float pitch; 2 filter; 8 sends offset; 9 envelope-reference offset |
+| WSD note | 0 original key; 1 volume; 2 pan; 3 float pitch; 4 filter; 8 sends offset; 9 envelope-reference offset |
+| SAR sound | 0 string index; 1 pan mode/curve; 2 player priority/actor ID; 8 3D-info offset; 17 front bypass; 28/29/30/31 user parameters 3/2/1/0 |
+| SAR sequence | 0 start offset; 1 channel/release priority |
+| SAR wave sound | 0 channel/release priority |
+| SAR legacy stream options | 0 file type; 1 loop-start frame; 2 loop-end frame |
+| SAR wave archive | 0 string index; 1 wave count |
+| SAR player | 0 string index; 1 heap size |
+| SAR bank, group, sound group | 0 string index; separate flag-set types for each record |
+| SAR 3D options, wave-sound group, file | No established optional-value semantics; record-specific reserved bits and words are preserved |
+
+The separate SAR 3D control word uses bits 0–4 for volume, priority, pan, surround pan and filter switches; unlike optional-parameter sets, it has no following value per set bit. BNK percussion and SAR release-priority/front-bypass switches also use native `(boolean bit)` fields and `-p` names.
+
+Sources: [Citric common flag ordering](https://gota7.github.io/Citric-Composer/specs/common.html), [BNK velocity flags](https://gota7.github.io/Citric-Composer/specs/bnk.html), and Citric Composer's `High Level/Sound Archive/SoundArchiveReader.cs`, `High Level/Wave Sound Data/WaveSoundData.cs`, and `SoundArchive.cs` in the [reference implementation](https://github.com/Gota7/Citric-Composer). Item sends/envelope offsets are relative to the WSD parameter flags; note offsets include the wave index. `#xffffffff` offsets and null envelope references remain `NIL`.
+
+Independent fixture words exercise C/F × LE/BE through complete-file readers, including sparse presence bits, bit 31, retained unknown values, absent fields and null effect offsets. Real-data verification remains the retained LE `mset.bcsar`; this does not establish retail BE compatibility.

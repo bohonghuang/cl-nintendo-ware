@@ -29,15 +29,15 @@
     (labels ((type/be (type)
                (cond ((assoc type primitives :test #'equal)
                       (cdr (assoc type primitives :test #'equal)))
-                     ((member type names) (alexandria:symbolicate type '#:/be))
+                     ((member type names) (symbolicate type '#:/be))
                      ((atom type) type)
-                     ((member (car type) names) (cons (alexandria:symbolicate (car type) '#:/be) (cdr type)))
+                     ((member (car type) names) (cons (symbolicate (car type) '#:/be) (cdr type)))
                      ((member (car type) '(simple-array satisfies peek))
                       (list* (car type) (type/be (second type)) (cddr type)))
                      (t type))))
       `(progn
          ,@(loop for (name arguments) in declarations
-                 collect `(defbinstruct (,(alexandria:symbolicate name '#:/be) (:type ,name) (:endian :big))
+                 collect `(defbinstruct (,(symbolicate name '#:/be) (:type ,name) (:endian :big))
                               ,arguments
                             ,@(loop for slot in (cdr (get name 'binstruct::slots))
                                     collect (list (first slot) (second slot)
@@ -51,7 +51,7 @@
   (integer-table ())
   (wave-id ())
   (wave-id-table ())
-  (flag-values ())
+  (fixture-parameter-words ())
   (reference-pair ())
   (reference-triple ())
   (byte-payload (count))
