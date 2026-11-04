@@ -52,7 +52,24 @@ BNK、WSD、SAR 的可选参数各有记录专属位域 set，开关字段使用
 
 `xwar-waves` 仿照 Nitro 的 `swar-waves`，直接返回按 wave index 排列的 WAV 结构向量；保留空引用为 `NIL`，不压缩索引，也不复制或解码编码音频。调用方不需要遍历 INFO section 和 reference entry。
 
-共用解析布局不等于保证所有游戏、版本和编码组合兼容。原始 ID、引用、可选字段、DATA 及填充保留；空引用为 `NIL`。外部档案路径只读取为字符串，绝不自动打开。
+共用解析布局不等于保证所有游戏、版本和编码组合兼容。原始 ID、引用及可选字段保留；空引用为 `NIL`。外部档案路径只读取为字符串，绝不自动打开。
+
+### WAV 原生采样数据
+
+`xwav-channel-data` 由声明中的 `ecase` 按 codec 直接读取最终专用数组，不先读取 octet vector 再做符号转换、拼接 PCM16 或拆 nibble。移除旧 `xwav-channel-encoded-data`，不提供兼容副本。`count` 为 `xwav-info-loop-end`，也是非循环波形的样本数。
+
+| `xwav-info-codec` | `xwav-channel-data` 元素类型 | 长度与顺序 |
+|---|---|---|
+| `pcm-8` | `(signed-byte 8)` | `count`；可直接传入 `s8-pcm-source` |
+| `pcm-16` | `(signed-byte 16)` | `count`；reader 按 WAV 自身 BOM 读出数值，可直接传入 `s16-pcm-source` |
+| `dsp-adpcm` | `(unsigned-byte 8)` | `8 * ceiling(count / 14)`；保留原生 DSP 帧，可直接交给后续 DSP-ADPCM source |
+| `ima-adpcm` | `(unsigned-byte 4)` | `count`；每字节低 nibble 在前，与 BOM 无关；奇数样本数不包含最后未使用的高 nibble，可直接传入 `ima-adpcm-source` |
+
+DSP 帧为一个 header 字节加七个采样字节：header 高 nibble 是 predictor／系数对索引，低 nibble 是 scale，随后 14 个残差按每字节高 nibble 在前排列。这里不把 DSP 解码成 PCM，也不分配另一份 nibble 数组；future source 在渲染时直接消费帧。系数及初始／循环 history 保留在 `xwav-channel-codec-info` 的 `xwav-dsp-adpcm-info` 中。IMA 的初始／循环 predictor 和 step-index 则在 `xwav-ima-adpcm-info` 中，data 不重复嵌入状态头。
+
+每个通道只读取自己的最终数组；`xwav-data` 仅保留并校验 DATA 区块头，不再复制整块原始音频或对齐填充。调用方不要再 `map` 有符号 PCM、按字节拼 PCM16、拆 IMA nibble，或预先渲染整段 ADPCM。构造 source 时直接共享 data，音频解码由消费端在渲染时完成。本库不添加音频解码器或播放器。
+
+合成回归覆盖 C/F × LE/BE、有符号极值、PCM16 非对称字节、奇数／零样本数、DSP 跨帧及不同 BOM 的内嵌 WAV。额外 smoke 使用现有 Closynth 的 `s8-pcm-source`、`s16-pcm-source`、`ima-adpcm-source`：共享同一 data 对象，只渲染短窗口，并通过跟踪输入流确认每个通道 payload 字节只读一次。没有修改 Closynth，也没有宣称当前存在 DSP source。
 
 ### 语义枚举与开关
 
@@ -105,7 +122,7 @@ XSAR 仿照 cl-nitro 的 SDAT：读取元数据和各内嵌文件的原始字节
 
 容器 BOM 与事件字节序分别处理：CSEQ 事件固定大端；Wii U FSEQ 为大端；Switch FSEQ 为小端。文件声明选择事件流布局，消费端无需处理端序。所有平台共享事件声明，不施加平台 opcode 白名单。
 
-CSTM SEEK 上下文固定小端；当前 FSTM SEEK 布局按 Citric 的参考实现使用大端上下文，独立于区块头 BOM。编码音频始终保留原始字节，不因容器换端序而交换音频 payload。
+CSTM SEEK 上下文固定小端；当前 FSTM SEEK 布局按 Citric 的参考实现使用大端上下文，独立于区块头 BOM。WAV PCM16 按自身 BOM 解析为有符号样本；DSP 帧字节和 IMA nibble 顺序遵循 codec，不随容器端序交换。STM 的 DATA 仍为原始字节。
 
 ## 声明模式
 
@@ -151,9 +168,9 @@ file body 直接接收容器已读取的 header；section body 通过原生位�
 
 新事件接口通过 [OoT3D-Custom-Sequences](https://github.com/Kewlan/OoT3D-Custom-Sequences) 的 63 个 BCSEQ 文件，共读取 401,232 个顶层事件并完成目标索引转换。此数量包含声明式事件流读取到的非静态可达事件，不等同于旧 reader 的静态遍历计数。另已用实际 `closynth:event-emit` 验证解析所得 note/tempo 对象的类型分派，未接入播放。Citric 的 `guts.bcseq` 有一个开轨目标落在扩展指令内部，索引化时拒绝，不擅自重定位。除下面的 BCSAR 样本外，其他格式与平台主要依赖合成夹具验证，不能据此宣称所有商业游戏兼容。
 
-已通过公开 `read-file` 接口读取 [pmee 的 `mset.bcsar`](https://github.com/bohonghuang/pmee/blob/01f93480dea5e3e99a2e0d658381fd3a2052423d/mset.bcsar)（383,408 字节，CSAR／小端）。pathname、二进制流、octet vector 三种输入均通过；67 个字符串、50 个声音的名称与文件／播放器 ID、音量、序列 bank／起始偏移／优先级，以及显式解析后的 5 个 CWSD item／note 字段与 [DualRip](https://github.com/TetraSsky/DualRip) 独立解析结果交叉核对。测试先通过 `xsar-files` 提取 19 个文件的原始字节，再由调用方显式解析全部文件：5 个 CSEQ（35,225 个顶层事件）、2 个 CWSD、5 个 CBNK、7 个 CWAR；读取 CWAR 时解析其中 34 个 CWAV／34 个声道，保留 273,362 字节编码音频，不进行解码或播放。
+已通过公开 `read-file` 接口读取 [pmee 的 `mset.bcsar`](https://github.com/bohonghuang/pmee/blob/01f93480dea5e3e99a2e0d658381fd3a2052423d/mset.bcsar)（383,408 字节，CSAR／小端）。pathname、二进制流、octet vector 三种输入均通过；67 个字符串、50 个声音的名称与文件／播放器 ID、音量、序列 bank／起始偏移／优先级，以及显式解析后的 5 个 CWSD item／note 字段与 [DualRip](https://github.com/TetraSsky/DualRip) 独立解析结果交叉核对。测试先通过 `xsar-files` 提取 19 个文件的原始字节，再由调用方显式解析全部文件：5 个 CSEQ（35,225 个顶层事件）、2 个 CWSD、5 个 CBNK、7 个 CWAR；读取 CWAR 时解析其中 34 个 CWAV／34 个声道，其磁盘音频共 273,362 字节。12 个 PCM16 通道直接返回有符号数组，22 个 DSP 通道保留编码帧；library 不进行 ADPCM 解码或播放。另已用这 12 个真实 PCM 数组直接构造 Closynth source 并渲染短窗口。
 
-样本 SHA-256：`e96097ab77e70837cee31acd2c3c132da56a262add4aa8e1fa27d623ecdf7323`。原始文件已纳入 `test/data/mset.bcsar`，由默认 `asdf:test-system` 执行 `test/pmee.lisp` 中的真实归档回归；测试不联网，也不需要外部 checkout。断言 cons 名称／原始数据长度和声音元数据，随后显式解析并验证完整序列事件数量、CWSD 效果参数、project-info，以及全部 CWAV 的 codec／采样率／样本数和编码数据总量。合成回归覆盖不解析损坏／未知子文件、可选名称、空数据／空引用／外部文件，以及跨端序显式读取；原有 WSD 参数和 SAR project-info tag 回归仍保留。
+样本 SHA-256：`e96097ab77e70837cee31acd2c3c132da56a262add4aa8e1fa27d623ecdf7323`。原始文件已纳入 `test/data/mset.bcsar`，由默认 `asdf:test-system` 执行 `test/pmee.lisp` 中的真实归档回归；测试不联网，也不需要外部 checkout。断言 cons 名称／原始数据长度和声音元数据，随后显式解析并验证完整序列事件数量、CWSD 效果参数、project-info，以及全部 CWAV 的符号 codec／采样率／样本数、专用数组类型和对应磁盘音频总量。合成回归覆盖不解析损坏／未知子文件、可选名称、空数据／空引用／外部文件，以及跨端序显式读取；原有 WSD 参数和 SAR project-info tag 回归仍保留。
 
 ```lisp
 (nintendo-ware:read-file 'nintendo-ware:xsar

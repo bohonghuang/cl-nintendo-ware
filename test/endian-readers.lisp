@@ -59,21 +59,30 @@
           (assert (= -2 (nintendo-ware::xseq-event-set-variable-value (aref events 2))))))))
   ;; Embedded headers never inherit their parent's endian or C/F identity.
   (dolist (endian '(:little :big))
-    (let* ((child-endian (if (eq endian :little) :big :little))
-           (wave (let ((*fixture-family* :c) (*fixture-endian* child-endian)) (wave-fixture 2)))
-           (archive (let ((*fixture-family* :f) (*fixture-endian* endian))
-                      (container-fixture "CWAR"
-                        (list (list #x6800 "INFO"
-                                    (encode-record 'sized-reference-table
-                                      (make-sized-reference-table :count 1 :entries
-                                       (vector (make-sized-reference :type #x1f00 :offset 0 :size (length wave))))))
-                              (list #x6801 "FILE" wave)))))
-           (parsed (nintendo-ware::read-file 'nintendo-ware::xwar archive))
-           (embedded (aref (nintendo-ware::xwar-waves parsed) 0))
-           (channel (aref (nintendo-ware::xwav-info-channels (nintendo-ware::xwav-info embedded)) 0))
-           (coefficients (nintendo-ware::xwav-dsp-adpcm-info-coefficients (nintendo-ware::xwav-channel-codec-info channel))))
-      (assert (eq endian (nintendo-ware::header-endian (nintendo-ware::xwar-header parsed))))
-      (assert (eq child-endian (nintendo-ware::header-endian (nintendo-ware::xwav-header embedded))))
-      (assert (= -123 (aref coefficients 0)))))
+    (dolist (codec '(1 2))
+      (let* ((child-endian (if (eq endian :little) :big :little))
+             (wave (let ((*fixture-family* :c) (*fixture-endian* child-endian))
+                     (wave-fixture codec :payloads
+                       (when (= codec 1)
+                         (let ((bytes (if (eq child-endian :little)
+                                          #(0 #x80 #xff #xff #xff #x7f)
+                                          #(#x80 0 #xff #xff #x7f #xff))))
+                           (list bytes bytes))))))
+             (archive (let ((*fixture-family* :f) (*fixture-endian* endian))
+                        (container-fixture "CWAR"
+                          (list (list #x6800 "INFO"
+                                      (encode-record 'sized-reference-table
+                                        (make-sized-reference-table :count 1 :entries
+                                         (vector (make-sized-reference :type #x1f00 :offset 0 :size (length wave))))))
+                                (list #x6801 "FILE" wave)))))
+             (parsed (nintendo-ware::read-file 'nintendo-ware::xwar archive))
+             (embedded (aref (nintendo-ware::xwar-waves parsed) 0))
+             (channel (aref (nintendo-ware::xwav-info-channels (nintendo-ware::xwav-info embedded)) 0)))
+        (assert (eq endian (nintendo-ware::header-endian (nintendo-ware::xwar-header parsed))))
+        (assert (eq child-endian (nintendo-ware::header-endian (nintendo-ware::xwav-header embedded))))
+        (ecase codec
+          (1 (assert (equalp #(-32768 -1 32767) (nintendo-ware::xwav-channel-data channel))))
+          (2 (assert (= -123 (aref (nintendo-ware::xwav-dsp-adpcm-info-coefficients
+                                    (nintendo-ware::xwav-channel-codec-info channel)) 0))))))))
   (assert (not (boundp 'nintendo-ware::*endian*)))
   (format t "Shared-type ME, C/F containers, event endian and mixed embedded files passed.~%"))

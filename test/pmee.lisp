@@ -185,6 +185,12 @@
                     (when (= codec 2)
                       (assert (typep (nintendo-ware::xwav-channel-codec-info (aref channels 0))
                                      'nintendo-ware::xwav-dsp-adpcm-info)))
-                    (incf encoded-bytes (length (nintendo-ware::xwav-channel-encoded-data (aref channels 0))))))))
+                    (let ((data (nintendo-ware::xwav-channel-data (aref channels 0))))
+                      (ecase codec
+                        (1 (assert (typep data '(simple-array (signed-byte 16) (*))))
+                           (assert (= sample-count (length data)))
+                           (incf encoded-bytes (* 2 (length data))))
+                        (2 (assert (typep data '(simple-array (unsigned-byte 8) (*))))
+                           (incf encoded-bytes (length data)))))))))
       (assert (= 273362 encoded-bytes))))
   (format t "Real mset.bcsar regression passed: 19 embedded files and 34 waves.~%"))

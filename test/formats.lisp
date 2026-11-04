@@ -40,14 +40,14 @@
                   (emit-octets output bytes)
                   (emit-octets output (make-array (- (cl-nintendo-ware.test::sized-reference-size reference) 8 (length bytes)) :initial-element 0)))))))
 
-(defun wave-fixture (codec)
-  (let* ((sample-size (cl-nintendo-ware.test::xwav-encoded-size codec 3))
+(defun wave-fixture (codec &key (sample-count 3) payloads (loop 1) (data-magic "DATA"))
+  (let* ((sample-size (cl-nintendo-ware.test::xwav-encoded-size codec sample-count))
          (codec-size (case codec (2 46) (3 8) (otherwise 0)))
          (codec-reference-type (case codec (2 #x0300) (3 #x0301) (otherwise 0)))
          (info
            (octets-join
             (encode-record 'cl-nintendo-ware.test::xwav-info
-                           (cl-nintendo-ware.test::make-xwav-info :codec codec :loop 1 :sample-rate 32000 :loop-start 1 :loop-end 3))
+                           (cl-nintendo-ware.test::make-xwav-info :codec codec :loop loop :sample-rate 32000 :loop-start 1 :loop-end sample-count))
             (encode-record 'cl-nintendo-ware.test::reference-table
                            (cl-nintendo-ware.test::make-reference-table :count 2
                              :entries (vector (cl-nintendo-ware.test::make-reference :type #x7100 :offset 20)
@@ -73,9 +73,10 @@
                                           :initial-context (cl-nintendo-ware.test::make-xwav-ima-adpcm-context :predictor -200 :step-index 12)
                                           :loop-context (cl-nintendo-ware.test::make-xwav-ima-adpcm-context :predictor 300 :step-index 24))))
                                     (otherwise #()))))))
-         (payload (octets-join (make-array sample-size :initial-element 17)
-                               (make-array sample-size :initial-element 34))))
-    (container-fixture "CWAV" (list (list #x7000 "INFO" info) (list #x7001 "DATA" payload)))))
+         (payload (if payloads (apply #'octets-join payloads)
+                      (octets-join (make-array sample-size :initial-element 17)
+                                   (make-array sample-size :initial-element 34)))))
+    (container-fixture "CWAV" (list (list #x7000 "INFO" info) (list #x7001 data-magic payload)))))
 
 (defun xbnk-node-fixture (tag child-type child)
   (let* ((detail-size (ecase tag (#x6000 8) (#x6001 16) (#x6002 12)))
@@ -130,10 +131,13 @@
       (assert (= 32000 (nintendo-ware::xwav-info-sample-rate information)))
       (assert (= 1 (nintendo-ware::xwav-info-loop-start information)))
       (assert (= 3 (nintendo-ware::xwav-info-loop-end information)))
-      (assert (equalp (make-array (xwav-encoded-size codec 3) :initial-element 17)
-                      (nintendo-ware::xwav-channel-encoded-data (aref channels 0))))
-      (assert (equalp (make-array (xwav-encoded-size codec 3) :initial-element 34)
-                      (nintendo-ware::xwav-channel-encoded-data (aref channels 1))))
+      (loop for channel across channels for value in '(17 34) do
+        (let* ((data (nintendo-ware::xwav-channel-data channel))
+               (element-type (ecase codec (0 '(signed-byte 8)) (1 '(signed-byte 16))
+                                          (2 '(unsigned-byte 8)) (3 '(unsigned-byte 4))))
+               (expected (ecase codec (0 value) (1 (* value 257)) (2 value) (3 (/ value 17)))))
+          (assert (typep data `(simple-array ,element-type (*))))
+          (assert (equalp (make-array (if (= codec 2) 8 3) :initial-element expected) data))))
       (case codec
         (2 (assert (= -123 (aref (nintendo-ware::xwav-dsp-adpcm-info-coefficients codec-info) 15)))
            (assert (= -200 (nintendo-ware::xwav-dsp-adpcm-context-history-1 (nintendo-ware::xwav-dsp-adpcm-info-initial-context codec-info))))
@@ -153,6 +157,32 @@
           (assert (equalp (nintendo-ware::xwav-info-channels information)
                           (nintendo-ware::xwav-info-channels (nintendo-ware::xwav-info embedded)))))
         (assert (null (aref waves 1))))))
+  ;; Distinct signs/bytes catch unsigned PCM and container-endian regressions;
+  ;; odd IMA lengths must discard the unused high nibble, not expose padding.
+  (dolist (case `((0 5 #(#x80 #xff 0 1 #x7f) (-128 -1 0 1 127) (signed-byte 8))
+                  (1 5 ,(if (eq *fixture-endian* :little)
+                            #(#xff #x7f 0 #x80 #xff #xff 0 0 #x34 #x12)
+                            #(#x7f #xff #x80 0 #xff #xff 0 0 #x12 #x34))
+                     (32767 -32768 -1 0 4660) (signed-byte 16))
+                  (2 15 #(#x21 #x7f #x80 #xff #xab #xcd #xef #x01
+                           #x30 #x89 #x67 #x45 #x23 #x01 #xfe #xdc)
+                     (33 127 128 255 171 205 239 1 48 137 103 69 35 1 254 220) (unsigned-byte 8))
+                  (3 5 #(#x21 #x43 #xf5) (1 2 3 4 5) (unsigned-byte 4))))
+    (destructuring-bind (codec count payload expected element-type) case
+      (let* ((wave (nintendo-ware::read-file 'nintendo-ware::xwav
+                     (wave-fixture codec :sample-count count :loop 0 :payloads (list payload payload))))
+             (info (nintendo-ware::xwav-info wave))
+             (data (nintendo-ware::xwav-channel-data (aref (nintendo-ware::xwav-info-channels info) 0))))
+        (assert (null (nintendo-ware::xwav-info-loop-p info)))
+        (assert (typep data `(simple-array ,element-type (*))))
+        (assert (equalp (coerce expected 'vector) data)))))
+  (dotimes (codec 4)
+    (let* ((wave (nintendo-ware::read-file 'nintendo-ware::xwav (wave-fixture codec :sample-count 0)))
+           (data (nintendo-ware::xwav-channel-data (aref (nintendo-ware::xwav-info-channels (nintendo-ware::xwav-info wave)) 0))))
+      (assert (typep data `(simple-array ,(ecase codec (0 '(signed-byte 8)) (1 '(signed-byte 16))
+                                                     (2 '(unsigned-byte 8)) (3 '(unsigned-byte 4))) (0))))))
+  (rejects nintendo-ware::invalid-file
+    (nintendo-ware::read-file 'nintendo-ware::xwav (wave-fixture 0 :data-magic "JUNK")))
   (dolist (instrument-tag '(#x6000 #x6001 #x6002))
     (dolist (key-tag '(#x6000 #x6001 #x6002))
       (let* ((xbnk (nintendo-ware::read-file 'nintendo-ware::xbnk (xbnk-fixture instrument-tag key-tag)))
