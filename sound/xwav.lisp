@@ -64,3 +64,7 @@
 
 (defbinalias (xwav-embedded (:type xwav)) () xwav)
 
+(defbinio xwav stream)
+
+(defmethod read-file ((type (eql 'xwav)) (stream stream))
+  (read-xwav stream))

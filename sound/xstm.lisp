@@ -83,7 +83,7 @@
 (define-nintendo-ware-section (xstm-seek (:magic "SEEK"))
   ;; SEEK row counts come from INFO; only its trailing padding needs the tail.
   (%size 0 :type nintendo-ware-section-tail-size)
-  (%information nil :type (xstm-referenced-stream-info %header))
+  (%information (make-xstm-stream-info) :type (xstm-referenced-stream-info %header))
   (%c-type-p nil :type (map null (lambda (ignored) (declare (ignore ignored)) (char= (char (header-magic %header) 0) #\C))))
   (%encoding 'dsp-adpcm :type (map null (lambda (ignored) (declare (ignore ignored)) (xstm-stream-info-encoding %information))))
   (%stride 4 :type (map null (lambda (ignored) (declare (ignore ignored))
@@ -107,7 +107,7 @@
 
 (define-nintendo-ware-section (xstm-regions (:magic "REGN"))
   ($regions-start 0 :type position)
-  (%information nil :type (xstm-referenced-stream-info %header))
+  (%information (make-xstm-stream-info) :type (xstm-referenced-stream-info %header))
   (%count 0 :type (map null (lambda (ignored) (declare (ignore ignored)) (xstm-stream-info-region-count %information))))
   (%stride 0 :type (map null (lambda (ignored) (declare (ignore ignored))
                               (let ((stride (xstm-region-info-entry-size (xstm-stream-info-region-info %information))))
@@ -123,3 +123,7 @@
                         (block-start header #x4002)))
   (regions nil :type (ecase (not (null (block-reference header #x4003 nil))) ((nil) null) ((t) (peek xstm-regions (block-start header #x4003))))))
 
+(defbinio xstm stream)
+
+(defmethod read-file ((type (eql 'xstm)) (stream stream))
+  (read-xstm stream))

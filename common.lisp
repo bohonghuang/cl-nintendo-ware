@@ -156,34 +156,6 @@
   (size 0 :type (unsigned-byte 32))
   (bytes #.(make-array 0 :element-type '(unsigned-byte 8)) :type (simple-array (unsigned-byte 8) ((- size 8)))))
 
-(deftype nintendo-ware-file-union () '(or null xseq xwav xwar xbnk xwsd xstm xsar xgrp))
-
-(defun magic-kind (magic)
-  (unless (and (= (length magic) 4) (find (char magic 0) "CF"))
-    (fail-file "Unknown file magic ~S" magic))
-  (cond ((string= magic "SEQ" :start1 1) :xseq)
-        ((string= magic "WAV" :start1 1) :xwav)
-        ((string= magic "WAR" :start1 1) :xwar)
-        ((string= magic "BNK" :start1 1) :xbnk)
-        ((string= magic "WSD" :start1 1) :xwsd)
-        ((string= magic "STM" :start1 1) :xstm)
-        ((string= magic "SAR" :start1 1) :xsar)
-        ((string= magic "GRP" :start1 1) :xgrp)
-        (t (fail-file "Unknown file magic ~S" magic))))
-
-(defbinstruct (embedded-file (:type nintendo-ware-file-union) (:constructor progn) (:conc-name nil)) ()
-  (%kind :xseq :type (map (peek (simple-base-string 4)) #'magic-kind))
-  (values nil :type (ecase %kind
-                     (:xseq xseq)
-                     (:xwav xwav)
-                     (:xwar xwar)
-                     (:xbnk xbnk)
-                     (:xwsd xwsd)
-                     (:xstm xstm)
-                     (:xsar xsar)
-                     (:xgrp xgrp))))
-
-
 (defbinstruct packed-pan ()
   (pan 0 :type (signed-byte 8))
   (surround-pan 0 :type (signed-byte 8))
@@ -195,6 +167,7 @@
   (pan 0 :type (signed-byte 8)))
 
 (defbinalias packed-pan/le () packed-pan)
+
 (%define-endian-reader packed-pan)
 
 (defbinstruct packed-filter ()
@@ -210,6 +183,7 @@
   (low-pass 0 :type (unsigned-byte 8)))
 
 (defbinalias packed-filter/le () packed-filter)
+
 (%define-endian-reader packed-filter)
 
 (defbinstruct packed-priority ()
@@ -225,5 +199,5 @@
   (channel-priority 0 :type (unsigned-byte 8)))
 
 (defbinalias packed-priority/le () packed-priority)
-(%define-endian-reader packed-priority)
 
+(%define-endian-reader packed-priority)

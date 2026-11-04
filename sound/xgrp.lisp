@@ -2,11 +2,7 @@
 
 (defbinstruct/me xgrp-entry (data-start)
   (file-id 0 :type (unsigned-byte 32))
-  (reference (make-sized-reference) :type sized-reference)
-  (content nil :type (ecase (= (sized-reference-offset reference) -1)
-                      ((t) null)
-                      ((nil) (peek embedded-file
-                                   (sized-reference-target reference (+ data-start 8) #x1f00))))))
+  (reference (make-sized-reference) :type sized-reference))
 
 (defbinstruct/me xgrp-dependency ()
   (resource-id 0 :type (unsigned-byte 32)) (load-flags 0 :type (unsigned-byte 32)))
@@ -30,3 +26,7 @@
                      ((t) (peek (raw-block "FILE")
                                 (block-start header #x7801))))))
 
+(defbinio xgrp stream)
+
+(defmethod read-file ((type (eql 'xgrp)) (stream stream))
+  (read-xgrp stream))

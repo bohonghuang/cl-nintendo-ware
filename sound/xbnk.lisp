@@ -181,3 +181,7 @@
 (define-nintendo-ware-file (xbnk (:magic ("CBNK" "FBNK")))
   (info nil :type (peek xbnk-info (block-start header #x5800))))
 
+(defbinio xbnk stream)
+
+(defmethod read-file ((type (eql 'xbnk)) (stream stream))
+  (read-xbnk stream))

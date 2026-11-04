@@ -21,3 +21,7 @@
   "Return WAV structures in wave-index order, preserving absent entries as NIL."
   (map 'simple-vector #'xwar-entry-content (xwar-info-entries (xwar-info xwar))))
 
+(defmethod read-file ((type (eql 'xwar)) (stream stream))
+  (read-xwar stream))
+
+(defbinio xwar stream)

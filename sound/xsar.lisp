@@ -431,3 +431,7 @@ as in cl-nitro: sounds, banks, wave archives, then groups. No files are parsed."
 (setf (fdefinition 'xsar-file-name) (fdefinition 'car)
       (fdefinition 'xsar-file-data) (fdefinition 'cdr))
 
+(defbinio xsar stream)
+
+(defmethod read-file ((type (eql 'xsar)) (stream stream))
+  (read-xsar stream))

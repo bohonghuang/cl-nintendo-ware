@@ -111,3 +111,7 @@
   (%tag #x6800 :type (map null (lambda (ignored) (declare (ignore ignored)) (if (block-reference header #x6800 nil) #x6800 #x4800))))
   (info nil :type (peek xwsd-info (block-start header %tag))))
 
+(defbinio xwsd stream)
+
+(defmethod read-file ((type (eql 'xwsd)) (stream stream))
+  (read-xwsd stream))

@@ -18,8 +18,7 @@
                              (:file "xwsd")
                              (:file "xstm")
                              (:file "xsar")
-                             (:file "xgrp")))
-               (:file "file")))
+                             (:file "xgrp")))))
 
 (asdf:defsystem #:cl-nintendo-ware/test
   :depends-on (#:cl-nintendo-ware)

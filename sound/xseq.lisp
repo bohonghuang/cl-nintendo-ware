@@ -528,3 +528,7 @@
 (defun xseq-events (sequence)
   (xseq-data-events (xseq-data sequence)))
 
+(defbinio xseq stream)
+
+(defmethod read-file ((type (eql 'xseq)) (stream stream))
+  (read-xseq stream))
