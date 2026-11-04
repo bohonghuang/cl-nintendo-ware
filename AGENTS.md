@@ -12,6 +12,7 @@
 - Return binstruct structures directly. The explicit cl-nitro-style `xsar-files` helper returns a simple-vector of `(name . data)` conses, with `xsar-file-name`/`xsar-file-data` as car/cdr accessors. Otherwise do not add post-parse result models, resource views, hand-built object graphs or manual binary decoding.
 - Preserve serial ASDF order. `file.lisp` loads last to compile complete cross-format and recursive readers.
 - XSAR extracts raw octet vectors declaratively from sized references; never dispatch embedded readers, inspect child magic/BOM or validate child events while reading XSAR. Callers explicitly select `read-file` types afterward. Keep file IDs including absent/external entries (NIL data); zero-length data stays an octet vector. Names are optional resource aliases, not synthesized filenames; later named resources win in sounds/banks/wave-archives/groups order. WAR/GRP embedded parsing is unchanged.
+- Keep `package.lisp` concise like cl-nitro: export only `read-file`, the eight file symbols, file-level extractors (`xseq-events`, `xwar-waves`, `xsar-files`) and the explicitly requested `xsar-file-name`/`xsar-file-data` aliases. Never export sections, fields, event types, constructors or macros from modules or macro expansions. Keep field definitions internal and unchanged; all library references in tests use `nintendo-ware::`. Reloading the package declaration after the library must not produce package-variance warnings.
 
 ## Key Directories
 

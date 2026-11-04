@@ -49,4 +49,3 @@
                                 (defun (setf ,accessor) (,value ,instance)
                                   (setf (,inner (,(alexandria:symbolicate name '-body) ,instance)) ,value)))))))))
 
-(export '(nintendo-ware-file nintendo-ware-file-header))

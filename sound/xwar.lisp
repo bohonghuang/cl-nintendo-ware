@@ -17,4 +17,7 @@
   (file nil :type (peek (raw-block "FILE")
                         (block-start header #x6801))))
 
-(export '(xwar xwar-header xwar-info xwar-file xwar-info-entries xwar-entry xwar-entry-reference xwar-entry-content))
+(defun xwar-waves (xwar)
+  "Return WAV structures in wave-index order, preserving absent entries as NIL."
+  (map 'simple-vector #'xwar-entry-content (xwar-info-entries (xwar-info xwar))))
+

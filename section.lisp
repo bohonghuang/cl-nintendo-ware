@@ -56,5 +56,3 @@
                                 (defun (setf ,accessor) (,value ,instance)
                                   (setf (,inner (,(alexandria:symbolicate name '-body) ,instance)) ,value)))))))))
 
-(export '(nintendo-ware-section nintendo-ware-section-magic nintendo-ware-section-size
-          nintendo-ware-section-tail-size))

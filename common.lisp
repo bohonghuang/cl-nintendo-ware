@@ -192,11 +192,6 @@
                      (:xsar xsar)
                      (:xgrp xgrp))))
 
-(export '(read-file invalid-file invalid-file-reason header header-start header-magic header-endian header-version-major
-          header-header-size header-version header-file-size header-block-count header-references
-          reference reference-type reference-offset sized-reference sized-reference-type sized-reference-offset sized-reference-size
-          flag-values flag-values-mask flag-values-values integer-table integer-table-entries byte-table byte-table-entries
-          wave-id wave-id-archive-id wave-id-index wave-id-table wave-id-table-entries raw-block raw-block-bytes))
 
 (defbinstruct packed-pan ()
   (pan 0 :type (signed-byte 8))

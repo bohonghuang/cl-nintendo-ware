@@ -170,13 +170,3 @@
 (define-nintendo-ware-file (xbnk (:magic ("CBNK" "FBNK")))
   (info nil :type (peek xbnk-info (block-start header #x5800))))
 
-(export '(xbnk xbnk-header xbnk-info xbnk-info-waves xbnk-info-instruments xbnk-instrument-table-entries
-          xbnk-instrument xbnk-instrument-reference xbnk-instrument-definition xbnk-key xbnk-key-reference xbnk-key-definition
-          xbnk-key-direct xbnk-key-direct-entry xbnk-key-index xbnk-key-index-upper-bounds xbnk-key-index-entries
-          xbnk-key-range xbnk-key-range-minimum xbnk-key-range-maximum xbnk-key-range-entries
-          xbnk-velocity-direct xbnk-velocity-direct-entry xbnk-velocity-index xbnk-velocity-index-upper-bounds xbnk-velocity-index-entries
-          xbnk-velocity-range xbnk-velocity-range-minimum xbnk-velocity-range-maximum xbnk-velocity-range-entries
-          xbnk-velocity xbnk-velocity-wave-index xbnk-velocity-flags xbnk-velocity-key-info xbnk-velocity-volume-info
-          xbnk-velocity-pan-info xbnk-velocity-note-info xbnk-velocity-pitch xbnk-velocity-envelope
-          xbnk-pan-flag-pan xbnk-pan-flag-surround-pan
-          xbnk-adshr-curve xbnk-adshr-curve-attack xbnk-adshr-curve-decay xbnk-adshr-curve-sustain xbnk-adshr-curve-hold xbnk-adshr-curve-release))

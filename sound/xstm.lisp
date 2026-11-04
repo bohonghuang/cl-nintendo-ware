@@ -124,10 +124,3 @@
                         (block-start header #x4002)))
   (regions nil :type (ecase (not (null (block-reference header #x4003 nil))) ((nil) null) ((t) (peek xstm-regions (block-start header #x4003))))))
 
-(export '(xstm xstm-header xstm-info xstm-seek xstm-data xstm-regions xstm-info-stream xstm-info-tracks xstm-info-channels
-          xstm-stream-info xstm-stream-info-encoding xstm-stream-info-channel-count xstm-stream-info-region-count
-          xstm-stream-info-sample-rate xstm-stream-info-sample-count xstm-stream-info-block-size xstm-stream-info-region-info
-          xstm-stream-info-original-loop-info xstm-stream-info-secret-info xstm-original-loop-info-start xstm-original-loop-info-end
-          xstm-secret-info-value xstm-track-table-entries xstm-channel-table-entries xstm-track xstm-track-channels xstm-channel xstm-channel-codec-info
-          xstm-seek-rows xstm-seek-row-entries xstm-seek-entry-context xstm-dsp-seek-context-history-1 xstm-dsp-seek-context-history-2
-          xstm-regions-entries xstm-region-start xstm-region-end xstm-region-contexts))

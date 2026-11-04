@@ -65,10 +65,3 @@
 
 (defbinalias (xwav-embedded (:type xwav)) () xwav)
 
-(export '(xwav xwav-header xwav-info xwav-data xwav-info-codec xwav-info-loop xwav-info-sample-rate
-          xwav-info-loop-start xwav-info-loop-end xwav-info-channels xwav-channel xwav-channel-samples-reference
-          xwav-channel-codec-reference xwav-channel-codec-info xwav-channel-encoded-data
-          xwav-dsp-adpcm-info xwav-dsp-adpcm-info-coefficients xwav-dsp-adpcm-info-initial-context xwav-dsp-adpcm-info-loop-context
-          xwav-dsp-adpcm-context xwav-dsp-adpcm-context-predictor-scale xwav-dsp-adpcm-context-history-1 xwav-dsp-adpcm-context-history-2
-          xwav-ima-adpcm-info xwav-ima-adpcm-info-initial-context xwav-ima-adpcm-info-loop-context
-          xwav-ima-adpcm-context xwav-ima-adpcm-context-predictor xwav-ima-adpcm-context-step-index))

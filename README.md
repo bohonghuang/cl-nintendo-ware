@@ -22,18 +22,18 @@ sbcl --non-interactive --eval '(ql:quickload :cl-nintendo-ware :silent t)' \
 
 ## 读取文件
 
-`read-file` 仿照 cl-nitro，是按文件类型符号和输入类型分派的 generic function。公开入口为 `read-file` 以及 `xseq`、`xwav`、`xwar`、`xbnk`、`xwsd`、`xstm`、`xsar`、`xgrp` 文件符号；类型参数使用带包名的符号，例如 `'nintendo-ware:xseq`，不再接受 `:auto`、关键字或 C/F 格式名称。输入支持 pathname、文件名字符串、二进制流和 octet vector；pathname 打开为流，向量包装为内存输入流，各格式的流方法调用对应的内部 `read-x...` reader。
+`read-file` 仿照 cl-nitro，是按文件类型符号和输入类型分派的 generic function。公开 API 只有 `read-file`、下表八个文件符号，以及文件级提取工具 `xseq-events`／`xwar-waves`／`xsar-files` 和文件条目访问器 `xsar-file-name`／`xsar-file-data`；全部在 `package.lisp` 的 `defpackage` 中声明。section、字段访问器、事件类型、构造器和声明宏保持内部，测试一律使用 `::`，模块和宏不得动态导出它们。类型参数例如 `'nintendo-ware:xseq`，不接受 `:auto`、关键字或 C/F 格式名称。输入支持 pathname、文件名字符串、二进制流和 octet vector；pathname 打开为流，向量包装为内存输入流，各格式的流方法调用对应的内部 `read-x...` reader。
 
 ```lisp
 (let* ((file (nintendo-ware:read-file 'nintendo-ware:xseq #P"/path/to/music.bcseq"))
        (events (nintendo-ware:xseq-events file)))
   (loop for event across events
-        when (typep event 'nintendo-ware:xseq-event-note)
-          collect (list (nintendo-ware:xseq-event-note-key event)
-                        (nintendo-ware:xseq-event-note-duration event))))
+        when (typep event 'nintendo-ware::xseq-event-note)
+          collect (list (nintendo-ware::xseq-event-note-key event)
+                        (nintendo-ware::xseq-event-note-duration event))))
 ```
 
-每个被解析的完整文件都读取自己的 header，通过 magic 校验格式、通过 BOM 选择容器字节序。生成的完整文件 reader 不需要 `limit` 或端序参数。解析直接使用 binstruct 的流后端，不再将整个流复制到字节向量；输入流需要支持二进制读取和 `file-position` 定位。解析失败通过 `read-file` 报告为 `invalid-file`。
+每个被解析的完整文件都读取自己的 header，通过 magic 校验格式、通过 BOM 选择容器字节序。生成的完整文件 reader 不需要 `limit` 或端序参数。解析直接使用 binstruct 的流后端，不再将整个流复制到字节向量；输入流需要支持二进制读取和 `file-position` 定位。解析失败通过 `read-file` 报告为内部条件 `nintendo-ware::invalid-file`。
 
 | 模块 | 结构 | 文件 magic |
 |---|---|---|
@@ -48,13 +48,15 @@ sbcl --non-interactive --eval '(ql:quickload :cl-nintendo-ware :silent t)' \
 
 模块和所属类型、函数、宏统一使用 `x` 加 magic 后三位的前缀；`x` 同时涵盖 C/F 两种容器。例如事件声明宏为 `define-xseq-event`，音符类型为 `xseq-event-note`。这是直接重命名，旧名称不再提供兼容别名。
 
+`xwar-waves` 仿照 Nitro 的 `swar-waves`，直接返回按 wave index 排列的 WAV 结构向量；保留空引用为 `NIL`，不压缩索引，也不复制或解码编码音频。调用方不需要遍历 INFO section 和 reference entry。
+
 共用解析布局不等于保证所有游戏、版本和编码组合兼容。原始 ID、引用、可选字段、DATA 及填充保留；空引用为 `NIL`。外部档案路径只读取为字符串，绝不自动打开。
 
 ### XSAR 文件提取
 
-XSAR 仿照 cl-nitro 的 SDAT：读取元数据和各内嵌文件的原始字节，不解析子文件的 magic、BOM 或事件。`xsar-files` 返回按 File ID 排列的 simple-vector，每项为 `(name . data)` cons；`xsar-file-name` 和 `xsar-file-data` 分别访问 car／cdr。调用方决定哪些数据交给 `read-file`，未选择的未知或损坏子文件不会阻止 XSAR 提取。
+XSAR 仿照 cl-nitro 的 SDAT：读取元数据和各内嵌文件的原始字节，不解析子文件的 magic、BOM 或事件。`xsar-files` 返回按 File ID 排列的 simple-vector，每项为 `(name . data)` cons；`xsar-file-name` 和 `xsar-file-data` 分别访问 car／cdr。这三个入口在 `package.lisp` 的 `defpackage` 中导出。调用方决定哪些数据交给 `read-file`，未选择的未知或损坏子文件不会阻止 XSAR 提取。
 
-名称是资源别名，不是附带扩展名的文件路径。按 sounds、banks、wave archives、groups 顺序填入，后出现的有名别名覆盖前面的名称，与 Nitro 一样；没有 STRG 或没有名字时为 `NIL`。内部文件的 data 为 octet vector，空文件保留零长度向量；空引用和外部文件为 `NIL`，不丢弃其 File ID。外部路径仍通过 `xsar-external-file-text` 访问，不自动打开。
+名称是资源别名，不是附带扩展名的文件路径。按 sounds、banks、wave archives、groups 顺序填入，后出现的有名别名覆盖前面的名称，与 Nitro 一样；没有 STRG 或没有名字时为 `NIL`。内部文件的 data 为 octet vector，空文件保留零长度向量；空引用和外部文件为 `NIL`，不丢弃其 File ID。外部路径可通过内部访问器 `nintendo-ware::xsar-external-file-text` 检查，不自动打开。
 
 ```lisp
 (let* ((archive (nintendo-ware:read-file 'nintendo-ware:xsar #P"/path/to/mset.bcsar"))

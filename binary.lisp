@@ -53,4 +53,3 @@ An optional lambda list precedes the fields, as in DEFBINSTRUCT."
            (,name ,@(parsonic::lambda-list-arguments lambda-list)))
          (%define-endian-reader ,name)))))
 
-(export '(defbinstruct/me *endian* define-nintendo-ware-file define-nintendo-ware-section))

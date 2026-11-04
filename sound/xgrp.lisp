@@ -30,5 +30,3 @@
                      ((t) (peek (raw-block "FILE")
                                 (block-start header #x7801))))))
 
-(export '(xgrp xgrp-header xgrp-info xgrp-infx xgrp-file xgrp-info-entries xgrp-infx-entries xgrp-entry-file-id xgrp-entry-reference xgrp-entry-content
-          xgrp-dependency-resource-id xgrp-dependency-load-flags))

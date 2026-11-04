@@ -241,11 +241,3 @@ as in cl-nitro: sounds, banks, wave archives, then groups. No files are parsed."
 (setf (fdefinition 'xsar-file-name) (fdefinition 'car)
       (fdefinition 'xsar-file-data) (fdefinition 'cdr))
 
-(export '(xsar xsar-header xsar-strg xsar-info xsar-file xsar-files xsar-file-name xsar-file-data xsar-strg-strings xsar-strg-tree xsar-string-table-entries xsar-string-text
-          xsar-patricia-tree-root-index xsar-patricia-tree-nodes xsar-patricia-node-resource-id xsar-patricia-node-string-index
-          xsar-info-sounds xsar-info-sound-groups xsar-info-banks xsar-info-wave-archives xsar-info-groups xsar-info-players xsar-info-files xsar-info-project-info
-          xsar-sounds-table-entries xsar-sound-groups-table-entries xsar-banks-table-entries xsar-wave-archives-table-entries
-          xsar-groups-table-entries xsar-players-table-entries xsar-files-table-entries xsar-sound-file-id xsar-sound-player-id xsar-sound-detail
-          xsar-sequence-info xsar-sequence-info-banks xsar-sequence-info-start-offset xsar-sequence-info-priority
-          xsar-bank-file-id xsar-bank-wave-archives xsar-player-sound-limit xsar-file-location xsar-internal-file-reference xsar-internal-file-data
-          xsar-external-file-text xsar-project-info-maximum-sequences))

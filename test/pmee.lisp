@@ -3,27 +3,27 @@
 ;; Source revision, original filename and SHA-256 are recorded in README.md.
 ;; Unlike the synthetic fixtures, this archive is read without rewriting bytes.
 (defun run-pmee-tests ()
-  (let* ((archive (nintendo-ware:read-file
-                   'nintendo-ware:xsar
+  (let* ((archive (nintendo-ware::read-file
+                   'nintendo-ware::xsar
                    (asdf:system-relative-pathname :cl-nintendo-ware #P"test/data/mset.bcsar")))
-         (info (nintendo-ware:xsar-info archive))
-         (strings (nintendo-ware:xsar-string-table-entries
-                   (nintendo-ware:xsar-strg-strings (nintendo-ware:xsar-strg archive))))
-         (sounds (nintendo-ware:xsar-sounds-table-entries (nintendo-ware:xsar-info-sounds info)))
-         (files (nintendo-ware:xsar-files archive))
+         (info (nintendo-ware::xsar-info archive))
+         (strings (nintendo-ware::xsar-string-table-entries
+                   (nintendo-ware::xsar-strg-strings (nintendo-ware::xsar-strg archive))))
+         (sounds (nintendo-ware::xsar-sounds-table-entries (nintendo-ware::xsar-info-sounds info)))
+         (files (nintendo-ware::xsar-files archive))
          ;; This test chooses to parse every file. XSAR only returned bytes.
          (contents (map 'vector
                         (lambda (file type)
-                          (nintendo-ware:read-file type (nintendo-ware:xsar-file-data file)))
+                          (nintendo-ware::read-file type (nintendo-ware::xsar-file-data file)))
                         files
-                        '#(nintendo-ware:xseq nintendo-ware:xseq nintendo-ware:xseq nintendo-ware:xseq nintendo-ware:xseq
-                           nintendo-ware:xwsd nintendo-ware:xwsd
-                           nintendo-ware:xbnk nintendo-ware:xbnk nintendo-ware:xbnk nintendo-ware:xbnk nintendo-ware:xbnk
-                           nintendo-ware:xwar nintendo-ware:xwar nintendo-ware:xwar nintendo-ware:xwar
-                           nintendo-ware:xwar nintendo-ware:xwar nintendo-ware:xwar)))
-         (project (nintendo-ware:xsar-info-project-info info)))
-    (assert (string= "CSAR" (nintendo-ware:header-magic (nintendo-ware:xsar-header archive))))
-    (assert (eq :little (nintendo-ware:header-endian (nintendo-ware:xsar-header archive))))
+                        '#(nintendo-ware::xseq nintendo-ware::xseq nintendo-ware::xseq nintendo-ware::xseq nintendo-ware::xseq
+                           nintendo-ware::xwsd nintendo-ware::xwsd
+                           nintendo-ware::xbnk nintendo-ware::xbnk nintendo-ware::xbnk nintendo-ware::xbnk nintendo-ware::xbnk
+                           nintendo-ware::xwar nintendo-ware::xwar nintendo-ware::xwar nintendo-ware::xwar
+                           nintendo-ware::xwar nintendo-ware::xwar nintendo-ware::xwar)))
+         (project (nintendo-ware::xsar-info-project-info info)))
+    (assert (string= "CSAR" (nintendo-ware::header-magic (nintendo-ware::xsar-header archive))))
+    (assert (eq :little (nintendo-ware::header-endian (nintendo-ware::xsar-header archive))))
     (assert (= 67 (length strings)))
     (assert (= 50 (length sounds)))
     ;; cl-nitro naming semantics: the last named alias for a file ID wins;
@@ -47,16 +47,16 @@
                      nil
                      nil
                      nil)
-                   (map 'list #'nintendo-ware:xsar-file-name files)))
+                   (map 'list #'nintendo-ware::xsar-file-name files)))
     (assert (equal '(68640 8800 2176 1760 352 216 664 2324 264 464 200 1024 10368 2800 230616 7118 7776 488 25232)
-                   (map 'list (lambda (file) (length (nintendo-ware:xsar-file-data file))) files)))
+                   (map 'list (lambda (file) (length (nintendo-ware::xsar-file-data file))) files)))
     ;; Non-null project-info requires the real #x220b reference tag.
-    (assert (= 32 (nintendo-ware:xsar-project-info-maximum-sequences project)))
+    (assert (= 32 (nintendo-ware::xsar-project-info-maximum-sequences project)))
     (assert (= 64 (nintendo-ware::xsar-project-info-maximum-sequence-tracks project)))
     (assert (= 64 (nintendo-ware::xsar-project-info-maximum-wave-sounds project)))
     (flet ((name (flags)
              (string-right-trim '(#\Null)
-               (nintendo-ware:xsar-string-text
+               (nintendo-ware::xsar-string-text
                 (aref strings (nintendo-ware::flag-value flags 0))))))
       ;; Names, file IDs and volumes independently cross-checked with DualRip.
       (loop for sound across sounds
@@ -112,9 +112,9 @@
               ("SE_CTR_COMMON_DIALOG" 3 110)
               ("SE_CTR_COMMON_SYSAPPLET_END" 3 90)) do
               (assert (string= expected-name (name (nintendo-ware::xsar-sound-flags sound))))
-              (assert (= file-id (nintendo-ware:xsar-sound-file-id sound)))
+              (assert (= file-id (nintendo-ware::xsar-sound-file-id sound)))
               (assert (= volume (nintendo-ware::xsar-sound-volume sound))))
-      (let ((banks (nintendo-ware:xsar-banks-table-entries (nintendo-ware:xsar-info-banks info))))
+      (let ((banks (nintendo-ware::xsar-banks-table-entries (nintendo-ware::xsar-info-banks info))))
         (assert (= 5 (length banks)))
         (loop for bank across banks for (expected-name file-id) in
               '(("BANK_CTR_MSET_BGM" 7)
@@ -123,43 +123,43 @@
               ("BANK_TWL_SE" 10)
               ("BANK_CTR_COMMON" 11)) do
                 (assert (string= expected-name (name (nintendo-ware::xsar-bank-flags bank))))
-                (assert (= file-id (nintendo-ware:xsar-bank-file-id bank))))))
+                (assert (= file-id (nintendo-ware::xsar-bank-file-id bank))))))
     ;; Read the whole event stream, including events after finish/return commands.
     (loop for id from 0 below 5 for expected in '(31747 2443 506 481 48) do
-      (assert (= expected (length (nintendo-ware:xseq-events (aref contents id))))))
+      (assert (= expected (length (nintendo-ware::xseq-events (aref contents id))))))
     ;; Item effects are relative to flags, not the surrounding item. Note flags
     ;; are absent in this asset and must remain NIL, not materialized defaults.
     (loop for file-id in '(5 6)
           for expected-items in '(((1.0f0 0)) ((1.0f0 0) (0.8f0 1) (1.8f0 1) (1.0f0 2))) do
-      (let ((items (nintendo-ware:xwsd-item-table-entries
-                    (nintendo-ware:xwsd-info-items (nintendo-ware:xwsd-info (aref contents file-id))))))
+      (let ((items (nintendo-ware::xwsd-item-table-entries
+                    (nintendo-ware::xwsd-info-items (nintendo-ware::xwsd-info (aref contents file-id))))))
         (assert (= (length expected-items) (length items)))
         (loop for item across items for (pitch wave-index) in expected-items do
-          (let* ((parameters (nintendo-ware:xwsd-item-parameters item))
-                 (sends (nintendo-ware:xwsd-parameters-sends parameters))
-                 (envelope (nintendo-ware:xwsd-parameters-envelope parameters))
-                 (notes (nintendo-ware:xwsd-note-table-entries (nintendo-ware:xwsd-item-notes item)))
-                 (events (nintendo-ware:xwsd-event-table-entries
-                           (nintendo-ware:xwsd-track-events
-                            (aref (nintendo-ware:xwsd-track-table-entries (nintendo-ware:xwsd-item-tracks item)) 0)))))
-            (assert (= pitch (nintendo-ware:xwsd-parameters-pitch parameters)))
-            (assert (= 64 (nintendo-ware::packed-pan-pan (nintendo-ware:xwsd-parameters-pan-info parameters))))
-            (assert (= 127 (nintendo-ware:xwsd-sends-main-send sends)))
-            (assert (equalp #(0 0) (nintendo-ware:xwsd-sends-auxiliary-sends sends)))
+          (let* ((parameters (nintendo-ware::xwsd-item-parameters item))
+                 (sends (nintendo-ware::xwsd-parameters-sends parameters))
+                 (envelope (nintendo-ware::xwsd-parameters-envelope parameters))
+                 (notes (nintendo-ware::xwsd-note-table-entries (nintendo-ware::xwsd-item-notes item)))
+                 (events (nintendo-ware::xwsd-event-table-entries
+                           (nintendo-ware::xwsd-track-events
+                            (aref (nintendo-ware::xwsd-track-table-entries (nintendo-ware::xwsd-item-tracks item)) 0)))))
+            (assert (= pitch (nintendo-ware::xwsd-parameters-pitch parameters)))
+            (assert (= 64 (nintendo-ware::packed-pan-pan (nintendo-ware::xwsd-parameters-pan-info parameters))))
+            (assert (= 127 (nintendo-ware::xwsd-sends-main-send sends)))
+            (assert (equalp #(0 0) (nintendo-ware::xwsd-sends-auxiliary-sends sends)))
             (assert (equal '(127 127 127 127 127)
                            (list (nintendo-ware::xwsd-envelope-attack envelope)
                                  (nintendo-ware::xwsd-envelope-decay envelope)
                                  (nintendo-ware::xwsd-envelope-sustain envelope)
                                  (nintendo-ware::xwsd-envelope-hold envelope)
-                                 (nintendo-ware:xwsd-envelope-release envelope))))
+                                 (nintendo-ware::xwsd-envelope-release envelope))))
             (assert (= 1 (length notes) (length events)))
-            (assert (= wave-index (nintendo-ware:xwsd-note-wave-index (aref notes 0))))
-            (assert (null (nintendo-ware:xwsd-parameters-envelope
-                           (nintendo-ware:xwsd-note-parameters (aref notes 0)))))
-            (assert (= 0.0f0 (nintendo-ware:xwsd-event-position (aref events 0))))
+            (assert (= wave-index (nintendo-ware::xwsd-note-wave-index (aref notes 0))))
+            (assert (null (nintendo-ware::xwsd-parameters-envelope
+                           (nintendo-ware::xwsd-note-parameters (aref notes 0)))))
+            (assert (= 0.0f0 (nintendo-ware::xwsd-event-position (aref events 0))))
             ;; This asset encodes zero, not an assumed indefinite duration.
-            (assert (= 0.0f0 (nintendo-ware:xwsd-event-length (aref events 0))))
-            (assert (= 0 (nintendo-ware:xwsd-event-note-index (aref events 0))))))))
+            (assert (= 0.0f0 (nintendo-ware::xwsd-event-length (aref events 0))))
+            (assert (= 0 (nintendo-ware::xwsd-event-note-index (aref events 0))))))))
     ;; Follow all seven CWARs, not just the first archive or wave in a table.
     (let ((encoded-bytes 0))
       (loop for file-id from 12 below 19
@@ -171,20 +171,19 @@
               ((1 16000 59) (2 32728 3959) (2 44100 3630) (1 32000 1056))
               ((2 32000 227))
               ((1 44000 356) (2 32000 6083) (2 24000 14011) (2 44100 6796) (2 16000 6000) (2 44100 1233) (1 32000 227) (1 32000 261) (2 32000 625) (2 16000 1033))) do
-              (let ((waves (nintendo-ware:xwar-info-entries (nintendo-ware:xwar-info (aref contents file-id)))))
+              (let ((waves (nintendo-ware::xwar-waves (aref contents file-id))))
                 (assert (= (length expected-waves) (length waves)))
-                (loop for entry across waves for (codec rate sample-count) in expected-waves do
-                  (let* ((wave (nintendo-ware:xwar-entry-content entry))
-                         (wave-info (nintendo-ware:xwav-info wave))
-                         (channels (nintendo-ware:xwav-info-channels wave-info)))
-                    (assert (string= "CWAV" (nintendo-ware:header-magic (nintendo-ware:xwav-header wave))))
-                    (assert (= codec (nintendo-ware:xwav-info-codec wave-info)))
-                    (assert (= rate (nintendo-ware:xwav-info-sample-rate wave-info)))
-                    (assert (= sample-count (nintendo-ware:xwav-info-loop-end wave-info)))
+                (loop for wave across waves for (codec rate sample-count) in expected-waves do
+                  (let* ((wave-info (nintendo-ware::xwav-info wave))
+                         (channels (nintendo-ware::xwav-info-channels wave-info)))
+                    (assert (string= "CWAV" (nintendo-ware::header-magic (nintendo-ware::xwav-header wave))))
+                    (assert (= codec (nintendo-ware::xwav-info-codec wave-info)))
+                    (assert (= rate (nintendo-ware::xwav-info-sample-rate wave-info)))
+                    (assert (= sample-count (nintendo-ware::xwav-info-loop-end wave-info)))
                     (assert (= 1 (length channels)))
                     (when (= codec 2)
-                      (assert (typep (nintendo-ware:xwav-channel-codec-info (aref channels 0))
-                                     'nintendo-ware:xwav-dsp-adpcm-info)))
-                    (incf encoded-bytes (length (nintendo-ware:xwav-channel-encoded-data (aref channels 0))))))))
+                      (assert (typep (nintendo-ware::xwav-channel-codec-info (aref channels 0))
+                                     'nintendo-ware::xwav-dsp-adpcm-info)))
+                    (incf encoded-bytes (length (nintendo-ware::xwav-channel-encoded-data (aref channels 0))))))))
       (assert (= 273362 encoded-bytes))))
   (format t "Real mset.bcsar regression passed: 19 embedded files and 34 waves.~%"))

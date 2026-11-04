@@ -48,12 +48,7 @@
            ,@(if (and fields (subtypep (binstruct::lisp-type (getf (cddr (car (last fields))) :type)) 'xseq-event))
                  fields (butlast fields)))
          (eval-when (:compile-toplevel :load-toplevel :execute)
-           (pushnew ',class *xseq-events*))
-         (export '(,class ,(alexandria:symbolicate 'make- class)
-                   ,(alexandria:symbolicate class '-p)
-                   ,@(loop for field in fields unless (or (null (car field))
-                                                         (char= (char (symbol-name (car field)) 0) #\%))
-                           collect (alexandria:symbolicate class '- (car field)))))))))
+           (pushnew ',class *xseq-events*))))))
 
 ;; A note's leading byte is its pitch, not a fixed event tag.
 (defbinstruct/me (xseq-event-note (:include xseq-event)) ()
@@ -65,8 +60,6 @@
   (velocity 0 :type (unsigned-byte 8)))
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (pushnew 'xseq-event-note *xseq-events*))
-(export '(xseq-event-note make-xseq-event-note xseq-event-note-p
-          xseq-event-note-key xseq-event-note-velocity xseq-event-note-duration))
 
 (define-xseq-event (wait #x80)
   (value 0 :type xseq-vlq))
@@ -511,6 +504,3 @@
 (defun xseq-events (sequence)
   (xseq-data-events (xseq-data sequence)))
 
-(export '(xseq-event xseq-event-child xseq-events
-          xseq xseq-header xseq-data xseq-labels
-          xseq-data-events xseq-labels-entries xseq-label-entry xseq-label-entry-name xseq-label-entry-index))

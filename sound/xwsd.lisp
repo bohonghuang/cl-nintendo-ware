@@ -82,9 +82,3 @@
   (%tag #x6800 :type (map null (lambda (ignored) (declare (ignore ignored)) (if (block-reference header #x6800 nil) #x6800 #x4800))))
   (info nil :type (peek xwsd-info (block-start header %tag))))
 
-(export '(xwsd xwsd-header xwsd-info xwsd-info-waves xwsd-info-items xwsd-item-table-entries xwsd-item
-          xwsd-item-parameters xwsd-item-tracks xwsd-item-notes xwsd-track-table-entries xwsd-note-table-entries
-          xwsd-track xwsd-track-events xwsd-event-table-entries xwsd-event xwsd-event-position xwsd-event-length xwsd-event-note-index
-          xwsd-note xwsd-note-wave-index xwsd-note-parameters xwsd-parameters xwsd-parameters-flags xwsd-parameters-pan-info
-          xwsd-parameters-key-info xwsd-parameters-volume-info xwsd-parameters-pitch xwsd-parameters-filter-info
-          xwsd-parameters-sends xwsd-parameters-envelope xwsd-envelope xwsd-envelope-release xwsd-sends xwsd-sends-main-send xwsd-sends-auxiliary-sends))
