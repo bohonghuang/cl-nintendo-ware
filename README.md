@@ -110,10 +110,11 @@ file body 直接接收容器已读取的 header；section body 通过原生位�
 
 已通过公开 `read-file` 接口完整读取 [pmee 的 `mset.bcsar`](https://github.com/bohonghuang/pmee/blob/01f93480dea5e3e99a2e0d658381fd3a2052423d/mset.bcsar)（383,408 字节，CSAR／小端）。pathname、二进制流、octet vector 三种输入均通过；67 个字符串、50 个声音的名称与文件／播放器 ID、音量、序列 bank／起始偏移／优先级，以及 5 个 CWSD item／note 的字段与 [DualRip](https://github.com/TetraSsky/DualRip) 独立解析结果交叉核对。19 个内嵌文件全部解析：5 个 CSEQ（35,225 个顶层事件）、2 个 CWSD、5 个 CBNK、7 个 CWAR；CWAR 中共读取 34 个 CWAV／34 个声道，保留 273,362 字节编码音频，不进行解码或播放。
 
-样本 SHA-256：`e96097ab77e70837cee31acd2c3c132da56a262add4aa8e1fa27d623ecdf7323`。样本未纳入测试仓库；独立合成回归覆盖此样本揭示的 CWSD item 效果偏移基址、内嵌文件后的 table 基址隔离，以及 SAR project-info 的 `#x220b` 引用 tag。
+样本 SHA-256：`e96097ab77e70837cee31acd2c3c132da56a262add4aa8e1fa27d623ecdf7323`。原始文件已纳入 `test/data/mset.bcsar`，由默认 `asdf:test-system` 执行 `test/pmee.lisp` 中的真实归档回归；测试不联网，也不需要外部 checkout。断言声音名称／文件 ID／音量、内嵌文件类型、完整序列事件数量、CWSD 效果参数、project-info，以及全部 CWAV 的 codec／采样率／样本数和编码数据总量。独立合成回归继续覆盖此样本揭示的 CWSD item 效果偏移基址、内嵌文件后的 table 基址隔离，以及 SAR project-info 的 `#x220b` 引用 tag。
 
 ```lisp
-(nintendo-ware:read-file 'nintendo-ware:xsar #P"/path/to/pmee/mset.bcsar")
+(nintendo-ware:read-file 'nintendo-ware:xsar
+                         (asdf:system-relative-pathname :cl-nintendo-ware #P"test/data/mset.bcsar"))
 ```
 
 - [ENDIAN.md](ENDIAN.md)：各平台、容器及事件流的端序证据。

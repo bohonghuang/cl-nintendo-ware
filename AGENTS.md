@@ -15,7 +15,7 @@
 ## Key Directories
 
 - `sound/`: platform-neutral sound schemas, references, tables and event declarations.
-- `test/`: independent fixture layouts and assertion-based reader regressions. Keep downloaded game assets and temporary smoke scripts outside the repository.
+- `test/`: independent fixture layouts, assertion-based reader regressions and the explicitly retained real archive `test/data/mset.bcsar`. Keep other downloaded game assets and temporary smoke scripts outside the repository.
 
 ## Development Commands
 
@@ -71,7 +71,7 @@ Check real fields and reference targets, never generated source or constructor w
 
 Exercise changed readers on actual or synthetic binary input in addition to regressions. The typed-event reader passed 63 public BCSEQ files with 401,232 top-level events and index conversion; this includes statically unreachable events, not just a control-flow walk. A smoke run used actual `closynth:event-emit` methods on parsed note/tempo types without binary access; this is dispatch evidence, not playback support. Citric's `guts.bcseq` contains a target inside another instruction and fails event-boundary validation. Other platforms/formats primarily have synthetic verification; do not claim universal game compatibility or audio playback from parser evidence.
 
-The `pmee` repository's `mset.bcsar` also has complete real-archive verification through public XSAR input dispatch, including every embedded SEQ/WSD/BNK/WAR and its WAV data. See README for the exact sample fingerprint and independent DualRip field comparisons. Keep the asset outside this repository; retain synthetic regressions for its addressing and reference-tag failures.
+The `pmee` repository's original `mset.bcsar` is retained at `test/data/mset.bcsar` and exercised by `test/pmee.lisp` in the default ASDF test operation, without networking or an external checkout. It has complete real-archive verification through public XSAR input dispatch, including every embedded SEQ/WSD/BNK/WAR and its WAV data. See README for the exact sample fingerprint and independent DualRip field comparisons. Retain the synthetic regressions alongside this asset to isolate its addressing and reference-tag failures.
 
 ## External References
 

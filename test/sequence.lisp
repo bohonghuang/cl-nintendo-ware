@@ -1,6 +1,6 @@
 (defpackage #:cl-nintendo-ware.test
   (:use #:cl #:parsonic #:binstruct)
-  (:export #:run-tests #:run-format-tests #:run-archive-tests #:run-endian-tests))
+  (:export #:run-tests #:run-format-tests #:run-archive-tests #:run-endian-tests #:run-pmee-tests))
 (in-package #:cl-nintendo-ware.test)
 (defvar *record-start* 0)
 (defvar *record-limit* most-positive-fixnum)
