@@ -28,6 +28,25 @@
 (defbinalias vlq ()
   (map %vlq #'%vlq-integer #'integer-%vlq))
 
+(defbinenum (xseq-mod-target (:type (unsigned-byte 8))) ()
+  (pitch 0)
+  (volume 1)
+  (pan 2))
+
+(defbinenum (xseq-mod-curve (:type (unsigned-byte 8))) ()
+  (sine 0)
+  (triangle 1)
+  (sawtooth 2)
+  (rectangular 3)
+  (random 4)
+  (none 5))
+
+(defbinenum (xseq-mute-mode (:type (unsigned-byte 8))) ()
+  (off 0)
+  (no-stop 1)
+  (release 2)
+  (stop 3))
+
 (defbinstruct/me xseq-event ())
 (deftype xseq-event-union () 'xseq-event)
 (deftype xseq-event-partial-union (&optional status) (declare (ignore status)) 'xseq-event)
@@ -116,7 +135,7 @@
   (value 0 :type (unsigned-byte 8)))
 
 (define-xseq-event (monophonic #xb2)
-  (value 0 :type (unsigned-byte 8)))
+  (value nil :type (boolean (unsigned-byte 8))))
 
 (define-xseq-event (velocity-range #xb3)
   (value 0 :type (unsigned-byte 8)))
@@ -134,10 +153,10 @@
   (value 0 :type (unsigned-byte 8)))
 
 (define-xseq-event (mod-curve #xbe)
-  (value 0 :type (unsigned-byte 8)))
+  (value 'sine :type xseq-mod-curve))
 
 (define-xseq-event (front-bypass #xbf)
-  (value 0 :type (unsigned-byte 8)))
+  (value nil :type (boolean (unsigned-byte 8))))
 
 (define-xseq-event (pan #xc0)
   (value 0 :type (unsigned-byte 8)))
@@ -161,10 +180,10 @@
   (value 0 :type (unsigned-byte 8)))
 
 (define-xseq-event (note-wait #xc7)
-  (value 0 :type (unsigned-byte 8)))
+  (value nil :type (boolean (unsigned-byte 8))))
 
 (define-xseq-event (tie #xc8)
-  (value 0 :type (unsigned-byte 8)))
+  (value nil :type (boolean (unsigned-byte 8))))
 
 (define-xseq-event (portamento #xc9)
   (value 0 :type (unsigned-byte 8)))
@@ -176,13 +195,13 @@
   (value 0 :type (unsigned-byte 8)))
 
 (define-xseq-event (mod-type #xcc)
-  (value 0 :type (unsigned-byte 8)))
+  (value 'pitch :type xseq-mod-target))
 
 (define-xseq-event (mod-range #xcd)
   (value 0 :type (unsigned-byte 8)))
 
 (define-xseq-event (portamento-switch #xce)
-  (value 0 :type (unsigned-byte 8)))
+  (value nil :type (boolean (unsigned-byte 8))))
 
 (define-xseq-event (portamento-time #xcf)
   (value 0 :type (unsigned-byte 8)))
@@ -227,13 +246,13 @@
   (value 0 :type (unsigned-byte 8)))
 
 (define-xseq-event (mute #xdd)
-  (value 0 :type (unsigned-byte 8)))
+  (value 'off :type xseq-mute-mode))
 
 (define-xseq-event (fx-send-c #xde)
   (value 0 :type (unsigned-byte 8)))
 
 (define-xseq-event (damper #xdf)
-  (value 0 :type (unsigned-byte 8)))
+  (value nil :type (boolean (unsigned-byte 8))))
 
 (define-xseq-event (mod-delay #xe0)
   (value 0 :type (signed-byte 16)))
@@ -331,7 +350,7 @@
   (value 0 :type (signed-byte 16)))
 
 (define-xseq-event (mod2-curve (#xf0 #xa0))
-  (value 0 :type (unsigned-byte 8)))
+  (value 'sine :type xseq-mod-curve))
 
 (define-xseq-event (mod2-phase (#xf0 #xa1))
   (value 0 :type (unsigned-byte 8)))
@@ -343,13 +362,13 @@
   (value 0 :type (unsigned-byte 8)))
 
 (define-xseq-event (mod2-type (#xf0 #xa4))
-  (value 0 :type (unsigned-byte 8)))
+  (value 'pitch :type xseq-mod-target))
 
 (define-xseq-event (mod2-range (#xf0 #xa5))
   (value 0 :type (unsigned-byte 8)))
 
 (define-xseq-event (mod3-curve (#xf0 #xa6))
-  (value 0 :type (unsigned-byte 8)))
+  (value 'sine :type xseq-mod-curve))
 
 (define-xseq-event (mod3-phase (#xf0 #xa7))
   (value 0 :type (unsigned-byte 8)))
@@ -361,13 +380,13 @@
   (value 0 :type (unsigned-byte 8)))
 
 (define-xseq-event (mod3-type (#xf0 #xaa))
-  (value 0 :type (unsigned-byte 8)))
+  (value 'pitch :type xseq-mod-target))
 
 (define-xseq-event (mod3-range (#xf0 #xab))
   (value 0 :type (unsigned-byte 8)))
 
 (define-xseq-event (mod4-curve (#xf0 #xac))
-  (value 0 :type (unsigned-byte 8)))
+  (value 'sine :type xseq-mod-curve))
 
 (define-xseq-event (mod4-phase (#xf0 #xad))
   (value 0 :type (unsigned-byte 8)))
@@ -379,7 +398,7 @@
   (value 0 :type (unsigned-byte 8)))
 
 (define-xseq-event (mod4-type (#xf0 #xb0))
-  (value 0 :type (unsigned-byte 8)))
+  (value 'pitch :type xseq-mod-target))
 
 (define-xseq-event (mod4-range (#xf0 #xb1))
   (value 0 :type (unsigned-byte 8)))

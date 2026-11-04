@@ -256,6 +256,16 @@
                        :version (* major-version #x1000000))))
 
 (defun run-archive-tests ()
+  (let* ((archive (nintendo-ware::read-file 'nintendo-ware::xsar
+                    (xsar-fixture #() :sound-flags (flags 2 #x0801))))
+         (sound (aref (nintendo-ware::xsar-sounds-table-entries
+                        (nintendo-ware::xsar-info-sounds (nintendo-ware::xsar-info archive))) 0))
+         (pan (nintendo-ware::xsar-sound-pan-mode-info sound)))
+    (assert (eq 'nintendo-ware::balance (nintendo-ware::xsar-pan-mode-info-mode pan)))
+    (assert (eq 'nintendo-ware::linear-0-clamp (nintendo-ware::xsar-pan-mode-info-curve pan)))
+    (assert (eq t (nintendo-ware::xsar-patricia-node-leaf-p
+                   (aref (nintendo-ware::xsar-patricia-tree-nodes
+                           (nintendo-ware::xsar-strg-tree (nintendo-ware::xsar-strg archive))) 0)))))
   ;; Sparse sets must not shift later values; unknown bits retain their words.
   (let* ((archive (nintendo-ware::read-file 'nintendo-ware::xsar
                     (xsar-fixture (sequence-fixture #(#xff))
@@ -392,6 +402,8 @@
            (seek (nintendo-ware::xstm-seek-entry-context (aref (nintendo-ware::xstm-seek-row-entries (aref (nintendo-ware::xstm-seek-rows (nintendo-ware::xstm-seek stream)) 1)) 1)))
            (channel (aref (nintendo-ware::xstm-channel-table-entries (nintendo-ware::xstm-info-channels information)) 1))
            (track (aref (nintendo-ware::xstm-track-table-entries (nintendo-ware::xstm-info-tracks information)) 0)))
+      (assert (eq 'nintendo-ware::dsp-adpcm (nintendo-ware::xstm-stream-info-encoding metadata)))
+      (assert (eq t (nintendo-ware::xstm-stream-info-loop-p metadata)))
       (assert (equalp #(0 1) (nintendo-ware::byte-table-entries (nintendo-ware::xstm-track-channels track))))
       (assert (= -4 (nintendo-ware::xstm-dsp-seek-context-history-1 seek)))
       (assert (= 400 (nintendo-ware::xstm-dsp-seek-context-history-2 seek)))

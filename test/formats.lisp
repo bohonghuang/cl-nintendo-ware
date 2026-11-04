@@ -123,6 +123,10 @@
            (information (nintendo-ware::xwav-info wave))
            (channels (nintendo-ware::xwav-info-channels information))
            (codec-info (nintendo-ware::xwav-channel-codec-info (aref channels 0))))
+      (assert (eq (nth codec '(nintendo-ware::pcm-8 nintendo-ware::pcm-16
+                               nintendo-ware::dsp-adpcm nintendo-ware::ima-adpcm))
+                  (nintendo-ware::xwav-info-codec information)))
+      (assert (eq t (nintendo-ware::xwav-info-loop-p information)))
       (assert (= 32000 (nintendo-ware::xwav-info-sample-rate information)))
       (assert (= 1 (nintendo-ware::xwav-info-loop-start information)))
       (assert (= 3 (nintendo-ware::xwav-info-loop-end information)))
@@ -172,7 +176,7 @@
         (let ((note (nintendo-ware::xbnk-velocity-note-info velocity)))
           (assert (nintendo-ware::xbnk-note-flag-percussion-p note))
           (assert (= 0 (nintendo-ware::xbnk-note-flag-key-group note)))
-          (assert (= 1 (nintendo-ware::xbnk-note-flag-interpolation-type note))))
+          (assert (eq 'nintendo-ware::linear (nintendo-ware::xbnk-note-flag-interpolation-type note))))
         (assert (= 4 (nintendo-ware::xbnk-adshr-curve-hold (nintendo-ware::xbnk-velocity-envelope velocity)))))))
   (rejects nintendo-ware::invalid-file (nintendo-ware::read-file 'nintendo-ware::xbnk (xbnk-fixture #x6000 #x6000 1)))
   ;; Removing size/overlap validation must not remove section identification.

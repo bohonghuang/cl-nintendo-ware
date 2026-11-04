@@ -54,6 +54,26 @@ BNK、WSD、SAR 的可选参数各有记录专属位域 set，开关字段使用
 
 共用解析布局不等于保证所有游戏、版本和编码组合兼容。原始 ID、引用、可选字段、DATA 及填充保留；空引用为 `NIL`。外部档案路径只读取为字符串，绝不自动打开。
 
+### 语义枚举与开关
+
+同 cl-nitro，枚举由原生 `defbinenum` 声明，读取后返回 `nintendo-ware` 包中的符号，不返回磁盘整数，也不提供整数兼容分支。调用方用 `eq`／`case`／`ecase`，不要再对枚举使用 `=` 或自行映射。
+
+| 字段 | 符号（按磁盘值递增） |
+|---|---|
+| `xwav-info-codec`、`xstm-stream-info-encoding` | `pcm-8`、`pcm-16`、`dsp-adpcm`、`ima-adpcm` |
+| `xbnk-note-flag-interpolation-type` | `polyphase`、`linear` |
+| SEQ `mod-type`、`mod2-type`、`mod3-type`、`mod4-type` 的 `value` | `pitch`、`volume`、`pan` |
+| SEQ `mod-curve`、`mod2-curve`、`mod3-curve`、`mod4-curve` 的 `value` | `sine`、`triangle`、`sawtooth`、`rectangular`、`random`、`none` |
+| SEQ `mute` 的 `value` | `off`、`no-stop`、`release`、`stop` |
+| `xsar-pan-mode-info-mode` | `dual`、`balance` |
+| `xsar-pan-mode-info-curve` | `sqrt-negative-3`、`sqrt-0`、`sqrt-0-clamp`、`sincos-negative-3`、`sincos-0`、`sincos-0-clamp`、`linear-negative-6`、`linear-0`、`linear-0-clamp` |
+| `xsar-sound-3d-info-attenuation-curve` | `logarithmic`、`linear` |
+| `xsar-stream-sound-info-file-type` | `invalid`、`binary`、`adts`、`opus`；缺席仍为 `NIL` |
+
+WAV 的 `loop` 改为 `xwav-info-loop-p`，STM 的 `loop-flag` 改为 `xstm-stream-info-loop-p`，track 的 `surround-mode` 改为 `xstm-track-surround-mode-p`，SAR 的 `leaf-flag`／`load-individually` 改为 `xsar-patricia-node-leaf-p`／`xsar-wave-archive-load-individually-p`，均返回 `T/NIL`。SEQ `monophonic`、`front-bypass`、`note-wait`、`tie`、`portamento-switch`、`damper` 的 `value` 也直接返回布尔值；调用方不要再用 `plusp`。
+
+原始资源 ID、引用 tag、计数、连续参数和位掩码不是封闭枚举，仍保留数值。`biquad-type` 是可注册滤波 callback 的索引，不擅自把游戏自定义索引命名为固定滤波模式；见 [NW4R callback registry](https://github.com/NSMBW-Community/NSMBW-Decomp/blob/master/include/lib/nw4r/snd/snd_AxManager.h)。C/F 枚举依据 [Citric Composer](https://github.com/Gota7/Citric-Composer/tree/master/Citric%20Composer) 的 `SequenceDataLib` 和 `High Level` 声明；静音模式另参见 [SeqMute](https://github.com/NSMBW-Community/NSMBW-Decomp/blob/master/include/lib/nw4r/snd/snd_SeqTrack.h)。
+
 ### XSAR 文件提取
 
 XSAR 仿照 cl-nitro 的 SDAT：读取元数据和各内嵌文件的原始字节，不解析子文件的 magic、BOM 或事件。`xsar-files` 返回按 File ID 排列的 simple-vector，每项为 `(name . data)` cons；`xsar-file-name` 和 `xsar-file-data` 分别访问 car／cdr。这三个入口在 `package.lisp` 的 `defpackage` 中导出。调用方决定哪些数据交给 `read-file`，未选择的未知或损坏子文件不会阻止 XSAR 提取。

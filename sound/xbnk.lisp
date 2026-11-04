@@ -1,5 +1,9 @@
 (in-package #:cl-nintendo-ware)
 
+(defbinenum (xbnk-interpolation-type (:type (unsigned-byte 8))) ()
+  (polyphase 0)
+  (linear 1))
+
 (defbinstruct/me xbnk-adshr-curve ()
   (attack 127 :type (satisfies (signed-byte 8) (lambda (value) (not (minusp value)))))
   (decay 127 :type (satisfies (signed-byte 8) (lambda (value) (not (minusp value)))))
@@ -48,7 +52,7 @@
   (percussion-p nil :type (boolean bit))
   (reserved 0 :type (unsigned-byte 7))
   (key-group 0 :type (unsigned-byte 8))
-  (interpolation-type 0 :type (unsigned-byte 8))
+  (interpolation-type 'polyphase :type xbnk-interpolation-type)
   (nil 0 :type (unsigned-byte 8)))
 
 (defbinstruct/me (xbnk-velocity-flag-set (:alignment 4)) ()

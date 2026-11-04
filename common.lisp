@@ -1,5 +1,11 @@
 (in-package #:cl-nintendo-ware)
 
+(defbinenum (sample-codec (:type (unsigned-byte 8))) ()
+  (pcm-8 0)
+  (pcm-16 1)
+  (dsp-adpcm 2)
+  (ima-adpcm 3))
+
 (define-condition invalid-file (error)
   ((reason :initarg :reason :reader invalid-file-reason))
   (:report (lambda (condition output) (write-string (invalid-file-reason condition) output))))

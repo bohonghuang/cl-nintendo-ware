@@ -43,7 +43,7 @@
           (assert (= -12 (nintendo-ware::xseq-event-random-min random)))
           (assert (= 12 (nintendo-ware::xseq-event-random-max random)))
           (assert (= 60 (nintendo-ware::xseq-event-note-key note)))
-          (assert (= 5 (nintendo-ware::xseq-event-mod4-curve-value (aref events 3))))
+          (assert (eq 'nintendo-ware::none (nintendo-ware::xseq-event-mod4-curve-value (aref events 3))))
           (let* ((body (if little
                            #(136 2 11 0 0 162 138 11 0 0 255 137 10 0 0)
                            #(136 2 0 0 11 162 138 0 0 11 255 137 0 0 10)))

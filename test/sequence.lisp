@@ -356,6 +356,20 @@
     (assert (equalp sequence (nintendo-ware::read-file 'nintendo-ware::xseq (flexi-streams:make-in-memory-input-stream bytes))))
     (rejects nintendo-ware::invalid-file (nintendo-ware::read-file 'nintendo-ware::xwav bytes))
     (rejects nintendo-ware::invalid-file (nintendo-ware::read-file 'nintendo-ware::xseq (sequence-fixture #(#xff) :label-offset 24))))
+  ;; Enum operands remain semantic under ordinary and nested event readers.
+  (let ((events (nintendo-ware::xseq-events
+                 (nintendo-ware::read-file 'nintendo-ware::xseq
+                   (sequence-fixture #(#xcc 2 #xbe 4 #xdd 3 #xc7 0 #xc8 1
+                                       #xa2 #xf0 #xa4 1 #xf0 #xa6 3 #xff))))))
+    (assert (eq 'nintendo-ware::pan (nintendo-ware::xseq-event-mod-type-value (aref events 0))))
+    (assert (eq 'nintendo-ware::random (nintendo-ware::xseq-event-mod-curve-value (aref events 1))))
+    (assert (eq 'nintendo-ware::stop (nintendo-ware::xseq-event-mute-value (aref events 2))))
+    (assert (null (nintendo-ware::xseq-event-note-wait-value (aref events 3))))
+    (assert (eq t (nintendo-ware::xseq-event-tie-value (aref events 4))))
+    (assert (eq 'nintendo-ware::volume
+                (nintendo-ware::xseq-event-mod2-type-value
+                  (nintendo-ware::xseq-event-if-sub-event (aref events 5)))))
+    (assert (eq 'nintendo-ware::rectangular (nintendo-ware::xseq-event-mod3-curve-value (aref events 6)))))
   (dolist (case '((#(0) 0) (#(#x7f) 127) (#(#x81 0) 128) (#(#xff #x7f) 16383)
                   (#(#x81 #x80 0) 16384) (#(#xff #xff #x7f) 2097151) (#(#xff #xff #xff #x7f) 268435455)
                   (#(#x81 #x80 #x80 #x80 0) 268435456) (#(#x8f #xff #xff #xff #x7f) 4294967295)))

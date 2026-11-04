@@ -1,5 +1,30 @@
 (in-package #:cl-nintendo-ware)
 
+(defbinenum (xsar-pan-mode (:type (unsigned-byte 8))) ()
+  (dual 0)
+  (balance 1))
+
+(defbinenum (xsar-pan-curve (:type (unsigned-byte 8))) ()
+  (sqrt-negative-3 0)
+  (sqrt-0 1)
+  (sqrt-0-clamp 2)
+  (sincos-negative-3 3)
+  (sincos-0 4)
+  (sincos-0-clamp 5)
+  (linear-negative-6 6)
+  (linear-0 7)
+  (linear-0-clamp 8))
+
+(defbinenum (xsar-attenuation-curve (:type (unsigned-byte 8))) ()
+  (logarithmic 0)
+  (linear 1))
+
+(defbinenum (xsar-stream-file-type (:type (unsigned-byte 32))) ()
+  (invalid 0)
+  (binary 1)
+  (adts 2)
+  (opus 3))
+
 (defbinstruct/me (xsar-front-bypass-info (:alignment 4)) ()
   (front-bypass-p nil :type (boolean bit))
   (reserved 0 :type (unsigned-byte 31)))
@@ -74,14 +99,14 @@
   (reserved-0-31 0 :type (unsigned-byte 32)))
 
 (defbinstruct xsar-pan-mode-info ()
-  (mode 0 :type (unsigned-byte 8))
-  (curve 0 :type (unsigned-byte 8))
+  (mode 'dual :type xsar-pan-mode)
+  (curve 'sqrt-negative-3 :type xsar-pan-curve)
   (reserved 0 :type (unsigned-byte 16)))
 
 (defbinstruct (xsar-pan-mode-info/be (:type xsar-pan-mode-info) (:endian :big)) ()
   (reserved 0 :type (unsigned-byte 16))
-  (curve 0 :type (unsigned-byte 8))
-  (mode 0 :type (unsigned-byte 8)))
+  (curve 'sqrt-negative-3 :type xsar-pan-curve)
+  (mode 'dual :type xsar-pan-mode))
 
 (defbinalias xsar-pan-mode-info/le () xsar-pan-mode-info)
 (%define-endian-reader xsar-pan-mode-info)
@@ -101,7 +126,7 @@
 
 
 (defbinstruct/me xsar-patricia-node ()
-  (leaf-flag 0 :type (unsigned-byte 16))
+  (leaf-p nil :type (boolean (unsigned-byte 16)))
   (bit-index 0 :type (unsigned-byte 16))
   (left-index 0 :type (unsigned-byte 32))
   (right-index 0 :type (unsigned-byte 32))
@@ -111,7 +136,7 @@
 (defbinstruct/me xsar-sound-3d-info ()
   (flags (make-xsar-sound-3d-flag-set) :type xsar-sound-3d-flag-set)
   (attenuation-rate 0.0 :type single-float)
-  (attenuation-curve 0 :type (unsigned-byte 8))
+  (attenuation-curve 'logarithmic :type xsar-attenuation-curve)
   (doppler-factor 0 :type (unsigned-byte 8))
   (padding 0 :type (unsigned-byte 16))
   (options (make-xsar-sound-3d-option-flag-set) :type xsar-sound-3d-option-flag-set)
@@ -132,7 +157,7 @@
   (channel-count 0 :type (unsigned-byte 16))
   (flags (make-xsar-stream-sound-flag-set) :type xsar-stream-sound-flag-set)
   (file-type nil :type (ecase (xsar-stream-sound-flag-set-file-type-p flags)
-                        ((nil) null) ((t) (unsigned-byte 32))))
+                        ((nil) null) ((t) xsar-stream-file-type)))
   (loop-start-frame nil :type (ecase (xsar-stream-sound-flag-set-loop-start-frame-p flags)
                         ((nil) null) ((t) (unsigned-byte 32))))
   (loop-end-frame nil :type (ecase (xsar-stream-sound-flag-set-loop-end-frame-p flags)
@@ -142,7 +167,7 @@
 
 (defbinstruct/me xsar-wave-archive ()
   (file-id 0 :type (unsigned-byte 32))
-  (load-individually 0 :type (unsigned-byte 8))
+  (load-individually-p nil :type (boolean (unsigned-byte 8)))
   (padding #.(make-array 0 :element-type '(unsigned-byte 8)) :type (simple-array (unsigned-byte 8) (3)))
   (flags (make-xsar-wave-archive-flag-set) :type xsar-wave-archive-flag-set)
   (string-index nil :type (ecase (xsar-wave-archive-flag-set-string-index-p flags)

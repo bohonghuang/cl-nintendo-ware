@@ -24,10 +24,10 @@
 (defun xwav-encoded-size (codec sample-count)
   "The number of encoded bytes for one C/F wave channel, excluding alignment."
   (ecase codec
-    (0 sample-count)
-    (1 (* 2 sample-count))
-    (2 (* 8 (ceiling sample-count 14)))
-    (3 (ceiling sample-count 2))))
+    (pcm-8 sample-count)
+    (pcm-16 (* 2 sample-count))
+    (dsp-adpcm (* 8 (ceiling sample-count 14)))
+    (ima-adpcm (ceiling sample-count 2))))
 
 (defbinstruct/me xwav-channel (codec sample-count header)
   (%start 0 :type position)
@@ -36,18 +36,18 @@
   (codec-reference (make-reference) :type reference)
   (reserved 0 :type (unsigned-byte 32))
   (codec-info nil :type (ecase codec
-                          ((0 1) null)
-                          (2 (peek xwav-dsp-adpcm-info
-                                   (reference-target codec-reference %start #x0300)))
-                          (3 (peek xwav-ima-adpcm-info
-                                   (reference-target codec-reference %start #x0301)))))
+                          ((pcm-8 pcm-16) null)
+                          (dsp-adpcm (peek xwav-dsp-adpcm-info
+                                           (reference-target codec-reference %start #x0300)))
+                          (ima-adpcm (peek xwav-ima-adpcm-info
+                                           (reference-target codec-reference %start #x0301)))))
   (encoded-data #.(make-array 0 :element-type '(unsigned-byte 8))
                 :type (peek (simple-array (unsigned-byte 8) ((xwav-encoded-size codec sample-count)))
                             (reference-target samples-reference %data-start #x1f00))))
 
 (define-nintendo-ware-section (xwav-info (:magic "INFO"))
-  (codec 0 :type (satisfies (unsigned-byte 8) (lambda (codec) (<= codec 3))))
-  (loop 0 :type (unsigned-byte 8))
+  (codec 'pcm-8 :type sample-codec)
+  (loop-p nil :type (boolean (unsigned-byte 8)))
   (padding 0 :type (unsigned-byte 16))
   (sample-rate 0 :type (unsigned-byte 32))
   (loop-start 0 :type (unsigned-byte 32))
