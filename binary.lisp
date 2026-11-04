@@ -35,33 +35,11 @@
                                        (list key value)))))
         (macroexpand `(defbinstruct (,name ,@options) ,lambda-list ,@slots))))))
 
-(eval-when (:compile-toplevel :load-toplevel :execute)
-  (defun big-endian-bitfield-slots (slots)
-    ;; Binstruct closes an integer group at each byte-aligned field boundary.
-    ;; Reverse those groups, not their fields, for a numeric bitfield word.
-    (let ((bits 0) (group nil) (groups nil))
-      (dolist (slot slots)
-        (let ((type (getf (cddr slot) :type)))
-          (incf bits (cond ((equal type '(boolean bit)) 1)
-                           ((eq type 'bit) 1)
-                           (t (destructuring-bind (unsigned-byte width) type
-                                (assert (eq unsigned-byte 'unsigned-byte))
-                                width)))))
-        (push slot group)
-        (when (zerop (mod bits 8))
-          (push (nreverse group) groups)
-          (setf group nil)))
-      (assert (and (= bits 32) (null group)))
-      (mappend #'identity groups))))
-
 (defmacro defbinstruct/me (name-and-options &body body)
   "Define default little-endian and /le, /be readers sharing one Lisp type.
-An optional lambda list precedes the fields, as in DEFBINSTRUCT.
-(:BITFIELD T) declares a numeric 32-bit native bitfield in low-bit-first order."
+An optional lambda list precedes the fields, as in DEFBINSTRUCT."
   (destructuring-bind (name &rest options) (ensure-list name-and-options)
-    (let* ((bitfield-p (cadr (assoc :bitfield options)))
-           (options (remove :bitfield options :key #'car))
-           (lambda-list (when (and body (not (member :type (first body)))) (pop body)))
+    (let* ((lambda-list (when (and body (not (member :type (first body)))) (pop body)))
            (type (or (cadr (assoc :type options)) name))
            (little (symbolicate name '#:/le))
            (big (symbolicate name '#:/be)))
@@ -70,7 +48,7 @@ An optional lambda list precedes the fields, as in DEFBINSTRUCT.
          (%defbinstruct/be (,big (:type ,type) (:endian :big)
                                 ,@(remove-if (lambda (option) (member (car option) '(:type :endian))) options))
              ,lambda-list
-           ,@(if bitfield-p (big-endian-bitfield-slots body) body))
+           ,@body)
          (defbinalias (,little (:type ,type)) ,lambda-list
            (,name ,@(parsonic::lambda-list-arguments lambda-list)))
          (%define-endian-reader ,name)))))

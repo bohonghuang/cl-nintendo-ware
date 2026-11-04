@@ -9,7 +9,7 @@
   (count 0 :type (unsigned-byte 8))
   (auxiliary-sends #.(make-array 0 :element-type '(unsigned-byte 8)) :type (simple-array (unsigned-byte 8) (count))))
 
-(defbinstruct/me (xwsd-item-flag-set (:bitfield t)) ()
+(defbinstruct/me (xwsd-item-flag-set (:alignment 4)) ()
   (pan-info-p nil :type (boolean bit))
   (pitch-p nil :type (boolean bit))
   (filter-info-p nil :type (boolean bit))
@@ -18,7 +18,7 @@
   (envelope-offset-p nil :type (boolean bit))
   (reserved-10-31 0 :type (unsigned-byte 22)))
 
-(defbinstruct/me (xwsd-note-flag-set (:bitfield t)) ()
+(defbinstruct/me (xwsd-note-flag-set (:alignment 4)) ()
   (key-info-p nil :type (boolean bit))
   (volume-info-p nil :type (boolean bit))
   (pan-info-p nil :type (boolean bit))

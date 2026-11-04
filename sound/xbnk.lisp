@@ -44,14 +44,14 @@
 (defbinalias xbnk-pan-flag/le () xbnk-pan-flag)
 (%define-endian-reader xbnk-pan-flag)
 
-(defbinstruct/me (xbnk-note-flag (:bitfield t)) ()
+(defbinstruct/me (xbnk-note-flag (:alignment 4)) ()
   (percussion-p nil :type (boolean bit))
   (reserved 0 :type (unsigned-byte 7))
   (key-group 0 :type (unsigned-byte 8))
   (interpolation-type 0 :type (unsigned-byte 8))
   (nil 0 :type (unsigned-byte 8)))
 
-(defbinstruct/me (xbnk-velocity-flag-set (:bitfield t)) ()
+(defbinstruct/me (xbnk-velocity-flag-set (:alignment 4)) ()
   (key-info-p nil :type (boolean bit))
   (volume-info-p nil :type (boolean bit))
   (pan-info-p nil :type (boolean bit))

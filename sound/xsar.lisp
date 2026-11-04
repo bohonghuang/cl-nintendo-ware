@@ -1,10 +1,10 @@
 (in-package #:cl-nintendo-ware)
 
-(defbinstruct/me (xsar-front-bypass-info (:bitfield t)) ()
+(defbinstruct/me (xsar-front-bypass-info (:alignment 4)) ()
   (front-bypass-p nil :type (boolean bit))
   (reserved 0 :type (unsigned-byte 31)))
 
-(defbinstruct/me (xsar-sound-3d-flag-set (:bitfield t)) ()
+(defbinstruct/me (xsar-sound-3d-flag-set (:alignment 4)) ()
   (volume-p nil :type (boolean bit))
   (priority-p nil :type (boolean bit))
   (pan-p nil :type (boolean bit))
@@ -13,39 +13,39 @@
   (reserved 0 :type (unsigned-byte 27)))
 
 ;; Optional parameter bits and their values follow ascending bit order.
-(defbinstruct/me (xsar-sound-3d-option-flag-set (:bitfield t)) ()
+(defbinstruct/me (xsar-sound-3d-option-flag-set (:alignment 4)) ()
   (reserved-0-31 0 :type (unsigned-byte 32)))
 
-(defbinstruct/me (xsar-wave-sound-flag-set (:bitfield t)) ()
+(defbinstruct/me (xsar-wave-sound-flag-set (:alignment 4)) ()
   (priority-p nil :type (boolean bit))
   (reserved-1-31 0 :type (unsigned-byte 31)))
 
-(defbinstruct/me (xsar-stream-sound-flag-set (:bitfield t)) ()
+(defbinstruct/me (xsar-stream-sound-flag-set (:alignment 4)) ()
   (file-type-p nil :type (boolean bit))
   (loop-start-frame-p nil :type (boolean bit))
   (loop-end-frame-p nil :type (boolean bit))
   (reserved-3-31 0 :type (unsigned-byte 29)))
 
-(defbinstruct/me (xsar-wave-archive-flag-set (:bitfield t)) ()
+(defbinstruct/me (xsar-wave-archive-flag-set (:alignment 4)) ()
   (string-index-p nil :type (boolean bit))
   (wave-count-p nil :type (boolean bit))
   (reserved-2-31 0 :type (unsigned-byte 30)))
 
-(defbinstruct/me (xsar-group-flag-set (:bitfield t)) ()
+(defbinstruct/me (xsar-group-flag-set (:alignment 4)) ()
   (string-index-p nil :type (boolean bit))
   (reserved-1-31 0 :type (unsigned-byte 31)))
 
-(defbinstruct/me (xsar-player-flag-set (:bitfield t)) ()
+(defbinstruct/me (xsar-player-flag-set (:alignment 4)) ()
   (string-index-p nil :type (boolean bit))
   (heap-size-p nil :type (boolean bit))
   (reserved-2-31 0 :type (unsigned-byte 30)))
 
-(defbinstruct/me (xsar-sequence-flag-set (:bitfield t)) ()
+(defbinstruct/me (xsar-sequence-flag-set (:alignment 4)) ()
   (start-offset-p nil :type (boolean bit))
   (priority-p nil :type (boolean bit))
   (reserved-2-31 0 :type (unsigned-byte 30)))
 
-(defbinstruct/me (xsar-sound-flag-set (:bitfield t)) ()
+(defbinstruct/me (xsar-sound-flag-set (:alignment 4)) ()
   (string-index-p nil :type (boolean bit))
   (pan-mode-info-p nil :type (boolean bit))
   (player-info-p nil :type (boolean bit))
@@ -59,18 +59,18 @@
   (user-parameter-1-p nil :type (boolean bit))
   (user-parameter-0-p nil :type (boolean bit)))
 
-(defbinstruct/me (xsar-wave-sound-group-flag-set (:bitfield t)) ()
+(defbinstruct/me (xsar-wave-sound-group-flag-set (:alignment 4)) ()
   (reserved-0-31 0 :type (unsigned-byte 32)))
 
-(defbinstruct/me (xsar-sound-group-flag-set (:bitfield t)) ()
+(defbinstruct/me (xsar-sound-group-flag-set (:alignment 4)) ()
   (string-index-p nil :type (boolean bit))
   (reserved-1-31 0 :type (unsigned-byte 31)))
 
-(defbinstruct/me (xsar-bank-flag-set (:bitfield t)) ()
+(defbinstruct/me (xsar-bank-flag-set (:alignment 4)) ()
   (string-index-p nil :type (boolean bit))
   (reserved-1-31 0 :type (unsigned-byte 31)))
 
-(defbinstruct/me (xsar-file-flag-set (:bitfield t)) ()
+(defbinstruct/me (xsar-file-flag-set (:alignment 4)) ()
   (reserved-0-31 0 :type (unsigned-byte 32)))
 
 (defbinstruct xsar-pan-mode-info ()
