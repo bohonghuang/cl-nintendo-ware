@@ -44,8 +44,8 @@
   (reference (make-reference) :type reference)
   (codec-info nil :type (ecase encoding
                           ((pcm-8 pcm-16) null)
-                          (dsp-adpcm (peek xwav-dsp-adpcm-info (reference-target reference %start #x0300)))
-                          (ima-adpcm (peek xwav-ima-adpcm-info (reference-target reference %start #x0301))))))
+                          (dsp-adpcm (values (pointer xwav-dsp-adpcm-info (map null (constantly (reference-target reference %start #x0300))))))
+                          (ima-adpcm (values (pointer xwav-ima-adpcm-info (map null (constantly (reference-target reference %start #x0301)))))))))
 
 (defbinstruct/me xstm-track-table ()
   ($table-start 0 :type position)
@@ -79,9 +79,8 @@
 
 ;; SEEK and REGN follow the same INFO reference without moving their cursor.
 (defbinstruct/me (xstm-referenced-stream-info (:type (or null xstm-stream-info)) (:constructor progn) (:conc-name nil)) (header)
-  (values nil :type (peek (reference-to #x4100 (+ (block-start header #x4000) 8)
-                                      (xstm-stream-info (header-version-major header)))
-                         (+ (block-start header #x4000) 8))))
+  (values nil :type (values (pointer (reference-to #x4100 (+ (block-start header #x4000) 8)
+                                      (xstm-stream-info (header-version-major header))) (map null (constantly (+ (block-start header #x4000) 8)))))))
 
 (define-nintendo-ware-section (xstm-seek (:magic "SEEK"))
   ;; SEEK row counts come from INFO; only its trailing padding needs the tail.
@@ -116,15 +115,13 @@
                               (let ((stride (xstm-region-info-entry-size (xstm-stream-info-region-info %information))))
                                 (unless (eq (xstm-stream-info-encoding %information) 'dsp-adpcm)
                                   (fail-file "Invalid REGN entry layout")) stride))))
-  (entries #() :type (peek (simple-array (xstm-region (xstm-stream-info-channel-count %information) %stride) (%count))
-                           (reference-target (xstm-region-info-data-reference (xstm-stream-info-region-info %information)) $regions-start #x1f00))))
+  (entries #() :type (values (pointer (simple-array (xstm-region (xstm-stream-info-channel-count %information) %stride) (%count)) (map null (constantly (reference-target (xstm-region-info-data-reference (xstm-stream-info-region-info %information)) $regions-start #x1f00)))))))
 
 (define-nintendo-ware-file (xstm (:magic ("CSTM" "FSTM")))
-  (info nil :type (peek xstm-info (block-start header #x4000)))
-  (seek nil :type (ecase (not (null (block-reference header #x4001 nil))) ((nil) null) ((t) (peek xstm-seek (block-start header #x4001)))))
-  (data nil :type (peek (raw-block "DATA")
-                        (block-start header #x4002)))
-  (regions nil :type (ecase (not (null (block-reference header #x4003 nil))) ((nil) null) ((t) (peek xstm-regions (block-start header #x4003))))))
+  (info nil :type (values (pointer xstm-info (map null (constantly (block-start %header #x4000))))))
+  (seek nil :type (ecase (not (null (block-reference %header #x4001 nil))) ((nil) null) ((t) (values (pointer xstm-seek (map null (constantly (block-start %header #x4001))))))))
+  (data nil :type (values (pointer (raw-block "DATA") (map null (constantly (block-start %header #x4002))))))
+  (regions nil :type (ecase (not (null (block-reference %header #x4003 nil))) ((nil) null) ((t) (values (pointer xstm-regions (map null (constantly (block-start %header #x4003)))))))))
 
 (defbinio xstm stream)
 

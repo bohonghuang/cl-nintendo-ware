@@ -9,7 +9,8 @@
         :type (simple-array (unsigned-byte 8) (%size))))
 
 (nintendo-ware::define-nintendo-ware-file (tail-probe (:magic ("CTST" "FTST")))
-  (info nil :type (peek tail-probe-info (nintendo-ware::block-start nintendo-ware::header #x1000))))
+  (info nil :type (values (pointer tail-probe-info
+                                  (map null (constantly (nintendo-ware::block-start nintendo-ware::%header #x1000)))))))
 
 (defbinio tail-probe (simple-array (unsigned-byte 8) (*)))
 
@@ -20,6 +21,29 @@
       (let ((*fixture-family* family) (*fixture-endian* endian))
         (run-format-tests)
         (run-archive-tests)
+        ;; Complete readers consume trailing padding, stop at the owning file's
+        ;; end and can start the next file at a nonzero stream position.
+        (let* ((first (wave-fixture 0 :payloads '(#(1 2 3) #(4 5 6))))
+               (second (wave-fixture 0 :payloads '(#(128 255 127) #(7 8 9))))
+               (stream (flexi-streams:make-in-memory-input-stream (octets-join first second))))
+          (unwind-protect
+               (progn
+                 (let ((wave (nintendo-ware::read-file 'nintendo-ware::xwav stream)))
+                   (assert (equalp #(1 2 3)
+                                   (nintendo-ware::xwav-channel-data
+                                    (aref (nintendo-ware::xwav-info-channels
+                                           (nintendo-ware::xwav-info wave)) 0)))))
+                 (assert (= (length first) (file-position stream)))
+                 (let ((wave (nintendo-ware::read-file 'nintendo-ware::xwav stream)))
+                   (assert (equalp #(-128 -1 127)
+                                   (nintendo-ware::xwav-channel-data
+                                    (aref (nintendo-ware::xwav-info-channels
+                                           (nintendo-ware::xwav-info wave)) 0)))))
+                 (assert (= (+ (length first) (length second)) (file-position stream))))
+            (close stream))
+          (rejects error
+            (nintendo-ware::read-file 'nintendo-ware::xwav
+                                     (subseq first 0 (1- (length first))))))
         (let* ((tail #(20 19 18 17 16 15 14 13 12 11 10 9 8 7 6 5 4 3 2 1))
                (payload (octets-join (if (eq endian :little) #(4 3 2 1) #(1 2 3 4)) tail))
                (file (read-tail-probe

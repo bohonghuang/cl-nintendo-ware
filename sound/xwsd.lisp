@@ -29,8 +29,13 @@
   (envelope-offset-p nil :type (boolean bit))
   (reserved-10-31 0 :type (unsigned-byte 22)))
 
-(defbinstruct/me xwsd-parameters (note-p base)
-  (%start 0 :type position)
+(defbinstruct/me (xwsd-envelope-reference (:type (or null xwsd-envelope))
+                                                (:constructor progn) (:conc-name nil)) ()
+  ($xwsd-envelope-start 0 :type position)
+  (values nil :type (reference-to 0 $xwsd-envelope-start xwsd-envelope)))
+
+(defbinstruct/me xwsd-parameters (note-p)
+  ($xwsd-parameters-start 0 :type position)
   (flags nil :type (ecase note-p
                     ((nil) xwsd-item-flag-set) ((t) xwsd-note-flag-set)))
   (key-info nil :type (ecase (and note-p (xwsd-note-flag-set-key-info-p flags))
@@ -57,16 +62,26 @@
                                  (xwsd-item-flag-set-reserved-10-31 flags))))))
   ;; Item effects use the flags base; note effects include wave-index.
   (sends nil :type (ecase (and sends-offset (/= sends-offset #xffffffff))
-                        ((nil) null) ((t) (peek xwsd-sends
-                                   (+ (if note-p base %start) sends-offset)))))
+                    ((nil) null)
+                    ((t) (ecase note-p
+                           ((t) (values (pointer xwsd-sends (map null (constantly sends-offset))
+                                                 $xwsd-note-start)))
+                           ((nil) (values (pointer xwsd-sends (map null (constantly sends-offset))
+                                                   $xwsd-parameters-start)))))))
   (envelope nil :type (ecase (and envelope-offset (/= envelope-offset #xffffffff))
-                        ((nil) null) ((t) (peek (reference-to 0 (+ (if note-p base %start) envelope-offset) xwsd-envelope)
-                                   (+ (if note-p base %start) envelope-offset))))))
+                       ((nil) null)
+                       ((t) (ecase note-p
+                              ((t) (values (pointer xwsd-envelope-reference
+                                                    (map null (constantly envelope-offset))
+                                                    $xwsd-note-start)))
+                              ((nil) (values (pointer xwsd-envelope-reference
+                                                      (map null (constantly envelope-offset))
+                                                      $xwsd-parameters-start))))))))
 
 (defbinstruct/me xwsd-note ()
-  (%start 0 :type position)
+  ($xwsd-note-start 0 :type position)
   (wave-index 0 :type (unsigned-byte 32))
-  (parameters nil :type (xwsd-parameters t %start)))
+  (parameters nil :type (xwsd-parameters t)))
 
 (defbinstruct/me xwsd-event ()
   (position 0.0f0 :type single-float) (length 0.0f0 :type single-float)
@@ -93,7 +108,7 @@
 
 (defbinstruct/me xwsd-item ()
   ($item-start 0 :type position)
-  (parameters nil :type (reference-to #x4901 $item-start (xwsd-parameters nil $item-start)))
+  (parameters nil :type (reference-to #x4901 $item-start (xwsd-parameters nil)))
   (tracks nil :type (reference-to #x0101 $item-start xwsd-track-table))
   (notes nil :type (reference-to #x0101 $item-start xwsd-note-table)))
 
@@ -108,8 +123,8 @@
   (items nil :type (reference-to #x0101 $info-start xwsd-item-table)))
 
 (define-nintendo-ware-file (xwsd (:magic ("CWSD" "FWSD")))
-  (%tag #x6800 :type (map null (lambda (ignored) (declare (ignore ignored)) (if (block-reference header #x6800 nil) #x6800 #x4800))))
-  (info nil :type (peek xwsd-info (block-start header %tag))))
+  (%tag #x6800 :type (map null (lambda (ignored) (declare (ignore ignored)) (if (block-reference %header #x6800 nil) #x6800 #x4800))))
+  (info nil :type (values (pointer xwsd-info (map null (constantly (block-start %header %tag)))))))
 
 (defbinio xwsd stream)
 

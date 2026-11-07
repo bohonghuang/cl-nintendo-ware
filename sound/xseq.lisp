@@ -514,7 +514,7 @@
   ;; Unlike counted records, this event stream ends at the DATA boundary.
   (%position 0 :type position)
   (%size 0 :type nintendo-ware-section-tail-size)
-  (labels nil :type (peek xseq-labels (block-start %header #x5001)))
+  (labels nil :type (values (pointer xseq-labels (map null (constantly (block-start %header #x5001))))))
   (%little nil :type (map null (lambda (ignored) (declare (ignore ignored))
                                   (and (string= (header-magic %header) "FSEQ") (eq (header-endian %header) :little)))))
   (%label-entries #() :type (map null (lambda (ignored) (declare (ignore ignored)) (xseq-labels-entries labels))))
@@ -524,7 +524,7 @@
                   ((nil) (xseq-track/be (+ %position %size) %label-entries)))))
 
 (define-nintendo-ware-file (xseq (:magic ("CSEQ" "FSEQ")))
-  (data nil :type (peek xseq-data (block-start header #x5000)))
+  (data nil :type (values (pointer xseq-data (map null (constantly (block-start %header #x5000))))))
   (labels nil :type (map null (lambda (ignored) (declare (ignore ignored))
                                (xseq-data-labels data)))))
 

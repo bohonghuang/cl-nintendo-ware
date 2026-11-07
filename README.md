@@ -136,17 +136,18 @@ CSTM SEEK 上下文固定小端；当前 FSTM SEEK 布局按 Citric 的参考实
 
 ## 声明模式
 
-`define-nintendo-ware-file`、`define-nintendo-ware-section` 按 `cl-nitro` 的声明方式，名称／选项后直接写字段，不带参数表；具体 file、section 及 section body 的 reader 均无参数。每个具体 file 只生成一个 reader：公共容器读取文件头的 BOM，再用 `ecase` 和 `inline` 选择 `body/be` 或 `body/le`，将已解析的 header 传给 body。只有 body、区块及记录保留共享 Lisp 类型的大小端布局，不生成完整文件的 `/le`、`/be` 入口。file／section 均生成直接字段访问器。现代容器仍按 sized reference 定位区块，而非假设区块连续排列。
+`define-nintendo-ware-file`、`define-nintendo-ware-section` 按 `cl-nitro` 的声明方式，名称／选项后直接写字段，不带参数表；具体 file、section 及其 body reader 均无参数。公共 file／section 均以 `inline` 读取具体 body，随后记录 `$nintendo-ware-file-end`／`$nintendo-ware-section-end`，再声明式读取剩余 padding。终点标记位于 padding 之前，为将来的 size 回写保留结构；目前不实现回写，也不保证 writer 可用。每个完整文件仍只有一个 reader，由 BOM 选择 BE 或默认 LE body。section 的 inline 参数显式选择对应 body parser，不能把 parser 参数误当成会自动 ME 分派的字段类型。区块仍通过 sized reference 独立定位，不假设连续排列。
 
 ```lisp
 (define-nintendo-ware-section (sample-info (:magic "INFO"))
   (value 0 :type (unsigned-byte 32)))
 
 (define-nintendo-ware-file (sample-file (:magic "CSMP"))
-  (info nil :type (peek sample-info (block-start header #x1000))))
+  (info nil :type (values (pointer sample-info
+                                  (map null (constantly (block-start %header #x1000)))))))
 ```
 
-file body 直接接收容器已读取的 header；section body 通过原生位置引用取得所属文件头与版本。普通记录、表、字符串和引用按声明的字段及数量读取，不接收或传递区块结束位置。每个文件字段读取前恢复本文件的位置锚点，避免 WAR 内嵌文件影响外层后续区块。GRP／XSAR 只读取原始子文件数据；调用方显式读取子文件时，由子文件自身容器读取 BOM。高阶 parser（`inline` 等）仅用于 file／section 容器，不用于具体记录、引用、表或事件。
+file／section body 均通过原生文件位置锚点恢复 `%header`，不再把 header 或文件起点作为 body 参数传递。每个文件字段读取前以原生 pointer 恢复 owning-file 锚点，避免 WAR 内嵌文件影响外层后续区块。WAV／WAR／GRP／SAR 的跨结构数据基址、SAR 字符串表及 WSD note／flags 基址使用各自 `$...` position 标记，删除对应位置参数传递链。GRP／XSAR 只读取原始子文件数据；显式读取子文件时，由其自身容器读取 BOM。高阶 parser（`inline` 等）仅用于 file／section 容器。
 
 只有确实需要剩余长度的布局使用零宽类型 `nintendo-ware-section-tail-size`，保存在 `%size`：它返回“区块大小 −（当前位置 − 区块起点）”，不消费输入，并遵循区块头端序。需要绝对结束位置时，就地用 `%position + %size` 计算。目前仅 SEQ 的无计数事件流需要结束位置，SEEK 需要剩余长度来读取尾部 padding；不向其他布局注入尾部上下文。
 
@@ -168,11 +169,11 @@ file body 直接接收容器已读取的 header；section body 通过原生位�
 
 也接受 binstruct 风格的可选参数列表；生产 schema 最多三个参数。递归类型用无 body 的 `(defbinstruct/me name)` 提前注册展开函数，随后提供完整声明，见 `xseq-event-union`。打包为 32 位整数的数值子字段统一用 `(:alignment 4)`，由 binstruct 按位偏移和端序处理，不手写反序布局。
 
-相对引用使用 `reference-to` 和原生 `pointer`；前者只在编译期展开具体读取表达式，不引入接收 parser 参数的运行时 reader。保留 magic、opcode、引用 tag、BOM／布局分派、空引用处理及其他非大小相关检查；不检查文件／区块声明大小的一致性、目录跨度或区块重叠。XSAR／GRP 的 sized reference 长度用于读取原始文件 data，不用于校验其内部格式；WAR 的内嵌 reader 不增加长度约束包装。大小字段仍用于实际 payload 和 padding 的读取，不提供完整格式校验或受限输入沙箱。
+寻址使用原生 `pointer`，库的声明和类型展开中不再使用 `peek`。`reference-to` 单次读取 tag／offset，保留空引用与 tag 校验，再展开原生 pointer；不引入运行时 parser 参数。`$...` position 可跨结构并参与原生延迟解析，`%...` position 保持局部。需要在后续字段中使用目标值时，用原生 `(values (pointer ...))` 将目标读取限定在当前字段单元内；不把 pointer 的延迟目标误当成已经可用的普通字段。已读取且会被嵌套表覆盖的基址仍取其词法快照。不添加目录跨度、重叠或 sized-reference 子文件长度校验；文件／区块 size 参与尾部 padding 读取，截断 padding 也会导致读取失败，不承诺完整格式校验或受限输入沙箱。
 
 **本库只保证 reader。** ME 同时注册 reader／writer 的编译期端序展开，以保持 binstruct 声明一致；不测试、不保证自动生成的 writer 正确性，也不提供文件写入 API。
 
-本次 ME 优化的强制编译测量：SBCL 2.6.9／Linux ARM64，`--dynamic-space-size 8192`，新进程先加载依赖，再计时 `(asdf:compile-system :cl-nintendo-ware :force t)`；不含依赖加载、测试和真实文件 smoke。优化前 wall／CPU 为 241.434／241.414 秒，优化后为 65.285／65.287 秒，wall 减少 73.0%（约 3.70 倍）。这是当前机器的单次对照，不是跨环境性能保证；编译仍有未使用变量等 style-warning。
+此前提交 `2e3bda2` 的 ME 优化强制编译测量（不代表本次容器改动的计时）：SBCL 2.6.9／Linux ARM64，`--dynamic-space-size 8192`，新进程先加载依赖，再计时 `(asdf:compile-system :cl-nintendo-ware :force t)`；不含依赖加载、测试和真实文件 smoke。优化前 wall／CPU 为 241.434／241.414 秒，优化后为 65.285／65.287 秒，wall 减少 73.0%（约 3.70 倍）。这是当前机器的单次对照，不是跨环境性能保证；编译仍有未使用变量等 style-warning。
 
 ## 验证范围与参考
 

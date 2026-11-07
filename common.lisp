@@ -72,17 +72,17 @@
   (defmethod binstruct::expand-reader-type-expr ((name (eql 'reference-to)) &rest arguments)
     (destructuring-bind (tag base content) arguments
       (with-gensyms (offset)
-        `(let ((,offset ,(binstruct::expand-reader-type-unit `(peek (reference-offset-value ,tag)))))
-           ,(binstruct::expand-reader-type
-             `(ecase (= ,offset -1)
-                ((t) (map (reference-offset-value ,tag) (constantly nil)))
-                ((nil) (pointer (map ,content
-                                     (the (function (t) (or null ,(binstruct::lisp-type content))) #'identity))
-                                (reference-offset-value ,tag)
-                                ;; These anchors have already been read. Use
-                                ;; their lexical value, not a global $ alias
-                                ;; overwritten by nested reference targets.
-                                (progn ,base)))))))))
+        `(let ((,offset ,(binstruct::expand-reader-type-unit `(reference-offset-value ,tag))))
+           (ecase (= ,offset -1)
+             ((t) (constantly nil))
+             ((nil)
+              ,(binstruct::expand-reader-type-unit
+                `(pointer (map ,content
+                               (the (function (t) (or null ,(binstruct::lisp-type content))) #'identity))
+                          (map null (constantly ,offset))
+                          ;; Already-read anchors use their lexical value;
+                          ;; nested tables may replace the native global alias.
+                          (progn ,base)))))))))
   (defmethod binstruct::expand-writer-type-expr ((name (eql 'reference-to)) &rest arguments)
     (destructuring-bind (tag base content) arguments
       (binstruct::expand-writer-type
