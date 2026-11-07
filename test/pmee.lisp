@@ -193,4 +193,23 @@
                         (2 (assert (typep data '(simple-array (unsigned-byte 8) (*))))
                            (incf encoded-bytes (length data)))))))))
       (assert (= 273362 encoded-bytes))))
+  (run-tiger-tests)
   (format t "Real mset.bcsar regression passed: 19 embedded files and 34 waves.~%"))
+
+(defun run-tiger-tests ()
+  (let* ((archive (nintendo-ware::read-file
+                   'nintendo-ware::xsar
+                   (asdf:system-relative-pathname :cl-nintendo-ware #P"test/data/TigerSound.bcsar")))
+         (sounds (nintendo-ware::xsar-sounds-table-entries
+                  (nintendo-ware::xsar-info-sounds (nintendo-ware::xsar-info archive)))))
+    (assert (= 82 (length sounds)))
+    (assert (= 16 (length (nintendo-ware::xsar-files archive))))
+    (loop for sound across sounds
+          for detail = (nintendo-ware::xsar-sound-detail sound)
+          when (typep detail 'nintendo-ware::xsar-stream-sound-info) do
+            (let ((tracks (nintendo-ware::xsar-stream-sound-info-tracks detail)))
+              (assert tracks)
+              (loop for track across (nintendo-ware::xsar-stream-track-table-entries tracks)
+                    when track do
+                      (assert (nintendo-ware::xsar-stream-track-channels track))))))
+  (format t "Real TigerSound.bcsar stream track regression passed.~%"))

@@ -24,6 +24,7 @@
   :depends-on (#:cl-nintendo-ware)
   :serial t
   :components ((:static-file "test/data/mset.bcsar")
+               (:static-file "test/data/TigerSound.bcsar")
                (:file "test/sequence")
                (:file "test/endian-fixtures")
                (:file "test/formats")

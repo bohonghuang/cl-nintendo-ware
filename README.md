@@ -172,6 +172,9 @@ file body 直接接收容器已读取的 header；section body 通过原生位�
 
 样本 SHA-256：`e96097ab77e70837cee31acd2c3c132da56a262add4aa8e1fa27d623ecdf7323`。原始文件已纳入 `test/data/mset.bcsar`，由默认 `asdf:test-system` 执行 `test/pmee.lisp` 中的真实归档回归；测试不联网，也不需要外部 checkout。断言 cons 名称／原始数据长度和声音元数据，随后显式解析并验证完整序列事件数量、CWSD 效果参数、project-info，以及全部 CWAV 的符号 codec／采样率／样本数、专用数组类型和对应磁盘音频总量。合成回归覆盖不解析损坏／未知子文件、可选名称、空数据／空引用／外部文件，以及跨端序显式读取；原有 WSD 参数和 SAR project-info tag 回归仍保留。
 
+`test/data/TigerSound.bcsar` 同样保留自 [pmee](https://github.com/bohonghuang/pmee/blob/d70ec1d94bdfd544c12d4ac6ab4f6c722177de1a/TigerSound.bcsar)，804,112 字节，SHA-256 为 `20a0c70542261e6a74f904f1a1f5ed6925bf813b1b0c752e9ecd08b1557d2ed5`。默认真实归档回归覆盖其流声音 track/channel 引用。依据本地 3sf 的 `externals/ntdlib/src/sar/formats.cpp`，CSAR 2.3.0 起在流声音的通道数之后读取 track table 引用；此前布局没有该引用。不能将引用 tag `#x0101` 误作可选参数掩码。归档仍只提取原始子文件，不自动打开外部流文件。
+该样本的内部 FILE payload sized reference 使用 tag `0`；在 `#x220c` 内部文件位置的上下文中，reader 接受 `0` 和 `#x1f00`，保留其他 tag 的拒绝行为。3sf 同一解析器也直接使用此记录的 offset／size 定位数据。
+
 ```lisp
 (nintendo-ware:read-file 'nintendo-ware:xsar
                          (asdf:system-relative-pathname :cl-nintendo-ware #P"test/data/mset.bcsar"))

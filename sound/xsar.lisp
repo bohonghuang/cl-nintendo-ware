@@ -152,10 +152,35 @@
   (reserved-1-31-values #.(make-array 0 :element-type '(unsigned-byte 32))
     :type (simple-array (unsigned-byte 32) ((logcount (xsar-wave-sound-flag-set-reserved-1-31 flags))))))
 
-(defbinstruct/me xsar-stream-sound-info ()
+(defbinstruct/me xsar-stream-track ()
+  ($track-start 0 :type position)
+  (volume 0 :type (unsigned-byte 8))
+  (pan 0 :type (unsigned-byte 8))
+  (span 0 :type (unsigned-byte 8))
+  (flags 0 :type (unsigned-byte 8))
+  (channels nil :type (reference-to #x0100 $track-start byte-table)))
+
+(defbinstruct/me xsar-stream-track-table ()
+  ($table-start 0 :type position)
+  (count 0 :type (unsigned-byte 32))
+  (entries #() :type (simple-array (reference-to #x220e $table-start xsar-stream-track) (count))))
+
+(defbinstruct/me xsar-stream-sound-info (tracks-p)
+  (%stream-start 0 :type position)
   (allocate-track-flags 0 :type (unsigned-byte 16))
   (channel-count 0 :type (unsigned-byte 16))
-  (flags (make-xsar-stream-sound-flag-set) :type xsar-stream-sound-flag-set)
+  (tracks nil :type (ecase (plusp tracks-p)
+                     ((nil) null)
+                     ((t) (reference-to #x0101 %stream-start xsar-stream-track-table))))
+  (pitch nil :type (ecase (= tracks-p 2) ((nil) null) ((t) single-float)))
+  (sends-reference nil :type (ecase (= tracks-p 2) ((nil) null) ((t) reference)))
+  (extension-reference nil :type (ecase (= tracks-p 2) ((nil) null) ((t) reference)))
+  (prefetch-file-id nil :type (ecase (= tracks-p 2) ((nil) null) ((t) (unsigned-byte 32))))
+  (flags (make-xsar-stream-sound-flag-set)
+         :type (ecase (= tracks-p 2)
+                 ((nil) xsar-stream-sound-flag-set)
+                 ((t) (map null (lambda (ignored) (declare (ignore ignored))
+                                  (make-xsar-stream-sound-flag-set))))))
   (file-type nil :type (ecase (xsar-stream-sound-flag-set-file-type-p flags)
                         ((nil) null) ((t) xsar-stream-file-type)))
   (loop-start-frame nil :type (ecase (xsar-stream-sound-flag-set-loop-start-frame-p flags)
@@ -240,7 +265,7 @@
   (reserved-2-31-values #.(make-array 0 :element-type '(unsigned-byte 32))
     :type (simple-array (unsigned-byte 32) ((logcount (xsar-sequence-flag-set-reserved-2-31 flags))))))
 
-(defbinstruct/me xsar-sound ()
+(defbinstruct/me xsar-sound (tracks-p)
   (%start 0 :type position)
   (file-id 0 :type (unsigned-byte 32)) (player-id 0 :type (unsigned-byte 32))
   (volume 0 :type (unsigned-byte 8)) (remote-filter 0 :type (signed-byte 8))
@@ -276,7 +301,7 @@
                                     (reference-target detail-reference %start #x2203)))
                       (#x2202 (peek xsar-wave-sound-info
                                     (reference-target detail-reference %start #x2202)))
-                      (#x2201 (peek xsar-stream-sound-info
+                      (#x2201 (peek (xsar-stream-sound-info tracks-p)
                                     (reference-target detail-reference %start #x2201)))))
   (sound-3d-info nil :type (ecase (and sound-3d-offset (/= sound-3d-offset #xffffffff))
                         ((nil) null) ((t) (peek xsar-sound-3d-info (+ %start sound-3d-offset))))))
@@ -313,11 +338,14 @@
   (text #.(coerce "" 'simple-base-string) :type simple-base-string))
 
 (defbinstruct/me xsar-internal-file (data-start)
-  (reference (make-sized-reference) :type sized-reference)
+  (reference (make-sized-reference)
+             :type (satisfies sized-reference
+                              (lambda (reference)
+                                (member (sized-reference-type reference) '(0 #x1f00)))))
   (data nil :type (ecase (= (sized-reference-offset reference) -1)
                    ((t) null)
                    ((nil) (peek (simple-array (unsigned-byte 8) ((sized-reference-size reference)))
-                                (sized-reference-target reference (+ data-start 8) #x1f00))))))
+                                (sized-reference-target reference (+ data-start 8)))))))
 
 (defbinstruct/me xsar-file (data-start)
   (%start 0 :type position)
@@ -333,10 +361,10 @@
                                  (#x220d (peek xsar-external-file
                                                (reference-target location-reference %start #x220d))))))))
 
-(defbinstruct/me xsar-sounds-table ()
+(defbinstruct/me xsar-sounds-table (tracks-p)
   ($table-start 0 :type position)
   (count 0 :type (unsigned-byte 32))
-  (entries #() :type (simple-array (reference-to #x2200 $table-start xsar-sound) (count))))
+  (entries #() :type (simple-array (reference-to #x2200 $table-start (xsar-sound tracks-p)) (count))))
 
 (defbinstruct/me xsar-sound-groups-table ()
   ($table-start 0 :type position)
@@ -371,7 +399,13 @@
 (define-nintendo-ware-section (xsar-info (:magic "INFO"))
   (%data-start 0 :type (map null (lambda (ignored) (declare (ignore ignored)) (if (block-reference %header #x2002 nil) (block-start %header #x2002) 0))))
   ($info-start 0 :type position)
-  (sounds nil :type (reference-to #x2100 $info-start xsar-sounds-table))
+  (sounds nil :type (reference-to #x2100 $info-start
+                                 (xsar-sounds-table
+                                  (if (string= (header-magic %header) "CSAR")
+                                      (cond ((>= (header-version %header) #x02030200) 2)
+                                            ((>= (header-version %header) #x02030000) 1)
+                                            (t 0))
+                                      0))))
   (sound-groups nil :type (reference-to #x2104 $info-start xsar-sound-groups-table))
   (banks nil :type (reference-to #x2101 $info-start xsar-banks-table))
   (wave-archives nil :type (reference-to #x2103 $info-start xsar-wave-archives-table))
