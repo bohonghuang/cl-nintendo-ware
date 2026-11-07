@@ -28,12 +28,12 @@
 (defbinalias vlq ()
   (map %vlq #'%vlq-integer #'integer-%vlq))
 
-(defbinenum (xseq-mod-target (:type (unsigned-byte 8))) ()
+(defbinenum (xseq-mod-target (:type (unsigned-byte 8)) (:endian :little)) ()
   (pitch 0)
   (volume 1)
   (pan 2))
 
-(defbinenum (xseq-mod-curve (:type (unsigned-byte 8))) ()
+(defbinenum (xseq-mod-curve (:type (unsigned-byte 8)) (:endian :little)) ()
   (sine 0)
   (triangle 1)
   (sawtooth 2)
@@ -41,7 +41,7 @@
   (random 4)
   (none 5))
 
-(defbinenum (xseq-mute-mode (:type (unsigned-byte 8))) ()
+(defbinenum (xseq-mute-mode (:type (unsigned-byte 8)) (:endian :little)) ()
   (off 0)
   (no-stop 1)
   (release 2)
@@ -59,7 +59,8 @@
   (:documentation "Parse the low sixteen bits with the final field type and assign that field."))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  (defparameter *xseq-events* nil))
+  (defparameter *xseq-events* nil)
+  (defvar *xseq-event-variable-value-types* nil))
 
 (defmacro define-xseq-event ((name event-bytes) &body fields)
   (let* ((class (symbolicate 'xseq-event- name))
@@ -68,13 +69,11 @@
          (type (getf (cddr field) :type))
          (variable-p
            (and field
-                (let ((binstruct::*offset* 0)
-                      (binstruct::*endian* binstruct::+endian-default+)
-                      (binstruct::*alignment* binstruct::+alignment-default+)
-                      (binstruct::*output* (gensym "OUTPUT"))
-                      (binstruct::*value* 'value))
-                  (binstruct::expand-writer-type type)
-                  (<= 1 binstruct::*offset* 2))))
+                (or (and (consp type)
+                         (member (first type) '(unsigned-byte signed-byte))
+                         (<= 1 (second type) 16))
+                    (equal type '(boolean (unsigned-byte 8)))
+                    (and (symbolp type) (subtypep type 'symbol)))))
          (bytes (ensure-list event-bytes))
          (tags (loop for byte in bytes collect
                  `(nil ,byte :type (satisfies (unsigned-byte 8) (curry #'eql ,byte))))))
@@ -88,28 +87,26 @@
            ,@(if (and fields (subtypep (binstruct::lisp-type type) 'xseq-event))
                  fields (butlast fields)))
          ,@(when variable-p
-             (let ((accessor (symbolicate class '- (first field))))
-               `((defmethod xseq-event-variable-value ((event ,class))
-                   (let ((bytes (make-array 2 :element-type '(unsigned-byte 8) :initial-element 0))
-                         (position 0))
+             (let ((accessor (symbolicate class '- (first field)))
+                   (reader (intern (format nil "READ-~A" type)))
+                   (writer (intern (format nil "WRITE-~A" type))))
+               `((eval-when (:compile-toplevel :load-toplevel :execute)
+                   (pushnew ',type *xseq-event-variable-value-types* :test #'equal))
+                 (declaim (ftype (function ((simple-array (unsigned-byte 8) (*)))
+                                           (values t)) ,reader)
+                          (ftype (function ((simple-array (unsigned-byte 8) (*)) t)
+                                           (values (simple-array (unsigned-byte 8) (*)))) ,writer))
+                 (defmethod xseq-event-variable-value ((event ,class))
+                   (let ((bytes (make-array 2 :element-type '(unsigned-byte 8) :initial-element 0)))
                      (declare (dynamic-extent bytes))
-                     (flet ((output (byte &optional offset)
-                              (declare (ignore offset))
-                              (setf (aref bytes position) byte)
-                              (incf position)))
-                       (declare (dynamic-extent #'output))
-                       ,(binstruct::expand-writer-type-unit
-                         type :endian binstruct::+endian-default+
-                         :alignment binstruct::+alignment-default+
-                         :output '(function output) :value `(,accessor event)))
+                     (,writer bytes (,accessor event))
                      (logior (aref bytes 0) (ash (aref bytes 1) 8))))
                  (defmethod (setf xseq-event-variable-value) (value (event ,class))
                    (let ((bytes (make-array 2 :element-type '(unsigned-byte 8))))
                      (declare (dynamic-extent bytes))
                      (setf (aref bytes 0) (ldb (byte 8 0) value)
                            (aref bytes 1) (ldb (byte 8 8) value))
-                     (setf (,accessor event)
-                           (parser-run (parser ,(ensure-list type)) bytes)))
+                     (setf (,accessor event) (,reader bytes)))
                    value))))
          (eval-when (:compile-toplevel :load-toplevel :execute)
            (pushnew ',class *xseq-events*))))))
@@ -463,6 +460,16 @@
 
 (define-xseq-event (mod4-period (#xf0 #xe6))
   (value 0 :type (signed-byte 16)))
+
+(defmacro define-event-variable-value-types-io ()
+  `(progn
+     ,@(loop for type in *xseq-event-variable-value-types*
+             for name = (if (symbolp type) type (intern (princ-to-string type)))
+             append (append (unless (symbolp type)
+                              `((defbinalias ,name () ,type)))
+                            `((defbinio ,name (simple-array (unsigned-byte 8) (*))))))))
+
+(define-event-variable-value-types-io)
 
 (defmacro define-xseq-event-unions ()
   `(progn
