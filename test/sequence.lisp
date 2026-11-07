@@ -405,4 +405,35 @@
   (dolist (body '(#(137 0 0 1) #(60 100 129) #(128 128 128 128 128) #(130)))
     (rejects nintendo-ware::invalid-file
       (nintendo-ware::read-file 'nintendo-ware::xseq (sequence-fixture body :padded nil))))
+  ;; Numeric prefix values use the omitted field's representation, not its
+  ;; already-decoded Lisp type. Parsed source events stay reusable.
+  (dolist (case '((#(#xc3 12) 255 -1 nintendo-ware::xseq-event-transpose-value)
+                  (#(#xc4 0) 128 -128 nintendo-ware::xseq-event-pitch-bend-value)
+                  (#(#xc7 1) 256 nil nintendo-ware::xseq-event-note-wait-value)
+                  (#(#xc8 0) 257 t nintendo-ware::xseq-event-tie-value)
+                  (#(#xcc 0) 258 nintendo-ware::pan nintendo-ware::xseq-event-mod-type-value)
+                  (#(#xf0 #xa4 0) 257 nintendo-ware::volume nintendo-ware::xseq-event-mod2-type-value)
+                  (#(#xbe 0) 260 nintendo-ware::random nintendo-ware::xseq-event-mod-curve-value)
+                  (#(#xdd 0) 259 nintendo-ware::stop nintendo-ware::xseq-event-mute-value)
+                  (#(#xc1 10) 320 64 nintendo-ware::xseq-event-volume-value)
+                  (#(#xf0 #x80 3 0 0) 65535 -1 nintendo-ware::xseq-event-set-variable-value)
+                  (#(60 100 12) 0 0 nintendo-ware::xseq-event-note-duration)))
+    (destructuring-bind (bytes value expected accessor) case
+      (let* ((sequence (nintendo-ware::read-file 'nintendo-ware::xseq
+                         (sequence-fixture (concatenate 'vector bytes #(#xff)))))
+             (event (aref (nintendo-ware::xseq-events sequence) 0))
+             (original (funcall accessor event))
+             (substituted (nintendo-ware::xseq-event-with-value event value)))
+        (assert (eql expected (funcall accessor substituted)))
+        (assert (eql original (funcall accessor event))))))
+  (rejects error
+    (nintendo-ware::xseq-event-with-value (nintendo-ware::make-xseq-event-mod-type) 3))
+  (dolist (case '((#(#xe3 #x80 0) -512.0f0)
+                  (#(#xe3 #xff #xff) -0.015625f0)
+                  (#(#xe3 #x7f #xff) 511.984375f0)))
+    (destructuring-bind (bytes expected) case
+      (let* ((sequence (nintendo-ware::read-file 'nintendo-ware::xseq
+                         (sequence-fixture (concatenate 'vector bytes #(#xff)))))
+             (event (aref (nintendo-ware::xseq-events sequence) 0)))
+        (assert (= expected (nintendo-ware::xseq-event-sweep-pitch-semitones event))))))
   (format t "Typed SEQ events, embedded partials and indexed control flow passed.~%"))

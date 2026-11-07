@@ -54,6 +54,8 @@ BNK、WSD、SAR 的可选参数各有记录专属位域 set，开关字段使用
 
 共用解析布局不等于保证所有游戏、版本和编码组合兼容。原始 ID、引用及可选字段保留；空引用为 `NIL`。外部档案路径只读取为字符串，绝不自动打开。
 
+资源 ID 按原生 32 位数值位域解析为内部 `resource-id`：`resource-id-index` 是低 24 位表索引，`resource-id-type` 是高 8 位类型 tag；`resource-id-value` 可无损取得原值，包括未知 tag 和 `#xffffffff`。WAV/BNK/WSD 的 `wave-id-archive-id`、SAR 的资源引用与资源 ID 表、GRP dependency 均使用此布局；ID 表使用 `resource-id-table-entries`，普通 File ID 表仍使用 `integer-table-entries`。消费端不再自行提取位。类型 tag 保留为整数，不擅自拒绝未知资源种类。
+
 ### WAV 原生采样数据
 
 `xwav-channel-data` 由声明中的 `ecase` 按 codec 直接读取最终专用数组，不先读取 octet vector 再做符号转换、拼接 PCM16 或拆 nibble。移除旧 `xwav-channel-encoded-data`，不提供兼容副本。`count` 为 `xwav-info-loop-end`，也是非循环波形的样本数。
@@ -89,7 +91,7 @@ DSP 帧为一个 header 字节加七个采样字节：header 高 nibble 是 pred
 
 WAV 的 `loop` 改为 `xwav-info-loop-p`，STM 的 `loop-flag` 改为 `xstm-stream-info-loop-p`，track 的 `surround-mode` 改为 `xstm-track-surround-mode-p`，SAR 的 `leaf-flag`／`load-individually` 改为 `xsar-patricia-node-leaf-p`／`xsar-wave-archive-load-individually-p`，均返回 `T/NIL`。SEQ `monophonic`、`front-bypass`、`note-wait`、`tie`、`portamento-switch`、`damper` 的 `value` 也直接返回布尔值；调用方不要再用 `plusp`。
 
-原始资源 ID、引用 tag、计数、连续参数和位掩码不是封闭枚举，仍保留数值。`biquad-type` 是可注册滤波 callback 的索引，不擅自把游戏自定义索引命名为固定滤波模式；见 [NW4R callback registry](https://github.com/NSMBW-Community/NSMBW-Decomp/blob/master/include/lib/nw4r/snd/snd_AxManager.h)。C/F 枚举依据 [Citric Composer](https://github.com/Gota7/Citric-Composer/tree/master/Citric%20Composer) 的 `SequenceDataLib` 和 `High Level` 声明；静音模式另参见 [SeqMute](https://github.com/NSMBW-Community/NSMBW-Decomp/blob/master/include/lib/nw4r/snd/snd_SeqTrack.h)。
+资源 ID 的类型 tag、引用 tag、计数、连续参数和位掩码不是封闭枚举，仍保留数值；完整资源 ID 使用上面的原生位域结构。`biquad-type` 是可注册滤波 callback 的索引，不擅自把游戏自定义索引命名为固定滤波模式；见 [NW4R callback registry](https://github.com/NSMBW-Community/NSMBW-Decomp/blob/master/include/lib/nw4r/snd/snd_AxManager.h)。C/F 枚举依据 [Citric Composer](https://github.com/Gota7/Citric-Composer/tree/master/Citric%20Composer) 的 `SequenceDataLib` 和 `High Level` 声明；静音模式另参见 [SeqMute](https://github.com/NSMBW-Community/NSMBW-Decomp/blob/master/include/lib/nw4r/snd/snd_SeqTrack.h)。
 
 ### XSAR 文件提取
 
@@ -125,6 +127,12 @@ GRP 条目通过 `nintendo-ware::xgrp-entry-file-id` 保留归档中的原始文
 `xseq-events` 返回具体事件对象的向量，可直接以 `xseq-event-note`、`xseq-event-tempo` 等类型进行 CLOS 分派。字段直接表达音高、力度、时值、数值及内嵌 `sub-event`；不暴露 opcode、事件原始字节或二进制位置。开轨、跳转、调用的 `index` 和标签的 `xseq-label-entry-index` 均为该向量的零基索引。
 
 `define-xseq-event` 仿照 Nitro 的 `define-sseq-event`，从同一份字段声明生成完整和 `/partial` 布局；random/variable 内嵌的子事件使用 `/partial`，省略最后一个参数，而不是最后一个字节。多字节事件标记不产生额外的消费对象，reader 直接返回具体事件类型。
+
+内部 `xseq-event-with-value (event value)` 复制事件并替换 `/partial` 省略的最后一个参数。转换代码从现有 binstruct 字段声明生成：数值按字段宽度收窄，有符号字段按二补码解释，枚举复用 `defbinenum` 的转换函数，开关返回布尔值；不维护第二份事件类型/枚举值表，也不修改原始事件。输入是调用方已求值的 Random/Variable 数字，本函数不选择随机数、不访问变量、不执行事件。流程目标的替换值仍采用消费端使用的事件索引，不增加运行时字节目标解析机制。
+
+`xseq-event-sweep-pitch-semitones` 将 `SweepPitch` 的有符号 10.6 定点数转换为 single-float 半音。保留现有 `value` 字段及其整数契约，不改变事件 struct；播放端使用半音访问函数，不重复除以 64。单位依据 [3sf/ntdlib C/F 策略](https://github.com/ogumaza/3sf/blob/master/externals/ntdlib/include/ntdlib/nwsnd/console.h)。BNK/WSD 的 pitch 和 SAR attenuation-rate 等 IEEE754 字段本来就按 single-float 解析，不另加补偿转换。
+
+VLQ 每组的 7 位值和 continuation 位由 binstruct 原生位域读取；`%vlq` 只保留已分离的七位组，转换函数进行基数 128 的数值累积。保留 `vlq`、`%vlq`、`%vlq-integer`、`integer-%vlq` 名称及映射，不引入固定四组/28 位限制。
 
 事件标记参数 `event-bytes` 用 `ensure-list` 统一：单字节写 `(wait #x80)`，多字节写 `(mod2-phase (#xf0 #xa1))`，也支持任意更长的固定字节序列。每个标记字节生成一个独立的 `satisfies`/`eql` 声明；没有 `extended` 标志或专用扩展事件 union。`/partial` 由外层提供已消费的第一个标记字节，其余标记字节仍逐个校验，只省略最后一个参数。音符的首字节是音高，因此单独声明其范围布局。
 
@@ -178,6 +186,8 @@ file／section body 均通过原生文件位置锚点恢复 `%header`，不再�
 ## 验证范围与参考
 
 测试使用 Common Lisp assertions 和独立 binstruct 输入夹具，检查实际字段、引用目标、可空引用、magic／opcode 识别、大小端、嵌套事件及版本分支，不断言生成源码或测试库的 writer。
+
+转换职责回归另覆盖子事件的有符号边界、字节溢出、枚举/开关转换、原事件不可变、定点数正负极值，以及 C/F × LE/BE 资源 ID 的完整 24 位索引、未知类型与全一 sentinel。集成 smoke 通过 Closynth 实际渲染 MSET 的 50 个和 TigerSound 的 81 个可播放条目；库本身仍只负责解析。
 
 新事件接口通过 [OoT3D-Custom-Sequences](https://github.com/Kewlan/OoT3D-Custom-Sequences) 的 63 个 BCSEQ 文件，共读取 401,232 个顶层事件并完成目标索引转换。此数量包含声明式事件流读取到的非静态可达事件，不等同于旧 reader 的静态遍历计数。另已用实际 `closynth:event-emit` 验证解析所得 note/tempo 对象的类型分派，未接入播放。Citric 的 `guts.bcseq` 有一个开轨目标落在扩展指令内部，索引化时拒绝，不擅自重定位。除下面的 BCSAR 样本外，其他格式与平台主要依赖合成夹具验证，不能据此宣称所有商业游戏兼容。
 

@@ -131,7 +131,8 @@
                       (aref (nintendo-ware::xseq-events parsed-sequence) 0))))
       (dolist (container (list group nested))
         (assert (= #x03000000
-                   (nintendo-ware::xgrp-dependency-resource-id
-                    (aref (nintendo-ware::xgrp-infx-entries (nintendo-ware::xgrp-infx container)) 0)))))))
+                   (nintendo-ware::resource-id-value
+                    (nintendo-ware::xgrp-dependency-resource-id
+                     (aref (nintendo-ware::xgrp-infx-entries (nintendo-ware::xgrp-infx container)) 0))))))))
   (assert (not (boundp 'nintendo-ware::*endian*)))
   (format t "Shared-type ME, C/F containers, event endian and mixed embedded files passed.~%"))

@@ -55,9 +55,8 @@
     (assert (= 64 (nintendo-ware::xsar-project-info-maximum-sequence-tracks project)))
     (assert (= 64 (nintendo-ware::xsar-project-info-maximum-wave-sounds project)))
     (flet ((name (string-index)
-             (string-right-trim '(#\Null)
-               (nintendo-ware::xsar-string-text
-                (aref strings string-index)))))
+             (nintendo-ware::xsar-string-text
+              (aref strings string-index))))
       ;; Names, file IDs and volumes independently cross-checked with DualRip.
       (loop for sound across sounds
             for (expected-name file-id volume) in

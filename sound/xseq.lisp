@@ -1,26 +1,35 @@
 (in-package #:nintendo-ware)
 
+(defbinstruct (vlq-continuation (:type (unsigned-byte 7))
+                              (:constructor progn) (:conc-name nil)) ()
+  (values 0 :type (unsigned-byte 7))
+  (nil t :type (satisfies (boolean bit) #'identity)))
+
+(defbinstruct (vlq-final (:type (unsigned-byte 7))
+                       (:constructor progn) (:conc-name nil)) ()
+  (values 0 :type (unsigned-byte 7))
+  (nil nil :type (satisfies (boolean bit) #'not)))
+
 (declaim (inline make-%vlq))
 (defbinstruct %vlq ()
-  (bytes #.(make-array 0 :element-type '(unsigned-byte 8))
-         :type (simple-array (satisfies (unsigned-byte 8) (lambda (byte) (plusp (ldb (byte 1 7) byte)))) (*)))
-  (byte 0 :type (unsigned-byte 8)))
+  (bytes #.(make-array 0 :element-type '(unsigned-byte 7))
+         :type (simple-array vlq-continuation (*)))
+  (byte 0 :type vlq-final))
 
 (declaim (inline %vlq-integer))
 (defun %vlq-integer (vlq)
   (declare (dynamic-extent vlq))
-  (loop :with value :of-type (unsigned-byte 64) := (%vlq-byte vlq)
-        :with bytes := (%vlq-bytes vlq)
-        :for i :of-type (mod 8) :from 1 :to (length bytes)
-        :do (setf (ldb (byte 7 (* i 7)) value) (ldb (byte 7 0) (aref bytes (- (length bytes) i))))
-        :finally (return value)))
+  (loop :with value :of-type (unsigned-byte 64) := 0
+        :for byte :across (%vlq-bytes vlq)
+        :do (setf value (+ (* value 128) byte))
+        :finally (return (+ (* value 128) (%vlq-byte vlq)))))
 
 (defun integer-%vlq (value)
-  (loop :for v :of-type (unsigned-byte 64) := (ash value -7) :then (ash v -7)
-        :while (plusp v)
-        :collect (logior #x80 (ldb (byte 7 0) v)) :into bytes
-        :finally (return (make-%vlq :bytes (coerce (nreverse bytes) '(simple-array (unsigned-byte 8) (*)))
-                                         :byte (ldb (byte 7 0) value)))))
+  (loop :for quotient :of-type (unsigned-byte 64) := (floor value 128) :then (floor quotient 128)
+        :while (plusp quotient)
+        :collect (mod quotient 128) :into bytes
+        :finally (return (make-%vlq :bytes (coerce (nreverse bytes) '(simple-array (unsigned-byte 7) (*)))
+                                   :byte (mod value 128)))))
 
 (deftype vlq ()
   '(unsigned-byte 32))
@@ -432,6 +441,41 @@
        (values nil :type (or ,@(loop for type in *xseq-events*
                                     collect `(,(symbolicate type '/partial) status)))))))
 (define-xseq-event-unions)
+
+;; Reuse the declared final operand type for random/variable substitution.
+;; This interprets a supplied value; it does not evaluate the prefix itself.
+(defmacro define-xseq-event-with-value ()
+  (labels ((converted-value (type)
+             (cond
+               ((eq type 'vlq) 'value)
+               ((member type '(xseq-mod-target xseq-mod-curve xseq-mute-mode))
+                `(,(symbolicate 'integer- type) (mod value 256)))
+               ((eq (first type) 'boolean)
+                `(not (zerop ,(converted-value (second type)))))
+               ((eq (first type) 'unsigned-byte)
+                `(mod value ,(expt 2 (second type))))
+               ((eq (first type) 'signed-byte)
+                `(binstruct::unsigned-signed-integer
+                  ,(second type) (mod value ,(expt 2 (second type)))))
+               (t (error "Unsupported SEQ operand type ~S" type)))))
+    `(defun xseq-event-with-value (event value)
+       "Copy EVENT and substitute its omitted final operand using its wire type."
+       (let ((copy (copy-structure event)))
+         (etypecase copy
+           ,@(loop for class in *xseq-events*
+                   for field = (car (last (get class 'binstruct::slots)))
+                   for type = (and field (getf (cddr field) :type))
+                   when (and (first field)
+                             (not (subtypep (binstruct::lisp-type type) 'xseq-event)))
+                     collect `(,class
+                               (setf (,(symbolicate class '- (first field)) copy)
+                                     ,(converted-value type)))))
+         copy))))
+(define-xseq-event-with-value)
+
+(defun xseq-event-sweep-pitch-semitones (event)
+  "Return the signed 10.6 fixed-point sweep operand in semitones."
+  (/ (float (xseq-event-sweep-pitch-value event) 1.0f0) 64.0f0))
 
 ;; These walkers operate on semantic events; binary positions stay local to
 ;; the reader and are discarded after resolving references.

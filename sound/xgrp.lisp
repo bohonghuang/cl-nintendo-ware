@@ -13,7 +13,7 @@
                    ((nil) (values (pointer (simple-array (unsigned-byte 8) ((sized-reference-size reference))) (map null (constantly (sized-reference-target reference 0 #x1f00))) $xgrp-data-start))))))
 
 (defbinstruct/me xgrp-dependency ()
-  (resource-id 0 :type (unsigned-byte 32)) (load-flags 0 :type (unsigned-byte 32)))
+  (resource-id (make-resource-id) :type resource-id) (load-flags 0 :type (unsigned-byte 32)))
 
 (define-nintendo-ware-section (xgrp-info (:magic "INFO"))
   (nil nil :type (values (pointer xgrp-data-position (map null (constantly (if (block-reference %header #x7801 nil) (+ 8 (block-start %header #x7801)) 8))))))

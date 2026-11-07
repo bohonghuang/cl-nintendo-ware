@@ -146,8 +146,20 @@
   (count 0 :type (unsigned-byte 32))
   (entries #.(make-array 0 :element-type '(unsigned-byte 8)) :type (simple-array (unsigned-byte 8) (count))))
 
+(defbinstruct/me (resource-id (:alignment 4)) ()
+  (index 0 :type (unsigned-byte 24))
+  (type 0 :type (unsigned-byte 8)))
+
+(defun resource-id-value (identifier)
+  "Return the complete original resource ID, including its type byte."
+  (+ (resource-id-index identifier) (* (resource-id-type identifier) #x1000000)))
+
+(defbinstruct/me resource-id-table ()
+  (count 0 :type (unsigned-byte 32))
+  (entries #() :type (simple-array resource-id (count))))
+
 (defbinstruct/me wave-id ()
-  (archive-id 0 :type (unsigned-byte 32))
+  (archive-id (make-resource-id) :type resource-id)
   (index 0 :type (unsigned-byte 32)))
 
 (defbinstruct/me wave-id-table ()

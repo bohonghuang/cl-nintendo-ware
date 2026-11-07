@@ -81,7 +81,7 @@
                     (cl-nintendo-ware.test::make-xwsd-envelope :attack 11 :decay 22 :sustain 33 :hold 44 :release 55)))))))
     (container-fixture "CWSD" (list (list #x6800 "INFO" body)))))
 
-(defun xgrp-fixture (embedded &key (file-id 7) (available-p t))
+(defun xgrp-fixture (embedded &key (file-id 7) (available-p t) (resource-id #x03000000))
   (let ((info
           (layout-fixture
            (list
@@ -98,7 +98,7 @@
                   (lambda (address) (cl-nintendo-ware.test::make-reference-table :count 1 :entries (vector (fixture-reference address #x7901 'entry 'table)))))
             (list 'entry 'cl-nintendo-ware.test::xgrp-dependency
                   (lambda (address) (declare (ignore address))
-                    (cl-nintendo-ware.test::make-xgrp-dependency :resource-id #x03000000 :load-flags 3)))))))
+                    (cl-nintendo-ware.test::make-xgrp-dependency :resource-id resource-id :load-flags 3)))))))
     (container-fixture "CGRP"
                        (list (list #x7800 "INFO" info) (list #x7801 "FILE" embedded) (list #x7802 "INFX" extra)))))
 
@@ -367,14 +367,18 @@
     (assert (equalp embedded (nintendo-ware::xgrp-entry-data
                               (find 7 (nintendo-ware::xgrp-info-entries (nintendo-ware::xgrp-info group))
                                     :key #'nintendo-ware::xgrp-entry-file-id))))
-    (assert (= #x03000000 (nintendo-ware::xgrp-dependency-resource-id (aref (nintendo-ware::xgrp-infx-entries (nintendo-ware::xgrp-infx group)) 0))))
+    (assert (= #x03000000 (nintendo-ware::resource-id-value (nintendo-ware::xgrp-dependency-resource-id (aref (nintendo-ware::xgrp-infx-entries (nintendo-ware::xgrp-infx group)) 0)))))
     (assert (string= "song" (nintendo-ware::xsar-string-text (aref (nintendo-ware::xsar-string-table-entries strings) 0))))
-    (assert (= #x01000000 (nintendo-ware::xsar-patricia-node-resource-id (aref (nintendo-ware::xsar-patricia-tree-nodes (nintendo-ware::xsar-strg-tree (nintendo-ware::xsar-strg archive))) 0))))
+    (assert (= #x01000000 (nintendo-ware::resource-id-value (nintendo-ware::xsar-patricia-node-resource-id (aref (nintendo-ware::xsar-patricia-tree-nodes (nintendo-ware::xsar-strg-tree (nintendo-ware::xsar-strg archive))) 0)))))
     (assert (= 4 (nintendo-ware::xsar-sequence-info-start-offset sequence)))
     (assert (= 80 (nintendo-ware::packed-priority-channel-priority priority)))
     (assert (nintendo-ware::packed-priority-release-priority-p priority))
-    (assert (= #x03000000 (aref (nintendo-ware::integer-table-entries (nintendo-ware::xsar-sequence-info-banks sequence)) 0)))
-    (assert (= #x05000002 (aref (nintendo-ware::integer-table-entries (nintendo-ware::xsar-bank-wave-archives (aref (nintendo-ware::xsar-banks-table-entries (nintendo-ware::xsar-info-banks information)) 0))) 0)))
+    (let ((bank (aref (nintendo-ware::resource-id-table-entries (nintendo-ware::xsar-sequence-info-banks sequence)) 0))
+          (wave (aref (nintendo-ware::resource-id-table-entries (nintendo-ware::xsar-bank-wave-archives (aref (nintendo-ware::xsar-banks-table-entries (nintendo-ware::xsar-info-banks information)) 0))) 0)))
+      (assert (= 3 (nintendo-ware::resource-id-type bank)))
+      (assert (zerop (nintendo-ware::resource-id-index bank)))
+      (assert (= 5 (nintendo-ware::resource-id-type wave)))
+      (assert (= 2 (nintendo-ware::resource-id-index wave))))
     (assert (= 4 (nintendo-ware::xsar-player-sound-limit (aref (nintendo-ware::xsar-players-table-entries (nintendo-ware::xsar-info-players information)) 0))))
     (assert (= 12 (nintendo-ware::xsar-project-info-maximum-sequences (nintendo-ware::xsar-info-project-info information))))
     (assert (= 24 (nintendo-ware::xsar-project-info-maximum-sequence-tracks (nintendo-ware::xsar-info-project-info information))))
@@ -386,6 +390,17 @@
                                                   (nintendo-ware::xsar-file-data (aref files 0)))) 0)
                    'nintendo-ware::xseq-event-finish))
     (assert (string= "audio/example.bcstm" (nintendo-ware::xsar-external-file-text (nintendo-ware::xsar-file-location external)))))
+  ;; Numeric-word bitfields retain all three index bytes and unknown type tags,
+  ;; including the all-ones sentinel, in either container byte order.
+  (dolist (case '((#x05abcdef 5 #xabcdef) (#xffffffff 255 #xffffff)))
+    (destructuring-bind (word type index) case
+      (let* ((group (nintendo-ware::read-file 'nintendo-ware::xgrp
+                      (xgrp-fixture #() :resource-id word)))
+             (identifier (nintendo-ware::xgrp-dependency-resource-id
+                          (aref (nintendo-ware::xgrp-infx-entries (nintendo-ware::xgrp-infx group)) 0))))
+        (assert (= type (nintendo-ware::resource-id-type identifier)))
+        (assert (= index (nintendo-ware::resource-id-index identifier)))
+        (assert (= word (nintendo-ware::resource-id-value identifier))))))
   ;; GRP file IDs belong to the archive, not the position in this group's table.
   ;; Unknown/invalid children are opaque; only an explicit read may reject them.
   (dolist (payload (list (octets-join #(66 65 68 33))
