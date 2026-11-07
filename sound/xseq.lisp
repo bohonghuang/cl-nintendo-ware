@@ -1,35 +1,26 @@
 (in-package #:nintendo-ware)
 
-(defbinstruct (vlq-continuation (:type (unsigned-byte 7))
-                              (:constructor progn) (:conc-name nil)) ()
-  (values 0 :type (unsigned-byte 7))
-  (nil t :type (satisfies (boolean bit) #'identity)))
-
-(defbinstruct (vlq-final (:type (unsigned-byte 7))
-                       (:constructor progn) (:conc-name nil)) ()
-  (values 0 :type (unsigned-byte 7))
-  (nil nil :type (satisfies (boolean bit) #'not)))
-
 (declaim (inline make-%vlq))
 (defbinstruct %vlq ()
-  (bytes #.(make-array 0 :element-type '(unsigned-byte 7))
-         :type (simple-array vlq-continuation (*)))
-  (byte 0 :type vlq-final))
+  (bytes #.(make-array 0 :element-type '(unsigned-byte 8))
+         :type (simple-array (satisfies (unsigned-byte 8) (lambda (byte) (plusp (ldb (byte 1 7) byte)))) (*)))
+  (byte 0 :type (unsigned-byte 8)))
 
 (declaim (inline %vlq-integer))
 (defun %vlq-integer (vlq)
   (declare (dynamic-extent vlq))
-  (loop :with value :of-type (unsigned-byte 64) := 0
-        :for byte :across (%vlq-bytes vlq)
-        :do (setf value (+ (* value 128) byte))
-        :finally (return (+ (* value 128) (%vlq-byte vlq)))))
+  (loop :with value :of-type (unsigned-byte 64) := (%vlq-byte vlq)
+        :with bytes := (%vlq-bytes vlq)
+        :for i :of-type (mod 8) :from 1 :to (length bytes)
+        :do (setf (ldb (byte 7 (* i 7)) value) (ldb (byte 7 0) (aref bytes (- (length bytes) i))))
+        :finally (return value)))
 
 (defun integer-%vlq (value)
-  (loop :for quotient :of-type (unsigned-byte 64) := (floor value 128) :then (floor quotient 128)
-        :while (plusp quotient)
-        :collect (mod quotient 128) :into bytes
-        :finally (return (make-%vlq :bytes (coerce (nreverse bytes) '(simple-array (unsigned-byte 7) (*)))
-                                   :byte (mod value 128)))))
+  (loop :for v :of-type (unsigned-byte 64) := (ash value -7) :then (ash v -7)
+        :while (plusp v)
+        :collect (logior #x80 (ldb (byte 7 0) v)) :into bytes
+        :finally (return (make-%vlq :bytes (coerce (nreverse bytes) '(simple-array (unsigned-byte 8) (*)))
+                                         :byte (ldb (byte 7 0) value)))))
 
 (deftype vlq ()
   '(unsigned-byte 32))

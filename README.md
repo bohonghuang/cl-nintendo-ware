@@ -132,8 +132,6 @@ GRP 条目通过 `nintendo-ware::xgrp-entry-file-id` 保留归档中的原始文
 
 `xseq-event-sweep-pitch-semitones` 将 `SweepPitch` 的有符号 10.6 定点数转换为 single-float 半音。保留现有 `value` 字段及其整数契约，不改变事件 struct；播放端使用半音访问函数，不重复除以 64。单位依据 [3sf/ntdlib C/F 策略](https://github.com/ogumaza/3sf/blob/master/externals/ntdlib/include/ntdlib/nwsnd/console.h)。BNK/WSD 的 pitch 和 SAR attenuation-rate 等 IEEE754 字段本来就按 single-float 解析，不另加补偿转换。
 
-VLQ 每组的 7 位值和 continuation 位由 binstruct 原生位域读取；`%vlq` 只保留已分离的七位组，转换函数进行基数 128 的数值累积。保留 `vlq`、`%vlq`、`%vlq-integer`、`integer-%vlq` 名称及映射，不引入固定四组/28 位限制。
-
 事件标记参数 `event-bytes` 用 `ensure-list` 统一：单字节写 `(wait #x80)`，多字节写 `(mod2-phase (#xf0 #xa1))`，也支持任意更长的固定字节序列。每个标记字节生成一个独立的 `satisfies`/`eql` 声明；没有 `extended` 标志或专用扩展事件 union。`/partial` 由外层提供已消费的第一个标记字节，其余标记字节仍逐个校验，只省略最后一个参数。音符的首字节是音高，因此单独声明其范围布局。
 
 事件选择使用 binstruct 的 `(or (事件类型) ...)` union，各类型的首字节声明校验操作码；不使用运行时 opcode 描述表或手写事件读取循环。`defbinio` 仅用于完整文件的最终代码生成，不提供事件级二进制读取 API。
