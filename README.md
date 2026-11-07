@@ -128,9 +128,7 @@ GRP 条目通过 `nintendo-ware::xgrp-entry-file-id` 保留归档中的原始文
 
 `define-xseq-event` 仿照 Nitro 的 `define-sseq-event`，从同一份字段声明生成完整和 `/partial` 布局；random/variable 内嵌的子事件使用 `/partial`，省略最后一个参数，而不是最后一个字节。多字节事件标记不产生额外的消费对象，reader 直接返回具体事件类型。
 
-内部 `xseq-event-with-value (event value)` 复制事件并替换 `/partial` 省略的最后一个参数。转换代码从现有 binstruct 字段声明生成：数值按字段宽度收窄，有符号字段按二补码解释，枚举复用 `defbinenum` 的转换函数，开关返回布尔值；不维护第二份事件类型/枚举值表，也不修改原始事件。输入是调用方已求值的 Random/Variable 数字，本函数不选择随机数、不访问变量、不执行事件。流程目标的替换值仍采用消费端使用的事件索引，不增加运行时字节目标解析机制。
-
-`xseq-event-sweep-pitch-semitones` 将 `SweepPitch` 的有符号 10.6 定点数转换为 single-float 半音。保留现有 `value` 字段及其整数契约，不改变事件 struct；播放端使用半音访问函数，不重复除以 64。单位依据 [3sf/ntdlib C/F 策略](https://github.com/ogumaza/3sf/blob/master/externals/ntdlib/include/ntdlib/nwsnd/console.h)。BNK/WSD 的 pitch 和 SAR attenuation-rate 等 IEEE754 字段本来就按 single-float 解析，不另加补偿转换。
+内部 `xseq-event-variable-value` 与 `(setf xseq-event-variable-value)` 由 `define-xseq-event` 在声明事件时生成方法，仅处理最后一个 slot 的 `:type`。变量存储为 s16，接口 raw 位容器为 u16，局部缓冲固定为 simple-array u8[2]：getter 在编译期用 `expand-writer-type-unit` 展开该字段的默认小端 emitter，写入缓冲后组合为 u16；setter 将参数低 16 位拆成小端两字节，再以 `(parser-run (parser 字段类型) 缓冲)` 解析并写回。只为静态编码长度一至两字节的字段生成方法；VLQ、u24、子事件和无参数事件没有此接口，不做静默忽略或额外转换。消费端先复制事件，再直接 setf；opcode、前置字段、播放单位及 VLQ 实现均不改动。
 
 事件标记参数 `event-bytes` 用 `ensure-list` 统一：单字节写 `(wait #x80)`，多字节写 `(mod2-phase (#xf0 #xa1))`，也支持任意更长的固定字节序列。每个标记字节生成一个独立的 `satisfies`/`eql` 声明；没有 `extended` 标志或专用扩展事件 union。`/partial` 由外层提供已消费的第一个标记字节，其余标记字节仍逐个校验，只省略最后一个参数。音符的首字节是音高，因此单独声明其范围布局。
 
@@ -185,7 +183,7 @@ file／section body 均通过原生文件位置锚点恢复 `%header`，不再�
 
 测试使用 Common Lisp assertions 和独立 binstruct 输入夹具，检查实际字段、引用目标、可空引用、magic／opcode 识别、大小端、嵌套事件及版本分支，不断言生成源码或测试库的 writer。
 
-转换职责回归另覆盖子事件的有符号边界、字节溢出、枚举/开关转换、原事件不可变、定点数正负极值，以及 C/F × LE/BE 资源 ID 的完整 24 位索引、未知类型与全一 sentinel。集成 smoke 通过 Closynth 实际渲染 MSET 的 50 个和 TigerSound 的 81 个可播放条目；库本身仍只负责解析。
+资源 ID 回归覆盖 C/F × LE/BE 的完整 24 位索引、未知类型与全一 sentinel。库本身仍只负责解析，不进行播放单位转换。
 
 新事件接口通过 [OoT3D-Custom-Sequences](https://github.com/Kewlan/OoT3D-Custom-Sequences) 的 63 个 BCSEQ 文件，共读取 401,232 个顶层事件并完成目标索引转换。此数量包含声明式事件流读取到的非静态可达事件，不等同于旧 reader 的静态遍历计数。另已用实际 `closynth:event-emit` 验证解析所得 note/tempo 对象的类型分派，未接入播放。Citric 的 `guts.bcseq` 有一个开轨目标落在扩展指令内部，索引化时拒绝，不擅自重定位。除下面的 BCSAR 样本外，其他格式与平台主要依赖合成夹具验证，不能据此宣称所有商业游戏兼容。
 

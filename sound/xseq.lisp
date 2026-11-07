@@ -53,12 +53,28 @@
 (defbinstruct/me xseq-event-union)
 (defbinstruct/me xseq-event-partial-union)
 
+(defgeneric xseq-event-variable-value (event)
+  (:documentation "Encode a fixed-width final field of at most two bytes as little-endian raw u16."))
+(defgeneric (setf xseq-event-variable-value) (value event)
+  (:documentation "Parse the low sixteen bits with the final field type and assign that field."))
+
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defparameter *xseq-events* nil))
 
 (defmacro define-xseq-event ((name event-bytes) &body fields)
   (let* ((class (symbolicate 'xseq-event- name))
          (partial (symbolicate class '/partial))
+         (field (car (last fields)))
+         (type (getf (cddr field) :type))
+         (variable-p
+           (and field
+                (let ((binstruct::*offset* 0)
+                      (binstruct::*endian* binstruct::+endian-default+)
+                      (binstruct::*alignment* binstruct::+alignment-default+)
+                      (binstruct::*output* (gensym "OUTPUT"))
+                      (binstruct::*value* 'value))
+                  (binstruct::expand-writer-type type)
+                  (<= 1 binstruct::*offset* 2))))
          (bytes (ensure-list event-bytes))
          (tags (loop for byte in bytes collect
                  `(nil ,byte :type (satisfies (unsigned-byte 8) (curry #'eql ,byte))))))
@@ -69,8 +85,32 @@
            (nil ,(first bytes) :type (satisfies (map null (constantly ,status))
                                               (curry #'eql ,(first bytes))))
            ,@(rest tags)
-           ,@(if (and fields (subtypep (binstruct::lisp-type (getf (cddr (car (last fields))) :type)) 'xseq-event))
+           ,@(if (and fields (subtypep (binstruct::lisp-type type) 'xseq-event))
                  fields (butlast fields)))
+         ,@(when variable-p
+             (let ((accessor (symbolicate class '- (first field))))
+               `((defmethod xseq-event-variable-value ((event ,class))
+                   (let ((bytes (make-array 2 :element-type '(unsigned-byte 8) :initial-element 0))
+                         (position 0))
+                     (declare (dynamic-extent bytes))
+                     (flet ((output (byte &optional offset)
+                              (declare (ignore offset))
+                              (setf (aref bytes position) byte)
+                              (incf position)))
+                       (declare (dynamic-extent #'output))
+                       ,(binstruct::expand-writer-type-unit
+                         type :endian binstruct::+endian-default+
+                         :alignment binstruct::+alignment-default+
+                         :output '(function output) :value `(,accessor event)))
+                     (logior (aref bytes 0) (ash (aref bytes 1) 8))))
+                 (defmethod (setf xseq-event-variable-value) (value (event ,class))
+                   (let ((bytes (make-array 2 :element-type '(unsigned-byte 8))))
+                     (declare (dynamic-extent bytes))
+                     (setf (aref bytes 0) (ldb (byte 8 0) value)
+                           (aref bytes 1) (ldb (byte 8 8) value))
+                     (setf (,accessor event)
+                           (parser-run (parser ,(ensure-list type)) bytes)))
+                   value))))
          (eval-when (:compile-toplevel :load-toplevel :execute)
            (pushnew ',class *xseq-events*))))))
 
@@ -432,41 +472,6 @@
        (values nil :type (or ,@(loop for type in *xseq-events*
                                     collect `(,(symbolicate type '/partial) status)))))))
 (define-xseq-event-unions)
-
-;; Reuse the declared final operand type for random/variable substitution.
-;; This interprets a supplied value; it does not evaluate the prefix itself.
-(defmacro define-xseq-event-with-value ()
-  (labels ((converted-value (type)
-             (cond
-               ((eq type 'vlq) 'value)
-               ((member type '(xseq-mod-target xseq-mod-curve xseq-mute-mode))
-                `(,(symbolicate 'integer- type) (mod value 256)))
-               ((eq (first type) 'boolean)
-                `(not (zerop ,(converted-value (second type)))))
-               ((eq (first type) 'unsigned-byte)
-                `(mod value ,(expt 2 (second type))))
-               ((eq (first type) 'signed-byte)
-                `(binstruct::unsigned-signed-integer
-                  ,(second type) (mod value ,(expt 2 (second type)))))
-               (t (error "Unsupported SEQ operand type ~S" type)))))
-    `(defun xseq-event-with-value (event value)
-       "Copy EVENT and substitute its omitted final operand using its wire type."
-       (let ((copy (copy-structure event)))
-         (etypecase copy
-           ,@(loop for class in *xseq-events*
-                   for field = (car (last (get class 'binstruct::slots)))
-                   for type = (and field (getf (cddr field) :type))
-                   when (and (first field)
-                             (not (subtypep (binstruct::lisp-type type) 'xseq-event)))
-                     collect `(,class
-                               (setf (,(symbolicate class '- (first field)) copy)
-                                     ,(converted-value type)))))
-         copy))))
-(define-xseq-event-with-value)
-
-(defun xseq-event-sweep-pitch-semitones (event)
-  "Return the signed 10.6 fixed-point sweep operand in semitones."
-  (/ (float (xseq-event-sweep-pitch-value event) 1.0f0) 64.0f0))
 
 ;; These walkers operate on semantic events; binary positions stay local to
 ;; the reader and are discarded after resolving references.
