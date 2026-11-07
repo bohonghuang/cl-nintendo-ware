@@ -84,5 +84,30 @@
           (1 (assert (equalp #(-32768 -1 32767) (nintendo-ware::xwav-channel-data channel))))
           (2 (assert (= -123 (aref (nintendo-ware::xwav-dsp-adpcm-info-coefficients
                                     (nintendo-ware::xwav-channel-codec-info channel)) 0))))))))
+  ;; File IDs select raw entries. Each explicitly selected child reads its BOM.
+  (dolist (endian '(:little :big))
+    (let* ((child-endian (if (eq endian :little) :big :little))
+           (sequence (let ((*fixture-family* :c) (*fixture-endian* :little))
+                       (sequence-fixture #(60 100 12 #xff))))
+           (child (let ((*fixture-family* :c) (*fixture-endian* child-endian))
+                    (xgrp-fixture sequence)))
+           (bytes (let ((*fixture-family* :f) (*fixture-endian* endian))
+                    (xgrp-fixture child)))
+           (group (nintendo-ware::read-file 'nintendo-ware::xgrp bytes))
+           (entry (find 7 (nintendo-ware::xgrp-info-entries (nintendo-ware::xgrp-info group))
+                        :key #'nintendo-ware::xgrp-entry-file-id))
+           (nested (nintendo-ware::read-file 'nintendo-ware::xgrp (nintendo-ware::xgrp-entry-data entry)))
+           (nested-entry (find 7 (nintendo-ware::xgrp-info-entries (nintendo-ware::xgrp-info nested))
+                               :key #'nintendo-ware::xgrp-entry-file-id))
+           (parsed-sequence (nintendo-ware::read-file 'nintendo-ware::xseq
+                                                    (nintendo-ware::xgrp-entry-data nested-entry))))
+      (assert (eq endian (nintendo-ware::header-endian (nintendo-ware::xgrp-header group))))
+      (assert (eq child-endian (nintendo-ware::header-endian (nintendo-ware::xgrp-header nested))))
+      (assert (= 12 (nintendo-ware::xseq-event-note-duration
+                      (aref (nintendo-ware::xseq-events parsed-sequence) 0))))
+      (dolist (container (list group nested))
+        (assert (= #x03000000
+                   (nintendo-ware::xgrp-dependency-resource-id
+                    (aref (nintendo-ware::xgrp-infx-entries (nintendo-ware::xgrp-infx container)) 0)))))))
   (assert (not (boundp 'nintendo-ware::*endian*)))
   (format t "Shared-type ME, C/F containers, event endian and mixed embedded files passed.~%"))

@@ -81,7 +81,7 @@
                     (cl-nintendo-ware.test::make-xwsd-envelope :attack 11 :decay 22 :sustain 33 :hold 44 :release 55)))))))
     (container-fixture "CWSD" (list (list #x6800 "INFO" body)))))
 
-(defun xgrp-fixture (embedded)
+(defun xgrp-fixture (embedded &key (file-id 7) (available-p t))
   (let ((info
           (layout-fixture
            (list
@@ -89,8 +89,8 @@
                   (lambda (address) (cl-nintendo-ware.test::make-reference-table :count 1 :entries (vector (fixture-reference address #x7900 'entry 'table)))))
             (list 'entry 'cl-nintendo-ware.test::xgrp-file-record
                   (lambda (address) (declare (ignore address))
-                    (cl-nintendo-ware.test::make-xgrp-file-record :file-id 7
-                     :file-reference (cl-nintendo-ware.test::make-sized-reference :type #x1f00 :offset 0 :size (length embedded))))))))
+                    (cl-nintendo-ware.test::make-xgrp-file-record :file-id file-id
+                     :file-reference (cl-nintendo-ware.test::make-sized-reference :type #x1f00 :offset (if available-p 0 -1) :size (length embedded))))))))
         (extra
           (layout-fixture
            (list
@@ -336,7 +336,9 @@
          (files (nintendo-ware::xsar-files archive))
          (external (aref (nintendo-ware::xsar-files-table-entries (nintendo-ware::xsar-info-files information)) 1)))
     (assert (= 7 (nintendo-ware::xgrp-entry-file-id (aref (nintendo-ware::xgrp-info-entries (nintendo-ware::xgrp-info group)) 0))))
-    (assert (typep (nintendo-ware::xgrp-entry-content (aref (nintendo-ware::xgrp-info-entries (nintendo-ware::xgrp-info group)) 0)) 'nintendo-ware::xseq))
+    (assert (equalp embedded (nintendo-ware::xgrp-entry-data
+                              (find 7 (nintendo-ware::xgrp-info-entries (nintendo-ware::xgrp-info group))
+                                    :key #'nintendo-ware::xgrp-entry-file-id))))
     (assert (= #x03000000 (nintendo-ware::xgrp-dependency-resource-id (aref (nintendo-ware::xgrp-infx-entries (nintendo-ware::xgrp-infx group)) 0))))
     (assert (string= "song" (nintendo-ware::xsar-string-text (aref (nintendo-ware::xsar-string-table-entries strings) 0))))
     (assert (= #x01000000 (nintendo-ware::xsar-patricia-node-resource-id (aref (nintendo-ware::xsar-patricia-tree-nodes (nintendo-ware::xsar-strg-tree (nintendo-ware::xsar-strg archive))) 0))))
@@ -356,6 +358,23 @@
                                                   (nintendo-ware::xsar-file-data (aref files 0)))) 0)
                    'nintendo-ware::xseq-event-finish))
     (assert (string= "audio/example.bcstm" (nintendo-ware::xsar-external-file-text (nintendo-ware::xsar-file-location external)))))
+  ;; GRP file IDs belong to the archive, not the position in this group's table.
+  ;; Unknown/invalid children are opaque; only an explicit read may reject them.
+  (dolist (payload (list (octets-join #(66 65 68 33))
+                        (sequence-fixture #(130) :padded nil)
+                        (make-array 0 :element-type '(unsigned-byte 8))))
+    (let* ((group (nintendo-ware::read-file 'nintendo-ware::xgrp
+                                         (xgrp-fixture payload :file-id 1234)))
+           (entry (find 1234 (nintendo-ware::xgrp-info-entries (nintendo-ware::xgrp-info group))
+                        :key #'nintendo-ware::xgrp-entry-file-id)))
+      (assert entry)
+      (assert (typep (nintendo-ware::xgrp-entry-data entry) '(simple-array (unsigned-byte 8) (*))))
+      (assert (equalp payload (nintendo-ware::xgrp-entry-data entry)))))
+  (let* ((group (nintendo-ware::read-file 'nintendo-ware::xgrp
+                                       (xgrp-fixture #(66 65 68 33) :available-p nil)))
+         (entry (aref (nintendo-ware::xgrp-info-entries (nintendo-ware::xgrp-info group)) 0)))
+    (assert (= 7 (nintendo-ware::xgrp-entry-file-id entry)))
+    (assert (null (nintendo-ware::xgrp-entry-data entry))))
   ;; A known-format child with an invalid opcode must remain opaque to XSAR.
   (let* ((bad-child (sequence-fixture #(130) :padded nil))
          (archive (nintendo-ware::read-file 'nintendo-ware::xsar (xsar-fixture bad-child)))

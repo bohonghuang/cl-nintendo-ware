@@ -107,7 +107,17 @@ XSAR 仿照 cl-nitro 的 SDAT：读取元数据和各内嵌文件的原始字节
                                   (nintendo-ware:xsar-file-data file))))
 ```
 
-移除旧的 `xsar-internal-file-content` 对象接口，不提供递归解析兼容层。WAR 中的 WAV 布局和 GRP 的内嵌 reader 不变；只有调用方显式读取相应文件时才进入这些 reader。
+XSAR 和 GRP 均不自动解析子文件，不检查其 magic、BOM 或事件；WAR 的 WAV reader 不变。旧的 `xsar-internal-file-content`、`xgrp-entry-content` 对象接口不保留兼容层。
+
+GRP 条目通过 `nintendo-ware::xgrp-entry-file-id` 保留归档中的原始文件索引，不能把条目在组表中的位置当作文件 ID。`nintendo-ware::xgrp-entry-data` 返回原始 octet vector；空引用返回 `NIL`，零长度数据仍为专用空 octet vector。按文件 ID 选择条目后，调用方显式指定类型解析：
+
+```lisp
+(let* ((group (nintendo-ware:read-file 'nintendo-ware:xgrp #P"/path/to/group.bcgrp"))
+       (entry (find 7 (nintendo-ware::xgrp-info-entries (nintendo-ware::xgrp-info group))
+                    :key #'nintendo-ware::xgrp-entry-file-id)))
+  (when (and entry (nintendo-ware::xgrp-entry-data entry))
+    (nintendo-ware:read-file 'nintendo-ware:xseq (nintendo-ware::xgrp-entry-data entry))))
+```
 
 
 ## 事件与端序
@@ -136,7 +146,7 @@ CSTM SEEK 上下文固定小端；当前 FSTM SEEK 布局按 Citric 的参考实
   (info nil :type (peek sample-info (block-start header #x1000))))
 ```
 
-file body 直接接收容器已读取的 header；section body 通过原生位置引用取得所属文件头与版本。普通记录、表、字符串和引用按声明的字段及数量读取，不接收或传递区块结束位置。每个文件字段读取前恢复本文件的位置锚点，避免内嵌文件影响外层后续区块。GRP 的内嵌 reader 只按 magic 选择文件类型，由子文件自身容器读取 BOM，不预读 BOM 来选择完整文件的大小端 reader；XSAR 不走这条递归路径。高阶 parser（`inline` 等）仅用于 file／section 容器，不用于具体记录、引用、表或事件。
+file body 直接接收容器已读取的 header；section body 通过原生位置引用取得所属文件头与版本。普通记录、表、字符串和引用按声明的字段及数量读取，不接收或传递区块结束位置。每个文件字段读取前恢复本文件的位置锚点，避免 WAR 内嵌文件影响外层后续区块。GRP／XSAR 只读取原始子文件数据；调用方显式读取子文件时，由子文件自身容器读取 BOM。高阶 parser（`inline` 等）仅用于 file／section 容器，不用于具体记录、引用、表或事件。
 
 只有确实需要剩余长度的布局使用零宽类型 `nintendo-ware-section-tail-size`，保存在 `%size`：它返回“区块大小 −（当前位置 − 区块起点）”，不消费输入，并遵循区块头端序。需要绝对结束位置时，就地用 `%position + %size` 计算。目前仅 SEQ 的无计数事件流需要结束位置，SEEK 需要剩余长度来读取尾部 padding；不向其他布局注入尾部上下文。
 
@@ -158,7 +168,7 @@ file body 直接接收容器已读取的 header；section body 通过原生位�
 
 也接受 binstruct 风格的可选参数列表；生产 schema 最多三个参数。递归类型需先声明端序分派，见 `xseq-event-union`。打包进一个整数的子字段若在两端字节位置不同，则显式声明共享 Lisp 类型的两种布局，不假装字段顺序相同。
 
-相对引用使用 `reference-to` 和原生 `pointer`；前者只在编译期展开具体读取表达式，不引入接收 parser 参数的运行时 reader。保留 magic、opcode、引用 tag、BOM／布局分派、空引用处理及其他非大小相关检查；不检查文件／区块声明大小的一致性、目录跨度或区块重叠。XSAR 的 sized reference 长度用于读取原始文件 data，不用于校验其内部格式；WAR／GRP 的内嵌 reader 不增加长度约束包装。大小字段仍用于实际 payload 和 padding 的读取，不提供完整格式校验或受限输入沙箱。
+相对引用使用 `reference-to` 和原生 `pointer`；前者只在编译期展开具体读取表达式，不引入接收 parser 参数的运行时 reader。保留 magic、opcode、引用 tag、BOM／布局分派、空引用处理及其他非大小相关检查；不检查文件／区块声明大小的一致性、目录跨度或区块重叠。XSAR／GRP 的 sized reference 长度用于读取原始文件 data，不用于校验其内部格式；WAR 的内嵌 reader 不增加长度约束包装。大小字段仍用于实际 payload 和 padding 的读取，不提供完整格式校验或受限输入沙箱。
 
 **本库只保证 reader。** 不为 writer 增加端序钩子，不测试、不保证自动生成的 writer 正确性；保留正常 binstruct 声明与指针信息，方便将来实现。
 

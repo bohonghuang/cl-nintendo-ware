@@ -2,7 +2,11 @@
 
 (defbinstruct/me xgrp-entry (data-start)
   (file-id 0 :type (unsigned-byte 32))
-  (reference (make-sized-reference) :type sized-reference))
+  (reference (make-sized-reference) :type sized-reference)
+  (data nil :type (ecase (= (sized-reference-offset reference) -1)
+                   ((t) null)
+                   ((nil) (peek (simple-array (unsigned-byte 8) ((sized-reference-size reference)))
+                                (sized-reference-target reference (+ data-start 8) #x1f00))))))
 
 (defbinstruct/me xgrp-dependency ()
   (resource-id 0 :type (unsigned-byte 32)) (load-flags 0 :type (unsigned-byte 32)))
