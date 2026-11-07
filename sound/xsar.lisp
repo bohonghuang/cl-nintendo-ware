@@ -98,31 +98,15 @@
 (defbinstruct/me (xsar-file-flag-set (:alignment 4)) ()
   (reserved-0-31 0 :type (unsigned-byte 32)))
 
-(defbinstruct xsar-pan-mode-info ()
+(defbinstruct/me (xsar-pan-mode-info (:alignment 4)) ()
   (mode 'dual :type xsar-pan-mode)
   (curve 'sqrt-negative-3 :type xsar-pan-curve)
   (reserved 0 :type (unsigned-byte 16)))
 
-(defbinstruct (xsar-pan-mode-info/be (:type xsar-pan-mode-info) (:endian :big)) ()
-  (reserved 0 :type (unsigned-byte 16))
-  (curve 'sqrt-negative-3 :type xsar-pan-curve)
-  (mode 'dual :type xsar-pan-mode))
-
-(defbinalias xsar-pan-mode-info/le () xsar-pan-mode-info)
-(%define-endian-reader xsar-pan-mode-info)
-
-(defbinstruct xsar-player-info ()
+(defbinstruct/me (xsar-player-info (:alignment 4)) ()
   (priority 0 :type (signed-byte 8))
   (actor-player-id 0 :type (signed-byte 8))
   (reserved 0 :type (unsigned-byte 16)))
-
-(defbinstruct (xsar-player-info/be (:type xsar-player-info) (:endian :big)) ()
-  (reserved 0 :type (unsigned-byte 16))
-  (actor-player-id 0 :type (signed-byte 8))
-  (priority 0 :type (signed-byte 8)))
-
-(defbinalias xsar-player-info/le () xsar-player-info)
-(%define-endian-reader xsar-player-info)
 
 
 (defbinstruct/me xsar-patricia-node ()

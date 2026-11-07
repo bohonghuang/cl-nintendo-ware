@@ -13,40 +13,18 @@
   (padding (make-array 3 :element-type '(unsigned-byte 8) :initial-element 0)
            :type (simple-array (unsigned-byte 8) (3))))
 
-(defbinstruct xbnk-key-flag ()
+(defbinstruct/me (xbnk-key-flag (:alignment 4)) ()
   (value 60 :type (signed-byte 8))
   (nil 0 :type (unsigned-byte 24)))
 
-(defbinstruct (xbnk-key-flag/be (:type xbnk-key-flag) (:endian :big)) ()
-  (nil 0 :type (unsigned-byte 24))
-  (value 60 :type (signed-byte 8)))
-
-(defbinalias xbnk-key-flag/le () xbnk-key-flag)
-(%define-endian-reader xbnk-key-flag)
-
-(defbinstruct xbnk-volume-flag ()
+(defbinstruct/me (xbnk-volume-flag (:alignment 4)) ()
   (value 127 :type (unsigned-byte 8))
   (nil 0 :type (unsigned-byte 24)))
 
-(defbinstruct (xbnk-volume-flag/be (:type xbnk-volume-flag) (:endian :big)) ()
-  (nil 0 :type (unsigned-byte 24))
-  (value 127 :type (unsigned-byte 8)))
-
-(defbinalias xbnk-volume-flag/le () xbnk-volume-flag)
-(%define-endian-reader xbnk-volume-flag)
-
-(defbinstruct xbnk-pan-flag ()
+(defbinstruct/me (xbnk-pan-flag (:alignment 4)) ()
   (pan 64 :type (signed-byte 8))
   (surround-pan 0 :type (signed-byte 8))
   (nil 0 :type (unsigned-byte 16)))
-
-(defbinstruct (xbnk-pan-flag/be (:type xbnk-pan-flag) (:endian :big)) ()
-  (nil 0 :type (unsigned-byte 16))
-  (surround-pan 0 :type (signed-byte 8))
-  (pan 64 :type (signed-byte 8)))
-
-(defbinalias xbnk-pan-flag/le () xbnk-pan-flag)
-(%define-endian-reader xbnk-pan-flag)
 
 (defbinstruct/me (xbnk-note-flag (:alignment 4)) ()
   (percussion-p nil :type (boolean bit))

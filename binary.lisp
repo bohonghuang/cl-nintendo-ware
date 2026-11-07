@@ -13,18 +13,9 @@
            ,lambda-list
          (values nil :type ,parser)))))
 
-(defmacro %define-endian-reader (name)
-  (let ((little (symbolicate name '#:/le))
-        (big (symbolicate name '#:/be)))
-    `(eval-when (:compile-toplevel :load-toplevel :execute)
-       (defmethod binstruct::expand-reader-type-expr ((name (eql ',name)) &rest arguments)
-         (if (boundp '*endian*)
-             (cons (ecase *endian* (:little ',little) (:big ',big)) arguments)
-             (call-next-method))))))
-
 ;; Expand here, not in the outer PROGN: the default definition and its Lisp
 ;; type have been registered before its big-endian reader is expanded.
-(defmacro %defbinstruct/be (name-and-options lambda-list &body slots)
+(defmacro defbinstruct/be (name-and-options lambda-list &body slots)
   (let ((*endian* :big))
     (destructuring-bind (name &rest options) name-and-options
       ;; Binstruct's :include calls the ancestor parser directly rather than
@@ -36,20 +27,31 @@
         (macroexpand `(defbinstruct (,name ,@options) ,lambda-list ,@slots))))))
 
 (defmacro defbinstruct/me (name-and-options &body body)
-  "Define default little-endian and /le, /be readers sharing one Lisp type.
-An optional lambda list precedes the fields, as in DEFBINSTRUCT."
+  "Define LE and shared-type BE layouts and property-based type expansion."
   (destructuring-bind (name &rest options) (ensure-list name-and-options)
-    (let* ((lambda-list (when (and body (not (member :type (first body)))) (pop body)))
+    (let* ((defined-p body)
+           (lambda-list (when (and body (not (member :type (first body)))) (pop body)))
            (type (or (cadr (assoc :type options)) name))
-           (little (symbolicate name '#:/le))
            (big (symbolicate name '#:/be)))
       `(progn
-         (defbinstruct (,name ,@options) ,lambda-list ,@body)
-         (%defbinstruct/be (,big (:type ,type) (:endian :big)
-                                ,@(remove-if (lambda (option) (member (car option) '(:type :endian))) options))
-             ,lambda-list
-           ,@body)
-         (defbinalias (,little (:type ,type)) ,lambda-list
-           (,name ,@(parsonic::lambda-list-arguments lambda-list)))
-         (%define-endian-reader ,name)))))
+         ,@(when defined-p
+             `((defbinstruct (,name ,@options) ,lambda-list ,@body)
+               (defbinstruct/be (,big (:type ,type) (:endian :big)
+                                     ,@(remove-if (lambda (option) (member (car option) '(:type :endian))) options))
+                   ,lambda-list
+                 ,@body)))
+         (eval-when (:compile-toplevel :load-toplevel :execute)
+           (setf (get ',name 'binstruct::expand-reader-type-expr)
+                 (lambda (&rest arguments)
+                   (cons (ecase (or (and (boundp '*endian*) *endian*) :little)
+                           (:little ',name) (:big ',big))
+                         arguments))
+                 (get ',name 'binstruct::expand-writer-type-expr)
+                 (lambda (&rest arguments)
+                   `(progn
+                      ,(binstruct::finish-writer-partial-byte)
+                      (,(ecase (or (and (boundp '*endian*) *endian*) :little)
+                          (:little ',(binstruct::emitter-name-symbol name))
+                          (:big ',(binstruct::emitter-name-symbol big)))
+                       ,binstruct::*output* ,binstruct::*value* ,@arguments)))))))))
 

@@ -74,6 +74,9 @@
 (defbinstruct/me xstm-seek-row (encoding stride channels)
   (entries #() :type (simple-array (xstm-seek-entry encoding stride) (channels))))
 
+;; CSTM SEEK payloads remain LE even inside a BE container.
+(defbinalias xstm-seek-row/le (encoding stride channels) (xstm-seek-row encoding stride channels))
+
 ;; SEEK and REGN follow the same INFO reference without moving their cursor.
 (defbinstruct/me (xstm-referenced-stream-info (:type (or null xstm-stream-info)) (:constructor progn) (:conc-name nil)) (header)
   (values nil :type (peek (reference-to #x4100 (+ (block-start header #x4000) 8)

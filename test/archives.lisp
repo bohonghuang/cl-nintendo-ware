@@ -256,6 +256,34 @@
                        :version (* major-version #x1000000))))
 
 (defun run-archive-tests ()
+  ;; Independent u32 words distinguish signed bytes, reserved bytes and bits.
+  (let* ((file (nintendo-ware::read-file 'nintendo-ware::xwsd
+                 (xwsd-fixture :item-flags (flags 5 #xa55a7f80 #xa5f3b271))))
+         (parameters (nintendo-ware::xwsd-item-parameters
+                       (aref (nintendo-ware::xwsd-item-table-entries
+                               (nintendo-ware::xwsd-info-items (nintendo-ware::xwsd-info file))) 0)))
+         (pan (nintendo-ware::xwsd-parameters-pan-info parameters))
+         (filter (nintendo-ware::xwsd-parameters-filter-info parameters)))
+    (assert (= -128 (nintendo-ware::packed-pan-pan pan)))
+    (assert (= 127 (nintendo-ware::packed-pan-surround-pan pan)))
+    (assert (= #xa55a (nintendo-ware::packed-pan-reserved pan)))
+    (assert (= #x71 (nintendo-ware::packed-filter-low-pass filter)))
+    (assert (= #xb2 (nintendo-ware::packed-filter-biquad-type filter)))
+    (assert (= #xf3 (nintendo-ware::packed-filter-biquad-value filter))))
+  (let* ((archive (nintendo-ware::read-file 'nintendo-ware::xsar
+                    (xsar-fixture #() :sound-flags (flags 6 #xa55a0801 #x5aa57f80)
+                                      :sequence-flags (flags 2 #xa55aff47))))
+         (sound (aref (nintendo-ware::xsar-sounds-table-entries
+                        (nintendo-ware::xsar-info-sounds (nintendo-ware::xsar-info archive))) 0))
+         (player (nintendo-ware::xsar-sound-player-info sound))
+         (priority (nintendo-ware::xsar-sequence-info-priority (nintendo-ware::xsar-sound-detail sound))))
+    (assert (= -128 (nintendo-ware::xsar-player-info-priority player)))
+    (assert (= 127 (nintendo-ware::xsar-player-info-actor-player-id player)))
+    (assert (= #xa55a (nintendo-ware::xsar-pan-mode-info-reserved
+                       (nintendo-ware::xsar-sound-pan-mode-info sound))))
+    (assert (= 71 (nintendo-ware::packed-priority-channel-priority priority)))
+    (assert (nintendo-ware::packed-priority-release-priority-p priority))
+    (assert (= 127 (nintendo-ware::packed-priority-release-reserved priority))))
   (let* ((archive (nintendo-ware::read-file 'nintendo-ware::xsar
                     (xsar-fixture #() :sound-flags (flags 2 #x0801))))
          (sound (aref (nintendo-ware::xsar-sounds-table-entries

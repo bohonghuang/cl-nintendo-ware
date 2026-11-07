@@ -50,8 +50,8 @@
 (defbinstruct/me xseq-event ())
 (deftype xseq-event-union () 'xseq-event)
 (deftype xseq-event-partial-union (&optional status) (declare (ignore status)) 'xseq-event)
-(%define-endian-reader xseq-event-union)
-(%define-endian-reader xseq-event-partial-union)
+(defbinstruct/me xseq-event-union)
+(defbinstruct/me xseq-event-partial-union)
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defparameter *xseq-events* nil))
@@ -493,6 +493,9 @@
   (values #.(make-array 0 :element-type 'xseq-event)
           :type (map null (lambda (ignored) (declare (ignore ignored))
                             (xseq-events-unpack %events %positions labels)))))
+
+;; The event stream's endian is independent of the surrounding section.
+(defbinalias xseq-track/le (end labels) (xseq-track end labels))
 
 (defbinstruct/me xseq-label-entry ()
   (index 0 :type (map (satisfies reference

@@ -108,6 +108,9 @@
   (%valid nil :type (map null (lambda (ignored) (declare (ignore ignored))
                                 (validate-header references)))))
 
+;; Explicit LE entry: embedded headers do not inherit their parent's endian.
+(defbinalias header/le (start magic endian) (header start magic endian))
+
 (defbinstruct (file-header (:type header) (:constructor progn) (:conc-name nil)) ()
   (%start 0 :type position)
   (%magic #.(coerce "" 'simple-base-string) :type (simple-base-string 4))
@@ -156,48 +159,19 @@
   (size 0 :type (unsigned-byte 32))
   (bytes #.(make-array 0 :element-type '(unsigned-byte 8)) :type (simple-array (unsigned-byte 8) ((- size 8)))))
 
-(defbinstruct packed-pan ()
+(defbinstruct/me (packed-pan (:alignment 4)) ()
   (pan 0 :type (signed-byte 8))
   (surround-pan 0 :type (signed-byte 8))
   (reserved 0 :type (unsigned-byte 16)))
 
-(defbinstruct (packed-pan/be (:type packed-pan) (:endian :big)) ()
-  (reserved 0 :type (unsigned-byte 16))
-  (surround-pan 0 :type (signed-byte 8))
-  (pan 0 :type (signed-byte 8)))
-
-(defbinalias packed-pan/le () packed-pan)
-
-(%define-endian-reader packed-pan)
-
-(defbinstruct packed-filter ()
+(defbinstruct/me (packed-filter (:alignment 4)) ()
   (low-pass 0 :type (unsigned-byte 8))
   (biquad-type 0 :type (unsigned-byte 8))
   (biquad-value 0 :type (unsigned-byte 8))
   (reserved 0 :type (unsigned-byte 8)))
 
-(defbinstruct (packed-filter/be (:type packed-filter) (:endian :big)) ()
-  (reserved 0 :type (unsigned-byte 8))
-  (biquad-value 0 :type (unsigned-byte 8))
-  (biquad-type 0 :type (unsigned-byte 8))
-  (low-pass 0 :type (unsigned-byte 8)))
-
-(defbinalias packed-filter/le () packed-filter)
-
-(%define-endian-reader packed-filter)
-
-(defbinstruct packed-priority ()
+(defbinstruct/me (packed-priority (:alignment 4)) ()
   (channel-priority 0 :type (unsigned-byte 8))
   (release-priority-p nil :type (boolean bit))
   (release-reserved 0 :type (unsigned-byte 7))
   (reserved 0 :type (unsigned-byte 16)))
-
-(defbinstruct (packed-priority/be (:type packed-priority) (:endian :big)) ()
-  (reserved 0 :type (unsigned-byte 16))
-  (release-priority-p nil :type (boolean bit))
-  (release-reserved 0 :type (unsigned-byte 7))
-  (channel-priority 0 :type (unsigned-byte 8)))
-
-(defbinalias packed-priority/le () packed-priority)
-
-(%define-endian-reader packed-priority)

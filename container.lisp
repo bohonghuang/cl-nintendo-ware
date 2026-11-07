@@ -34,7 +34,7 @@
                             ,section)))
          (defbinstruct (,name (:include (nintendo-ware-file ',magic
                                           #',(symbolicate body '/be)
-                                          #',(symbolicate body '/le)))
+                                          #',body))
                              ,@(remove :magic options :key #'car)) ())
          ,@(with-gensyms (instance value)
              (loop for section in sections
