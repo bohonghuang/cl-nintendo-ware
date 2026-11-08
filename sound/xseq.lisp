@@ -85,7 +85,9 @@
                    (parameters (remove-if-not #'symbolp (cdr (ensure-list type)))))
              (when field
                  `((eval-when (:compile-toplevel :load-toplevel :execute)
-                     (pushnew ',type *xseq-event-variable-value-types* :test #'equal))
+                     (pushnew ',type *xseq-event-variable-value-types* :test #'equal)
+                     (setf (get ',class 'variable-value-definition)
+                           '(,type
                    (declaim (ftype (function ((simple-array (unsigned-byte 8) (*)) ,@(mapcar (constantly t) parameters))
                                              (values t)) ,reader)
                             (ftype (function ((simple-array (unsigned-byte 8) (*)) t ,@(mapcar (constantly t) parameters))
@@ -101,7 +103,7 @@
                        (setf (aref bytes 0) (ldb (byte 8 0) value)
                              (aref bytes 1) (ldb (byte 8 8) value))
                        (setf (,accessor event) (,reader bytes)))
-                     value))))
+                     value)))))))
          (eval-when (:compile-toplevel :load-toplevel :execute)
            (pushnew ',class *xseq-events*))))))
 
@@ -456,13 +458,24 @@
   (value 0 :type (signed-byte 16)))
 
 (defmacro define-event-variable-value-types-io ()
-  `(progn
-     ,@(loop for type in *xseq-event-variable-value-types*
-             for name = (if (symbolp type) type (intern (princ-to-string type)))
-             for parameters = (remove-if-not #'symbolp (cdr (ensure-list type)))
-             append (append (unless (symbolp type)
-                              `((defbinalias ,name ,parameters ,type)))
-                            `((defbinio (,name ,@parameters) (simple-array (unsigned-byte 8) (*))))))))
+  (let ((types (remove-if-not
+                (lambda (type)
+                  (multiple-value-bind (minimum maximum)
+                      (parsonic::compute-bounds/compile
+                       (parsonic::expand/compile (ensure-list type)))
+                    (= minimum maximum)))
+                *xseq-event-variable-value-types*)))
+    `(progn
+       ,@(loop for class in *xseq-events*
+               for definition = (get class 'variable-value-definition)
+               when (member (car definition) types :test #'equal)
+                 append (cdr definition))
+       ,@(loop for type in types
+               for name = (if (symbolp type) type (intern (princ-to-string type)))
+               for parameters = (remove-if-not #'symbolp (cdr (ensure-list type)))
+               append (append (unless (symbolp type)
+                                `((defbinalias ,name ,parameters ,type)))
+                              `((defbinio (,name ,@parameters) (simple-array (unsigned-byte 8) (*)))))))))
 
 
 (defmacro define-xseq-event-unions ()
@@ -476,19 +489,6 @@
 
 (define-event-variable-value-types-io)
 
-(defmethod xseq-event-variable-value ((event xseq-event-note))
-  (let ((bytes (make-array 2 :element-type '(unsigned-byte 8) :initial-element 0)))
-    (declare (dynamic-extent bytes))
-    (write-vlq bytes (xseq-event-note-duration event))
-    (logior (aref bytes 0) (ash (aref bytes 1) 8))))
-
-(defmethod (setf xseq-event-variable-value) (value (event xseq-event-note))
-  (let ((bytes (make-array 2 :element-type '(unsigned-byte 8))))
-    (declare (dynamic-extent bytes))
-    (setf (aref bytes 0) (ldb (byte 8 0) value)
-          (aref bytes 1) (ldb (byte 8 8) value))
-    (setf (xseq-event-note-duration event) (read-vlq bytes)))
-  value)
 
 ;; These walkers operate on semantic events; binary positions stay local to
 ;; the reader and are discarded after resolving references.
