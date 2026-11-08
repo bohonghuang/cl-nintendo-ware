@@ -128,9 +128,9 @@ GRP 条目通过 `nintendo-ware::xgrp-entry-file-id` 保留归档中的原始文
 
 `define-xseq-event` 仿照 Nitro 的 `define-sseq-event`，从同一份字段声明生成完整和 `/partial` 布局；random/variable 内嵌的子事件使用 `/partial`，省略最后一个参数，而不是最后一个字节。多字节事件标记不产生额外的消费对象，reader 直接返回具体事件类型。
 
-内部 `xseq-event-variable-value` 与 `(setf xseq-event-variable-value)` 由 `define-xseq-event` 生成，仅处理最后一个 slot 的 `:type`。声明宏直接以 `ignore-errors` 包住最后一个字段类型的原生 bounds 判定，只有判定成功且两值相等时才用 `pushnew :test #'equal` 收集类型、声明 reader／writer 的 `ftype` 并直接生成方法；不保存 plist 或方法队列，也不事后筛选；所有事件声明后，`defbinio-xseq-event-variable-value-types` 为非 symbol 类型以 `(intern (princ-to-string type))` 建立 `defbinalias`，统一通过 `defbinio` 生成独立的 `read-类型`／`write-类型`。方法直接调用这些函数，不展开 binstruct 内部 emitter，也不自行运行 parser。变量存储仍为 s16，raw 容器为 u16，局部缓冲固定为 simple-array u8[2]；不按字段类型特判，也不限制位宽；只为原生 `compute-bounds` 两个返回值相等的定长字段生成方法，变长字段不生成方法，由 CLOS 在调用时直接报错。一律按小端拆出低 16 位并调用原生 reader／writer，解析错误直接抛出。超过 16 位的定长字段仍生成方法；无参数事件不生成，note 不手写任何 variable-value 方法；消费端仍先复制事件再直接 setf，opcode、前置字段、播放单位及 VLQ 实现均不改动。 events 与 variable-value 类型注册表均使用 `defvar`，不在重新加载时重置。
+内部 `xseq-event-variable-value` 与 `(setf xseq-event-variable-value)` 由 `define-xseq-event` 生成，仅处理最后一个 slot 的 `:type`。与 cl-nitro 一致，声明宏以 `ignore-errors` 获取原生 bounds：取不到 bounds 时不生成方法；两值相等时，以 `pushnew :test #'equal` 收集类型、声明 reader／writer 的 `ftype`，并生成通过原生编解码读写低十六位的方法；两值不相等时，生成直接读写字段整数值的方法，VLQ 不经过原始字节重解码。note 也由同一声明宏生成，duration 与 wait、program-change 的 VLQ 参数使用相同路径；音符布局和 `/partial` 消费规则不变。所有事件声明后，`defbinio-xseq-event-variable-value-types` 为已收集的定长类型生成 `defbinalias`／`defbinio`，不保存 plist 或方法队列，不事后筛选，也不访问 binstruct emitter 内部实现。定长方法不按类型特判、不限制字段位宽；宽字段的两字节 setter 限制由原生 reader 报错。events 与 variable-value 类型注册表均使用 `defvar`。
 
-事件标记参数 `event-bytes` 用 `ensure-list` 统一：单字节写 `(wait #x80)`，多字节写 `(mod2-phase (#xf0 #xa1))`，也支持任意更长的固定字节序列。每个标记字节生成一个独立的 `satisfies`/`eql` 声明；没有 `extended` 标志或专用扩展事件 union。`/partial` 由外层提供已消费的第一个标记字节，其余标记字节仍逐个校验，只省略最后一个参数。音符的首字节是音高，因此单独声明其范围布局。
+事件标记参数 `event-bytes` 用 `ensure-list` 统一：单字节写 `(wait #x80)`，多字节写 `(mod2-phase (#xf0 #xa1))`，也支持任意更长的固定字节序列。每个标记字节生成一个独立的 `satisfies`/`eql` 声明；没有 `extended` 标志或专用扩展事件 union。`/partial` 由外层提供已消费的第一个标记字节，其余标记字节仍逐个校验，只省略最后一个参数。note 的首字节是音高，由同一宏生成 key 范围布局，不作为固定标记。
 
 事件选择使用 binstruct 的 `(or (事件类型) ...)` union，各类型的首字节声明校验操作码；不使用运行时 opcode 描述表或手写事件读取循环。`defbinio` 用于完整文件的最终代码生成，以及上述内部 variable-value slot reader／writer；不提供事件流遍历 API。
 
