@@ -59,7 +59,7 @@
   (:documentation "Parse the low sixteen bits with the final field type and assign that field."))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  (defparameter *xseq-events* nil)
+  (defvar *xseq-events* nil)
   (defvar *xseq-event-variable-value-types* nil))
 
 (defmacro define-xseq-event ((name event-bytes) &body fields)
@@ -84,10 +84,15 @@
                    (writer (intern (format nil "WRITE-~A" type)))
                    (parameters (remove-if-not #'symbolp (cdr (ensure-list type)))))
              (when field
-                 `((eval-when (:compile-toplevel :load-toplevel :execute)
-                     (pushnew ',type *xseq-event-variable-value-types* :test #'equal)
-                     (setf (get ',class 'variable-value-definition)
-                           '(,type
+               `((macrolet ((generate-variable-value-methods ()
+                              (when (ignore-errors
+                                      (multiple-value-bind (minimum maximum)
+                                          (parsonic::compute-bounds/compile
+                                           (parsonic::expand/compile '(,class)))
+                                        (= minimum maximum)))
+                                '(progn
+                                   (eval-when (:compile-toplevel :load-toplevel :execute)
+                                     (pushnew ',type *xseq-event-variable-value-types* :test #'equal))
                    (declaim (ftype (function ((simple-array (unsigned-byte 8) (*)) ,@(mapcar (constantly t) parameters))
                                              (values t)) ,reader)
                             (ftype (function ((simple-array (unsigned-byte 8) (*)) t ,@(mapcar (constantly t) parameters))
@@ -103,7 +108,8 @@
                        (setf (aref bytes 0) (ldb (byte 8 0) value)
                              (aref bytes 1) (ldb (byte 8 8) value))
                        (setf (,accessor event) (,reader bytes)))
-                     value)))))))
+                     value)))))
+                   (generate-variable-value-methods)))))
          (eval-when (:compile-toplevel :load-toplevel :execute)
            (pushnew ',class *xseq-events*))))))
 
@@ -458,24 +464,13 @@
   (value 0 :type (signed-byte 16)))
 
 (defmacro define-event-variable-value-types-io ()
-  (let ((types (remove-if-not
-                (lambda (type)
-                  (multiple-value-bind (minimum maximum)
-                      (parsonic::compute-bounds/compile
-                       (parsonic::expand/compile (ensure-list type)))
-                    (= minimum maximum)))
-                *xseq-event-variable-value-types*)))
-    `(progn
-       ,@(loop for class in *xseq-events*
-               for definition = (get class 'variable-value-definition)
-               when (member (car definition) types :test #'equal)
-                 append (cdr definition))
-       ,@(loop for type in types
-               for name = (if (symbolp type) type (intern (princ-to-string type)))
-               for parameters = (remove-if-not #'symbolp (cdr (ensure-list type)))
-               append (append (unless (symbolp type)
-                                `((defbinalias ,name ,parameters ,type)))
-                              `((defbinio (,name ,@parameters) (simple-array (unsigned-byte 8) (*)))))))))
+  `(progn
+     ,@(loop for type in *xseq-event-variable-value-types*
+             for name = (if (symbolp type) type (intern (princ-to-string type)))
+             for parameters = (remove-if-not #'symbolp (cdr (ensure-list type)))
+             append (append (unless (symbolp type)
+                              `((defbinalias ,name ,parameters ,type)))
+                            `((defbinio (,name ,@parameters) (simple-array (unsigned-byte 8) (*))))))))
 
 
 (defmacro define-xseq-event-unions ()
