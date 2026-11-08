@@ -128,7 +128,7 @@ GRP 条目通过 `nintendo-ware::xgrp-entry-file-id` 保留归档中的原始文
 
 `define-xseq-event` 仿照 Nitro 的 `define-sseq-event`，从同一份字段声明生成完整和 `/partial` 布局；random/variable 内嵌的子事件使用 `/partial`，省略最后一个参数，而不是最后一个字节。多字节事件标记不产生额外的消费对象，reader 直接返回具体事件类型。
 
-内部 `xseq-event-variable-value` 与 `(setf xseq-event-variable-value)` 由 `define-xseq-event` 生成，仅处理最后一个 slot 的 `:type`。声明时用 `pushnew :test #'equal` 收集类型并提前声明 reader／writer 的 `ftype`；所有事件声明后，`define-event-variable-value-types-io` 为非 symbol 类型以 `(intern (princ-to-string type))` 建立 `defbinalias`，统一通过 `defbinio` 生成独立的 `read-类型`／`write-类型`。方法直接调用这些函数，不展开 binstruct 内部 emitter，也不自行运行 parser。变量存储仍为 s16，raw 容器为 u16，局部缓冲固定为 simple-array u8[2]；仅处理一至两字节的整数、布尔和枚举字段。VLQ、u24、子事件和无参数事件没有此接口；消费端仍先复制事件再直接 setf，opcode、前置字段、播放单位及 VLQ 实现均不改动。
+内部 `xseq-event-variable-value` 与 `(setf xseq-event-variable-value)` 由 `define-xseq-event` 生成，仅处理最后一个 slot 的 `:type`。声明时用 `pushnew :test #'equal` 收集类型并提前声明 reader／writer 的 `ftype`；所有事件声明后，`define-event-variable-value-types-io` 为非 symbol 类型以 `(intern (princ-to-string type))` 建立 `defbinalias`，统一通过 `defbinio` 生成独立的 `read-类型`／`write-类型`。方法直接调用这些函数，不展开 binstruct 内部 emitter，也不自行运行 parser。变量存储仍为 s16，raw 容器为 u16，局部缓冲固定为 simple-array u8[2]；不按字段类型或编码长度筛选 operand，也不为 boolean 特判；一律按小端拆出低 16 位并调用原生 reader／writer，解析错误直接抛出。所有有参数事件（包括超过 16 位的字段和子事件字段）都生成方法，无参数事件不生成；消费端仍先复制事件再直接 setf，opcode、前置字段、播放单位及 VLQ 实现均不改动。
 
 事件标记参数 `event-bytes` 用 `ensure-list` 统一：单字节写 `(wait #x80)`，多字节写 `(mod2-phase (#xf0 #xa1))`，也支持任意更长的固定字节序列。每个标记字节生成一个独立的 `satisfies`/`eql` 声明；没有 `extended` 标志或专用扩展事件 union。`/partial` 由外层提供已消费的第一个标记字节，其余标记字节仍逐个校验，只省略最后一个参数。音符的首字节是音高，因此单独声明其范围布局。
 
