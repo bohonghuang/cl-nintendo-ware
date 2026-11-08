@@ -63,50 +63,47 @@
   (defvar *xseq-event-variable-value-types* nil))
 
 (defmacro define-xseq-event ((name event-bytes) &body fields)
-  (let* ((class (symbolicate 'xseq-event- name))
-         (partial (symbolicate class '/partial))
-         (field (car (last fields)))
-         (type (getf (cddr field) :type))
+  (let* ((class (symbolicate '#:xseq-event- name))
+         (class-partial (symbolicate class '#:/partial))
+         (last-field (car (last fields)))
+         (variable-value-type (getf (cddr last-field) :type))
          (bytes (ensure-list event-bytes))
          (tags (loop for byte in bytes collect
                  `(nil ,byte :type (satisfies (unsigned-byte 8) (curry #'eql ,byte))))))
     (with-gensyms (status)
       `(progn
          (defbinstruct/me (,class (:include xseq-event)) () ,@tags ,@fields)
-         (defbinstruct/me (,partial (:type ,class)) (,status)
+         (defbinstruct/me (,class-partial (:type ,class)) (,status)
            (nil ,(first bytes) :type (satisfies (map null (constantly ,status))
                                               (curry #'eql ,(first bytes))))
            ,@(rest tags)
-           ,@(if (and fields (subtypep (binstruct::lisp-type type) 'xseq-event))
+           ,@(if (and fields (subtypep (binstruct::lisp-type variable-value-type) 'xseq-event))
                  fields (butlast fields)))
-         ,@(let* ((accessor (symbolicate class '- (first field)))
-                   (reader (intern (format nil "READ-~A" type)))
-                   (writer (intern (format nil "WRITE-~A" type)))
-                   (parameters (remove-if-not #'symbolp (cdr (ensure-list type)))))
-             (when (and field
-                        (ignore-errors
-                          (multiple-value-bind (minimum maximum)
-                              (parsonic::compute-bounds/compile
-                               (parsonic::expand/compile (ensure-list type)))
-                            (= minimum maximum))))
+         ,@(let* ((accessor (symbolicate class '- (first last-field)))
+                  (reader (intern (format nil "~A-~A" 'read variable-value-type)))
+                  (writer (intern (format nil "~A-~A" 'write variable-value-type)))
+                  (parameters (remove-if-not #'symbolp (cdr (ensure-list variable-value-type)))))
+             (when (ignore-errors
+                    (multiple-value-bind (minimum maximum)
+                        (parsonic::compute-bounds/compile
+                         (parsonic::expand/compile (ensure-list variable-value-type)))
+                      (= minimum maximum)))
                `((eval-when (:compile-toplevel :load-toplevel :execute)
-                   (pushnew ',type *xseq-event-variable-value-types* :test #'equal))
-                   (declaim (ftype (function ((simple-array (unsigned-byte 8) (*)) ,@(mapcar (constantly t) parameters))
-                                             (values t)) ,reader)
-                            (ftype (function ((simple-array (unsigned-byte 8) (*)) t ,@(mapcar (constantly t) parameters))
-                                             (values (simple-array (unsigned-byte 8) (*)))) ,writer))
-                   (defmethod xseq-event-variable-value ((event ,class))
-                     (let ((bytes (make-array 2 :element-type '(unsigned-byte 8) :initial-element 0)))
-                       (declare (dynamic-extent bytes))
-                       (,writer bytes (,accessor event))
-                       (logior (aref bytes 0) (ash (aref bytes 1) 8))))
-                   (defmethod (setf xseq-event-variable-value) (value (event ,class))
-                     (let ((bytes (make-array 2 :element-type '(unsigned-byte 8))))
-                       (declare (dynamic-extent bytes))
-                       (setf (aref bytes 0) (ldb (byte 8 0) value)
-                             (aref bytes 1) (ldb (byte 8 8) value))
-                       (setf (,accessor event) (,reader bytes)))
-                     value))))
+                   (pushnew ',variable-value-type *xseq-event-variable-value-types* :test #'equal))
+                 (declaim (ftype (function ((simple-array (unsigned-byte 8) (*)) ,@(mapcar (constantly t) parameters)) (values t)) ,reader)
+                          (ftype (function ((simple-array (unsigned-byte 8) (*)) t ,@(mapcar (constantly t) parameters)) (values (simple-array (unsigned-byte 8) (*)))) ,writer))
+                 (defmethod xseq-event-variable-value ((event ,class))
+                   (let ((bytes (make-array 2 :element-type '(unsigned-byte 8) :initial-element 0)))
+                     (declare (dynamic-extent bytes))
+                     (,writer bytes (,accessor event))
+                     (logior (aref bytes 0) (ash (aref bytes 1) 8))))
+                 (defmethod (setf xseq-event-variable-value) (value (event ,class))
+                   (let ((bytes (make-array 2 :element-type '(unsigned-byte 8))))
+                     (declare (dynamic-extent bytes))
+                     (setf (aref bytes 0) (ldb (byte 8 0) value)
+                           (aref bytes 1) (ldb (byte 8 8) value))
+                     (setf (,accessor event) (,reader bytes)))
+                   value))))
          (eval-when (:compile-toplevel :load-toplevel :execute)
            (pushnew ',class *xseq-events*))))))
 
@@ -460,14 +457,16 @@
 (define-xseq-event (mod4-period (#xf0 #xe6))
   (value 0 :type (signed-byte 16)))
 
-(defmacro define-event-variable-value-types-io ()
+(defmacro defbinio-xseq-event-variable-value-types ()
   `(progn
-     ,@(loop for type in *xseq-event-variable-value-types*
-             for name = (if (symbolp type) type (intern (princ-to-string type)))
-             for parameters = (remove-if-not #'symbolp (cdr (ensure-list type)))
-             append (append (unless (symbolp type)
-                              `((defbinalias ,name ,parameters ,type)))
-                            `((defbinio (,name ,@parameters) (simple-array (unsigned-byte 8) (*))))))))
+     ,@(loop :for type :in *xseq-event-variable-value-types*
+             :for name := (if (symbolp type) type (intern (princ-to-string type)))
+             :for parameters := (remove-if-not #'symbolp (cdr (ensure-list type)))
+             :unless (symbolp type)
+               :collect `(defbinalias ,name ,parameters ,type)
+             :collect `(defbinio (,name ,@parameters) (simple-array (unsigned-byte 8) (*))))))
+
+(defbinio-xseq-event-variable-value-types)
 
 
 (defmacro define-xseq-event-unions ()
@@ -479,7 +478,6 @@
                                     collect `(,(symbolicate type '/partial) status)))))))
 (define-xseq-event-unions)
 
-(define-event-variable-value-types-io)
 
 
 ;; These walkers operate on semantic events; binary positions stay local to
