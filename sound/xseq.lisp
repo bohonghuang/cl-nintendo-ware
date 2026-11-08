@@ -83,16 +83,14 @@
                    (reader (intern (format nil "READ-~A" type)))
                    (writer (intern (format nil "WRITE-~A" type)))
                    (parameters (remove-if-not #'symbolp (cdr (ensure-list type)))))
-             (when field
-               `((macrolet ((generate-variable-value-methods ()
-                              (when (ignore-errors
-                                      (multiple-value-bind (minimum maximum)
-                                          (parsonic::compute-bounds/compile
-                                           (parsonic::expand/compile '(,class)))
-                                        (= minimum maximum)))
-                                '(progn
-                                   (eval-when (:compile-toplevel :load-toplevel :execute)
-                                     (pushnew ',type *xseq-event-variable-value-types* :test #'equal))
+             (when (and field
+                        (ignore-errors
+                          (multiple-value-bind (minimum maximum)
+                              (parsonic::compute-bounds/compile
+                               (parsonic::expand/compile (ensure-list type)))
+                            (= minimum maximum))))
+               `((eval-when (:compile-toplevel :load-toplevel :execute)
+                   (pushnew ',type *xseq-event-variable-value-types* :test #'equal))
                    (declaim (ftype (function ((simple-array (unsigned-byte 8) (*)) ,@(mapcar (constantly t) parameters))
                                              (values t)) ,reader)
                             (ftype (function ((simple-array (unsigned-byte 8) (*)) t ,@(mapcar (constantly t) parameters))
@@ -108,8 +106,7 @@
                        (setf (aref bytes 0) (ldb (byte 8 0) value)
                              (aref bytes 1) (ldb (byte 8 8) value))
                        (setf (,accessor event) (,reader bytes)))
-                     value)))))
-                   (generate-variable-value-methods)))))
+                     value))))
          (eval-when (:compile-toplevel :load-toplevel :execute)
            (pushnew ',class *xseq-events*))))))
 
