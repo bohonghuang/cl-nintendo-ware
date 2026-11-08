@@ -25,6 +25,7 @@
   :serial t
   :components ((:static-file "test/data/mset.bcsar")
                (:static-file "test/data/TigerSound.bcsar")
+               (:static-file "test/data/menu.bcsar")
                (:file "test/sequence")
                (:file "test/endian-fixtures")
                (:file "test/formats")

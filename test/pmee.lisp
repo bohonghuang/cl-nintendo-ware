@@ -193,6 +193,7 @@
                            (incf encoded-bytes (length data)))))))))
       (assert (= 273362 encoded-bytes))))
   (run-tiger-tests)
+  (run-menu-tests)
   (format t "Real mset.bcsar regression passed: 19 embedded files and 34 waves.~%"))
 
 (defun run-tiger-tests ()
@@ -212,3 +213,130 @@
                     when track do
                       (assert (nintendo-ware::xsar-stream-track-channels track))))))
   (format t "Real TigerSound.bcsar stream track regression passed.~%"))
+
+(defun run-menu-tests ()
+  (let* ((archive (nintendo-ware::read-file
+                   'nintendo-ware::xsar
+                   (asdf:system-relative-pathname :cl-nintendo-ware #P"test/data/menu.bcsar")))
+         (info (nintendo-ware::xsar-info archive))
+         (sounds (nintendo-ware::xsar-sounds-table-entries (nintendo-ware::xsar-info-sounds info)))
+         (files (nintendo-ware::xsar-files archive))
+         ;; File types are selected by this consumer, not inferred by XSAR.
+         (contents (map 'vector
+                        (lambda (file type)
+                          (when type
+                            (nintendo-ware::read-file type (nintendo-ware::xsar-file-data file))))
+                        files
+                        '#(nil nil
+                           nintendo-ware::xseq nintendo-ware::xseq nintendo-ware::xseq
+                           nintendo-ware::xseq nintendo-ware::xseq nintendo-ware::xseq
+                           nintendo-ware::xseq nintendo-ware::xseq nintendo-ware::xseq
+                           nintendo-ware::xseq nintendo-ware::xseq
+                           nintendo-ware::xwsd nintendo-ware::xwsd
+                           nintendo-ware::xbnk nintendo-ware::xbnk nintendo-ware::xbnk
+                           nintendo-ware::xbnk nintendo-ware::xbnk nintendo-ware::xbnk
+                           nintendo-ware::xgrp nintendo-ware::xgrp nintendo-ware::xgrp
+                           nintendo-ware::xwar nintendo-ware::xwar nintendo-ware::xwar
+                           nintendo-ware::xwar nintendo-ware::xwar nintendo-ware::xwar
+                           nintendo-ware::xwar nintendo-ware::xwar))))
+    (assert (string= "CSAR" (nintendo-ware::header-magic (nintendo-ware::xsar-header archive))))
+    (assert (eq :little (nintendo-ware::header-endian (nintendo-ware::xsar-header archive))))
+    (assert (= #x02000000 (nintendo-ware::header-version (nintendo-ware::xsar-header archive))))
+    (assert (= 133 (length (nintendo-ware::xsar-string-table-entries
+                           (nintendo-ware::xsar-strg-strings (nintendo-ware::xsar-strg archive))))))
+    (assert (= 104 (length sounds)))
+    ;; Counts, external paths, aliases and file lengths cross-checked with DualRip.
+    (assert (equal '("BGM_THEME" "BGM_THEME_MONO" "SE_CTR_MYMENU_DECIDE"
+                     "BGM_CTR_HOME_NO_INTRO" "BGM_CTR_HOME" "SE_CTR_HOME_CAPTURE_END"
+                     "SE_CTR_HOME_EX_ICON_SCROLL" "SE_CTR_HOME_BANNER_INVALID"
+                     "SE_CTR_HOME_BANNER_BASHOTORYA" "SE_CTR_HOME_WELCOME"
+                     "SE_CTR_BADGE_BACK" "SE_CTR_MYMENU_SAVE_DOWN" "BGM_THEME_SHOP"
+                     "SE_CTR_COMMON_TOGGLE" "SE_THEME_SCROLL" "BANK_CTR_COMMON"
+                     "BANK_CTR_HOME_BGM" "BANK_CTR_HOME" "BANK_CAVE" "BANK_WELCOME"
+                     "BANK_THEME_BGM" "GROUP_STATIC" "GROUP_BGM" "GROUP_BGM_THEME"
+                     nil nil nil nil nil nil nil nil)
+                   (map 'list #'nintendo-ware::xsar-file-name files)))
+    (assert (equal '(nil nil 1760 22624 31104 4032 1344 800 992 4512 928 512 8992
+                     664 360 1024 800 1616 440 456 1532 544 288 192
+                     2800 1952 25232 84336 49760 128 13032 65056)
+                   (map 'list (lambda (file)
+                                (let ((data (nintendo-ware::xsar-file-data file)))
+                                  (when data (length data))))
+                        files)))
+    ;; Version 2.0 stream details have no track-table reference. External paths
+    ;; remain metadata; extraction must not open them or collapse their IDs.
+    (loop for id from 0 below 2
+          for path in '("stream/BGM_THEME.bcstm" "stream/BGM_THEME_MONO.bcstm")
+          for channels in '(2 1)
+          for entries = (nintendo-ware::xsar-files-table-entries (nintendo-ware::xsar-info-files info))
+          for detail = (nintendo-ware::xsar-sound-detail (aref sounds id)) do
+            (assert (null (nintendo-ware::xsar-file-data (aref files id))))
+            (assert (string= path (nintendo-ware::xsar-external-file-text
+                                  (nintendo-ware::xsar-file-location (aref entries id)))))
+            (assert (= id (nintendo-ware::xsar-sound-file-id (aref sounds id))))
+            (assert (= channels (nintendo-ware::xsar-stream-sound-info-channel-count detail)))
+            (assert (null (nintendo-ware::xsar-stream-sound-info-tracks detail))))
+    (loop for id from 2 below 13
+          for expected in '(481 8989 13071 910 420 215 305 1859 155 50 2280) do
+            (assert (= expected (length (nintendo-ware::xseq-events (aref contents id))))))
+    (loop for id in '(13 14)
+          for expected in '(((1.0f0 0) (0.8f0 1) (1.8f0 1) (1.0f0 2))
+                            ((1.0f0 0) (1.0f0 0))) do
+            (assert (equal expected
+                           (map 'list
+                                (lambda (item)
+                                  (let ((notes (nintendo-ware::xwsd-note-table-entries
+                                                (nintendo-ware::xwsd-item-notes item))))
+                                    (assert (= 1 (length notes)))
+                                    (list (nintendo-ware::xwsd-parameters-pitch
+                                           (nintendo-ware::xwsd-item-parameters item))
+                                          (nintendo-ware::xwsd-note-wave-index (aref notes 0)))))
+                                (nintendo-ware::xwsd-item-table-entries
+                                 (nintendo-ware::xwsd-info-items
+                                  (nintendo-ware::xwsd-info (aref contents id))))))))
+    (loop for id from 15 below 21
+          for (waves instruments) in '((10 10) (7 15) (16 18) (4 3) (4 5) (16 11))
+          for bank = (nintendo-ware::xbnk-info (aref contents id)) do
+            (assert (= waves (length (nintendo-ware::wave-id-table-entries
+                                     (nintendo-ware::xbnk-info-waves bank)))))
+            (assert (= instruments (length (nintendo-ware::xbnk-instrument-table-entries
+                                           (nintendo-ware::xbnk-info-instruments bank))))))
+    ;; These groups reference archive file IDs without embedding duplicate data.
+    (loop for id from 21 below 24
+          for expected in '((13 24 2 15 26 5 17 28 6 16 27 7 8 14 25 10 11)
+                            (16 27 3 4 19 30 9) (20 31 12))
+          for entries = (nintendo-ware::xgrp-info-entries
+                         (nintendo-ware::xgrp-info (aref contents id))) do
+            (assert (equal expected (map 'list #'nintendo-ware::xgrp-entry-file-id entries)))
+            (loop for entry across entries do
+              (assert (null (nintendo-ware::xgrp-entry-data entry)))))
+    ;; Includes an empty WAR and a stereo DSP wave; retain both channels and
+    ;; encoded payloads rather than silently dropping the second channel.
+    (loop for id from 24 below 32
+          for expected-waves in '(3 1 10 7 16 0 4 16)
+          for expected-bytes in '(2060 1392 22160 81620 45248 0 11656 60328)
+          for waves = (nintendo-ware::xwar-waves (aref contents id))
+          for bytes = 0 do
+            (assert (= expected-waves (length waves)))
+            (loop for wave across waves
+                  for wave-info = (nintendo-ware::xwav-info wave) do
+                    (loop for channel across (nintendo-ware::xwav-info-channels wave-info)
+                          for data = (nintendo-ware::xwav-channel-data channel) do
+                            (ecase (nintendo-ware::xwav-info-codec wave-info)
+                              (nintendo-ware::pcm-16
+                               (assert (typep data '(simple-array (signed-byte 16) (*))))
+                               (assert (= (nintendo-ware::xwav-info-loop-end wave-info) (length data)))
+                               (incf bytes (* 2 (length data))))
+                              (nintendo-ware::dsp-adpcm
+                               (assert (typep data '(simple-array (unsigned-byte 8) (*))))
+                               (assert (typep (nintendo-ware::xwav-channel-codec-info channel)
+                                              'nintendo-ware::xwav-dsp-adpcm-info))
+                               (incf bytes (length data))))))
+            (assert (= expected-bytes bytes)))
+    (let* ((wave (aref (nintendo-ware::xwar-waves (aref contents 25)) 0))
+           (wave-info (nintendo-ware::xwav-info wave)))
+      (assert (eq 'nintendo-ware::dsp-adpcm (nintendo-ware::xwav-info-codec wave-info)))
+      (assert (= 32000 (nintendo-ware::xwav-info-sample-rate wave-info)))
+      (assert (= 1212 (nintendo-ware::xwav-info-loop-end wave-info)))
+      (assert (= 2 (length (nintendo-ware::xwav-info-channels wave-info))))))
+  (format t "Real menu.bcsar regression passed: 2 external files, 30 embedded files and 57 waves.~%"))

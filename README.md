@@ -194,6 +194,10 @@ file／section body 均通过原生文件位置锚点恢复 `%header`，不再�
 `test/data/TigerSound.bcsar` 同样保留自 [pmee](https://github.com/bohonghuang/pmee/blob/d70ec1d94bdfd544c12d4ac6ab4f6c722177de1a/TigerSound.bcsar)，804,112 字节，SHA-256 为 `20a0c70542261e6a74f904f1a1f5ed6925bf813b1b0c752e9ecd08b1557d2ed5`。默认真实归档回归覆盖其流声音 track/channel 引用。依据本地 3sf 的 `externals/ntdlib/src/sar/formats.cpp`，CSAR 2.3.0 起在流声音的通道数之后读取 track table 引用；此前布局没有该引用。不能将引用 tag `#x0101` 误作可选参数掩码。归档仍只提取原始子文件，不自动打开外部流文件。
 该样本的内部 FILE payload sized reference 使用 tag `0`；在 `#x220c` 内部文件位置的上下文中，reader 接受 `0` 和 `#x1f00`，保留其他 tag 的拒绝行为。3sf 同一解析器也直接使用此记录的 offset／size 定位数据。
 
+`test/data/menu.bcsar` 保留自 [pmee 的提交 `46a0e0859e6eecff2e3765a5779453e567d1d46c`](https://github.com/bohonghuang/pmee/blob/46a0e0859e6eecff2e3765a5779453e567d1d46c/menu.bcsar)，351,392 字节，SHA-256 为 `1017eb4a367cb202ac6018fb432b5654222487149d16242fa7d1f205e63f3eb2`。这是 CSAR 2.0.0／小端样本，默认真实归档回归覆盖 133 个字符串、104 个声音及全部 32 个文件 ID。前两个文件为外部 `stream/BGM_THEME.bcstm`／`stream/BGM_THEME_MONO.bcstm`：保留名称、路径、单／双声道元数据和 `NIL` 数据，不打开外部路径；此版本的流声音没有 track table 引用。归档计数、外部路径、资源别名和内嵌文件长度与 DualRip 独立解析结果核对。
+
+测试显式解析其余 30 个内嵌文件：11 个 CSEQ、2 个 CWSD、6 个 CBNK、3 个 CGRP、8 个 CWAR。断言完整序列事件数量、CWSD pitch／note 波形索引、bank 波形／乐器数量和 CGRP 文件 ID／空数据引用；CWAR 包括空归档与双声道 DSP 波形，共 57 个 CWAV／58 个声道，验证专用音频数组类型及各归档的编码数据字节数，并检查双声道波形的 codec、采样率与样本数。此覆盖不包含外部流文件解析、ADPCM 解码或播放。
+
 ```lisp
 (nintendo-ware:read-file 'nintendo-ware:xsar
                          (asdf:system-relative-pathname :cl-nintendo-ware #P"test/data/mset.bcsar"))
