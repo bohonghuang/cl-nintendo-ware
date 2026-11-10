@@ -33,7 +33,7 @@
   (interpolation-type 'polyphase :type xbnk-interpolation-type)
   (nil 0 :type (unsigned-byte 8)))
 
-(defbinstruct/me (xbnk-velocity-flag-set (:alignment 4)) ()
+(defbinstruct/me (xbnk-velocity-flags (:alignment 4)) ()
   (key-info-p nil :type (boolean bit))
   (volume-info-p nil :type (boolean bit))
   (pan-info-p nil :type (boolean bit))
@@ -49,49 +49,49 @@
 (defbinstruct/me xbnk-velocity (wave-count)
   (%start 0 :type position)
   (wave-index 0 :type (satisfies (unsigned-byte 32) (lambda (index) (< index wave-count))))
-  (flags (make-xbnk-velocity-flag-set) :type xbnk-velocity-flag-set)
-  (key-info nil :type (ecase (xbnk-velocity-flag-set-key-info-p flags)
+  (flags (make-xbnk-velocity-flags) :type xbnk-velocity-flags)
+  (key-info nil :type (ecase (xbnk-velocity-flags-key-info-p flags)
                         ((nil) null) ((t) xbnk-key-flag)))
-  (volume-info nil :type (ecase (xbnk-velocity-flag-set-volume-info-p flags)
+  (volume-info nil :type (ecase (xbnk-velocity-flags-volume-info-p flags)
                         ((nil) null) ((t) xbnk-volume-flag)))
-  (pan-info nil :type (ecase (xbnk-velocity-flag-set-pan-info-p flags)
+  (pan-info nil :type (ecase (xbnk-velocity-flags-pan-info-p flags)
                         ((nil) null) ((t) xbnk-pan-flag)))
-  (pitch nil :type (ecase (xbnk-velocity-flag-set-pitch-p flags)
+  (pitch nil :type (ecase (xbnk-velocity-flags-pitch-p flags)
                         ((nil) null) ((t) single-float)))
-  (note-info nil :type (ecase (xbnk-velocity-flag-set-note-info-p flags)
+  (note-info nil :type (ecase (xbnk-velocity-flags-note-info-p flags)
                         ((nil) null) ((t) xbnk-note-flag)))
   (reserved-5-7-values #.(make-array 0 :element-type '(unsigned-byte 32))
-    :type (simple-array (unsigned-byte 32) ((logcount (xbnk-velocity-flag-set-reserved-5-7 flags)))))
-  (send nil :type (ecase (xbnk-velocity-flag-set-send-p flags)
+    :type (simple-array (unsigned-byte 32) ((logcount (xbnk-velocity-flags-reserved-5-7 flags)))))
+  (send nil :type (ecase (xbnk-velocity-flags-send-p flags)
                         ((nil) null) ((t) (unsigned-byte 32))))
-  (envelope-offset nil :type (ecase (xbnk-velocity-flag-set-envelope-offset-p flags)
+  (envelope-offset nil :type (ecase (xbnk-velocity-flags-envelope-offset-p flags)
                         ((nil) null) ((t) (unsigned-byte 32))))
-  (randomizer nil :type (ecase (xbnk-velocity-flag-set-randomizer-p flags)
+  (randomizer nil :type (ecase (xbnk-velocity-flags-randomizer-p flags)
                         ((nil) null) ((t) (unsigned-byte 32))))
-  (low-pass nil :type (ecase (xbnk-velocity-flag-set-low-pass-p flags)
+  (low-pass nil :type (ecase (xbnk-velocity-flags-low-pass-p flags)
                         ((nil) null) ((t) (unsigned-byte 32))))
   (reserved-12-31-values #.(make-array 0 :element-type '(unsigned-byte 32))
-    :type (simple-array (unsigned-byte 32) ((logcount (xbnk-velocity-flag-set-reserved-12-31 flags)))))
+    :type (simple-array (unsigned-byte 32) ((logcount (xbnk-velocity-flags-reserved-12-31 flags)))))
   (envelope nil :type
             (ecase (and envelope-offset (/= envelope-offset #xffffffff))
               ((nil) null)
               ((t)
                (values
                 (pointer
-                 (or null-reference
+                 (or nintendo-ware-null-reference
                      (values
                       (pointer (map xbnk-adshr-curve
                                     (the (function (t) (or null xbnk-adshr-curve)) #'identity))
-                               (reference-offset-value 0)
+                               (nintendo-ware-reference-offset-value 0)
                                (+ %start envelope-offset))))
                  (map null (constantly (+ %start envelope-offset)))))))))
 
 (defbinstruct/me xbnk-velocity-direct (wave-count)
   ($xbnk-velocity-direct-start 0 :type position)
-  (entry nil :type (or null-reference
+  (entry nil :type (or nintendo-ware-null-reference
                        (values (pointer (map (xbnk-velocity wave-count)
                                              (the (function (t) (or null xbnk-velocity)) #'identity))
-                                        (reference-offset-value #x5902)
+                                        (nintendo-ware-reference-offset-value #x5902)
                                         $xbnk-velocity-direct-start)))))
 
 (defbinstruct/me xbnk-velocity-index (wave-count)
@@ -100,10 +100,10 @@
   (upper-bounds #.(make-array 0 :element-type '(unsigned-byte 8)) :type (simple-array (unsigned-byte 8) (count)))
   (padding #.(make-array 0 :element-type '(unsigned-byte 8)) :type (simple-array (unsigned-byte 8) ((mod (- count) 4))))
   (entries #() :type (simple-array
-                      (or null-reference
+                      (or nintendo-ware-null-reference
                           (values (pointer (map (xbnk-velocity wave-count)
                                                 (the (function (t) (or null xbnk-velocity)) #'identity))
-                                           (reference-offset-value #x5902)
+                                           (nintendo-ware-reference-offset-value #x5902)
                                            $xbnk-velocity-index-start))) (count))))
 
 (defbinstruct/me xbnk-velocity-range (wave-count)
@@ -112,28 +112,28 @@
   (maximum 0 :type (satisfies (unsigned-byte 8) (lambda (maximum) (<= minimum maximum 127))))
   (padding 0 :type (unsigned-byte 16))
   (entries #() :type (simple-array
-                      (or null-reference
+                      (or nintendo-ware-null-reference
                           (values (pointer (map (xbnk-velocity wave-count)
                                                 (the (function (t) (or null xbnk-velocity)) #'identity))
-                                           (reference-offset-value #x5902)
+                                           (nintendo-ware-reference-offset-value #x5902)
                                            $xbnk-velocity-range-start))) ((1+ (- maximum minimum))))))
 
 (defbinstruct/me xbnk-key (wave-count)
   (%start 0 :type position)
-  (reference (make-reference) :type reference)
-  (definition nil :type (ecase (= (reference-offset reference) -1)
+  (reference (make-nintendo-ware-reference) :type nintendo-ware-reference)
+  (definition nil :type (ecase (= (nintendo-ware-reference-offset reference) -1)
                           ((t) null)
-                          ((nil) (ecase (reference-type reference)
-                                   (#x6000 (values (pointer (xbnk-velocity-direct wave-count) (map null (constantly (reference-target reference %start #x6000))))))
-                                   (#x6001 (values (pointer (xbnk-velocity-index wave-count) (map null (constantly (reference-target reference %start #x6001))))))
-                                   (#x6002 (values (pointer (xbnk-velocity-range wave-count) (map null (constantly (reference-target reference %start #x6002)))))))))))
+                          ((nil) (ecase (nintendo-ware-reference-type reference)
+                                   (#x6000 (values (pointer (xbnk-velocity-direct wave-count) (map null (constantly (nintendo-ware-reference-target reference %start #x6000))))))
+                                   (#x6001 (values (pointer (xbnk-velocity-index wave-count) (map null (constantly (nintendo-ware-reference-target reference %start #x6001))))))
+                                   (#x6002 (values (pointer (xbnk-velocity-range wave-count) (map null (constantly (nintendo-ware-reference-target reference %start #x6002)))))))))))
 
 (defbinstruct/me xbnk-key-direct (wave-count)
   ($xbnk-key-direct-start 0 :type position)
-  (entry nil :type (or null-reference
+  (entry nil :type (or nintendo-ware-null-reference
                        (values (pointer (map (xbnk-key wave-count)
                                              (the (function (t) (or null xbnk-key)) #'identity))
-                                        (reference-offset-value #x5901)
+                                        (nintendo-ware-reference-offset-value #x5901)
                                         $xbnk-key-direct-start)))))
 
 (defbinstruct/me xbnk-key-index (wave-count)
@@ -142,10 +142,10 @@
   (upper-bounds #.(make-array 0 :element-type '(unsigned-byte 8)) :type (simple-array (unsigned-byte 8) (count)))
   (padding #.(make-array 0 :element-type '(unsigned-byte 8)) :type (simple-array (unsigned-byte 8) ((mod (- count) 4))))
   (entries #() :type (simple-array
-                      (or null-reference
+                      (or nintendo-ware-null-reference
                           (values (pointer (map (xbnk-key wave-count)
                                                 (the (function (t) (or null xbnk-key)) #'identity))
-                                           (reference-offset-value #x5901)
+                                           (nintendo-ware-reference-offset-value #x5901)
                                            $xbnk-key-index-start))) (count))))
 
 (defbinstruct/me xbnk-key-range (wave-count)
@@ -154,42 +154,42 @@
   (maximum 0 :type (satisfies (unsigned-byte 8) (lambda (maximum) (<= minimum maximum 127))))
   (padding 0 :type (unsigned-byte 16))
   (entries #() :type (simple-array
-                      (or null-reference
+                      (or nintendo-ware-null-reference
                           (values (pointer (map (xbnk-key wave-count)
                                                 (the (function (t) (or null xbnk-key)) #'identity))
-                                           (reference-offset-value #x5901)
+                                           (nintendo-ware-reference-offset-value #x5901)
                                            $xbnk-key-range-start))) ((1+ (- maximum minimum))))))
 
 (defbinstruct/me xbnk-instrument (wave-count)
   (%start 0 :type position)
-  (reference (make-reference) :type reference)
-  (definition nil :type (ecase (= (reference-offset reference) -1)
+  (reference (make-nintendo-ware-reference) :type nintendo-ware-reference)
+  (definition nil :type (ecase (= (nintendo-ware-reference-offset reference) -1)
                           ((t) null)
-                          ((nil) (ecase (reference-type reference)
-                                   (#x6000 (values (pointer (xbnk-key-direct wave-count) (map null (constantly (reference-target reference %start #x6000))))))
-                                   (#x6001 (values (pointer (xbnk-key-index wave-count) (map null (constantly (reference-target reference %start #x6001))))))
-                                   (#x6002 (values (pointer (xbnk-key-range wave-count) (map null (constantly (reference-target reference %start #x6002)))))))))))
+                          ((nil) (ecase (nintendo-ware-reference-type reference)
+                                   (#x6000 (values (pointer (xbnk-key-direct wave-count) (map null (constantly (nintendo-ware-reference-target reference %start #x6000))))))
+                                   (#x6001 (values (pointer (xbnk-key-index wave-count) (map null (constantly (nintendo-ware-reference-target reference %start #x6001))))))
+                                   (#x6002 (values (pointer (xbnk-key-range wave-count) (map null (constantly (nintendo-ware-reference-target reference %start #x6002)))))))))))
 
 (defbinstruct/me xbnk-instrument-table (wave-count)
   ($xbnk-instrument-table-start 0 :type position)
   (count 0 :type (unsigned-byte 32))
   (entries #() :type (simple-array
-                      (or null-reference
+                      (or nintendo-ware-null-reference
                           (values (pointer (map (xbnk-instrument wave-count)
                                                 (the (function (t) (or null xbnk-instrument)) #'identity))
-                                           (reference-offset-value #x5900)
+                                           (nintendo-ware-reference-offset-value #x5900)
                                            $xbnk-instrument-table-start))) (count))))
 
 (define-nintendo-ware-section (xbnk-info (:magic "INFO"))
   ($info-start 0 :type position)
-  (waves-reference (make-reference) :type reference)
-  (instruments-reference (make-reference) :type reference)
-  (waves nil :type (ecase (= (reference-offset waves-reference) -1)
+  (waves-reference (make-nintendo-ware-reference) :type nintendo-ware-reference)
+  (instruments-reference (make-nintendo-ware-reference) :type nintendo-ware-reference)
+  (waves nil :type (ecase (= (nintendo-ware-reference-offset waves-reference) -1)
                      ((t) null)
-                     ((nil) (values (pointer wave-id-table (map null (constantly (reference-target waves-reference $info-start #x0100))))))))
-  (instruments nil :type (ecase (= (reference-offset instruments-reference) -1)
+                     ((nil) (values (pointer nintendo-ware-sound-wave-id-table (map null (constantly (nintendo-ware-reference-target waves-reference $info-start #x0100))))))))
+  (instruments nil :type (ecase (= (nintendo-ware-reference-offset instruments-reference) -1)
                            ((t) null)
-                           ((nil) (values (pointer (xbnk-instrument-table (if waves (wave-id-table-count waves) 0)) (map null (constantly (reference-target instruments-reference $info-start #x0101)))))))))
+                           ((nil) (values (pointer (xbnk-instrument-table (if waves (nintendo-ware-sound-wave-id-table-count waves) 0)) (map null (constantly (nintendo-ware-reference-target instruments-reference $info-start #x0101)))))))))
 
 (define-nintendo-ware-file (xbnk (:magic ("CBNK" "FBNK")))
   (info nil :type (values (pointer xbnk-info (map null (constantly (block-start %header #x5800)))))))

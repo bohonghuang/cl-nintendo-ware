@@ -548,9 +548,9 @@
 (defbinalias xseq-track/le (end labels) (xseq-track end labels))
 
 (defbinstruct/me xseq-label-entry ()
-  (index 0 :type (map (satisfies reference
-                                 (lambda (reference) (reference-target reference 0 #x1f00)))
-                      #'reference-offset))
+  (index 0 :type (map (satisfies nintendo-ware-reference
+                                 (lambda (reference) (nintendo-ware-reference-target reference 0 #x1f00)))
+                      #'nintendo-ware-reference-offset))
   (length 0 :type (unsigned-byte 32))
   (name #.(coerce "" 'simple-base-string) :type (simple-base-string length))
   (nil 0 :type (satisfies (unsigned-byte 8))))
@@ -559,10 +559,10 @@
   ($labels-start 0 :type position)
   (count 0 :type (unsigned-byte 32))
   (entries #() :type (simple-array
-                      (or null-reference
+                      (or nintendo-ware-null-reference
                           (values (pointer (map xseq-label-entry
                                                 (the (function (t) (or null xseq-label-entry)) #'identity))
-                                           (reference-offset-value #x5100)
+                                           (nintendo-ware-reference-offset-value #x5100)
                                            $labels-start))) (count))))
 
 (define-nintendo-ware-section (xseq-data (:magic "DATA"))
@@ -571,7 +571,7 @@
   (%size 0 :type nintendo-ware-section-tail-size)
   (labels nil :type (values (pointer xseq-labels (map null (constantly (block-start %header #x5001))))))
   (%little nil :type (map null (lambda (ignored) (declare (ignore ignored))
-                                  (and (string= (header-magic %header) "FSEQ") (eq (header-endian %header) :little)))))
+                                  (and (string= (nintendo-ware-file-header-magic %header) "FSEQ") (eq (nintendo-ware-file-header-endian %header) :little)))))
   (%label-entries #() :type (map null (lambda (ignored) (declare (ignore ignored)) (xseq-labels-entries labels))))
   (events #.(make-array 0 :element-type 'xseq-event)
           :type (ecase %little

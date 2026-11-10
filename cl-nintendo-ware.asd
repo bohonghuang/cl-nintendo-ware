@@ -7,11 +7,12 @@
   :components ((:file "package")
                (:file "binary")
                (:file "common")
+               (:file "file")
                (:file "section")
-               (:file "container")
                (:module "sound"
                 :serial t
-                :components ((:file "xseq")
+                :components ((:file "sound")
+                             (:file "xseq")
                              (:file "xwav")
                              (:file "xwar")
                              (:file "xbnk")

@@ -22,8 +22,8 @@
                            nintendo-ware::xwar nintendo-ware::xwar nintendo-ware::xwar nintendo-ware::xwar
                            nintendo-ware::xwar nintendo-ware::xwar nintendo-ware::xwar)))
          (project (nintendo-ware::xsar-info-project-info info)))
-    (assert (string= "CSAR" (nintendo-ware::header-magic (nintendo-ware::xsar-header archive))))
-    (assert (eq :little (nintendo-ware::header-endian (nintendo-ware::xsar-header archive))))
+    (assert (string= "CSAR" (nintendo-ware::nintendo-ware-file-header-magic (nintendo-ware::xsar-header archive))))
+    (assert (eq :little (nintendo-ware::nintendo-ware-file-header-endian (nintendo-ware::xsar-header archive))))
     (assert (= 67 (length strings)))
     (assert (= 50 (length sounds)))
     ;; cl-nitro naming semantics: the last named alias for a file ID wins;
@@ -175,7 +175,7 @@
                 (loop for wave across waves for (codec rate sample-count) in expected-waves do
                   (let* ((wave-info (nintendo-ware::xwav-info wave))
                          (channels (nintendo-ware::xwav-info-channels wave-info)))
-                    (assert (string= "CWAV" (nintendo-ware::header-magic (nintendo-ware::xwav-header wave))))
+                    (assert (string= "CWAV" (nintendo-ware::nintendo-ware-file-header-magic (nintendo-ware::xwav-header wave))))
                     (assert (eq (ecase codec (1 'nintendo-ware::pcm-16) (2 'nintendo-ware::dsp-adpcm))
                                 (nintendo-ware::xwav-info-codec wave-info)))
                     (assert (= rate (nintendo-ware::xwav-info-sample-rate wave-info)))
@@ -239,9 +239,9 @@
                            nintendo-ware::xwar nintendo-ware::xwar nintendo-ware::xwar
                            nintendo-ware::xwar nintendo-ware::xwar nintendo-ware::xwar
                            nintendo-ware::xwar nintendo-ware::xwar))))
-    (assert (string= "CSAR" (nintendo-ware::header-magic (nintendo-ware::xsar-header archive))))
-    (assert (eq :little (nintendo-ware::header-endian (nintendo-ware::xsar-header archive))))
-    (assert (= #x02000000 (nintendo-ware::header-version (nintendo-ware::xsar-header archive))))
+    (assert (string= "CSAR" (nintendo-ware::nintendo-ware-file-header-magic (nintendo-ware::xsar-header archive))))
+    (assert (eq :little (nintendo-ware::nintendo-ware-file-header-endian (nintendo-ware::xsar-header archive))))
+    (assert (= #x02000000 (nintendo-ware::nintendo-ware-file-header-version (nintendo-ware::xsar-header archive))))
     (assert (= 133 (length (nintendo-ware::xsar-string-table-entries
                            (nintendo-ware::xsar-strg-strings (nintendo-ware::xsar-strg archive))))))
     (assert (= 104 (length sounds)))
@@ -297,7 +297,7 @@
     (loop for id from 15 below 21
           for (waves instruments) in '((10 10) (7 15) (16 18) (4 3) (4 5) (16 11))
           for bank = (nintendo-ware::xbnk-info (aref contents id)) do
-            (assert (= waves (length (nintendo-ware::wave-id-table-entries
+            (assert (= waves (length (nintendo-ware::nintendo-ware-sound-wave-id-table-entries
                                      (nintendo-ware::xbnk-info-waves bank)))))
             (assert (= instruments (length (nintendo-ware::xbnk-instrument-table-entries
                                            (nintendo-ware::xbnk-info-instruments bank))))))

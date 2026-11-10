@@ -48,15 +48,15 @@ sbcl --dynamic-space-size 4096 --non-interactive --eval '(ql:quickload :cl-ninte
 
 模块和所属类型、函数、宏统一使用 `x` 加 magic 后三位的前缀；`x` 同时涵盖 C/F 两种容器。例如事件声明宏为 `define-xseq-event`，音符类型为 `xseq-event-note`。这是直接重命名，旧名称不再提供兼容别名。
 
-`common.lisp` 仅保留跨模块共用布局。SAR 专用的整数表、资源 ID 表、priority 数值字段位于 `sound/xsar.lisp`，使用 `xsar-integer-table`、`xsar-resource-id-table`、`xsar-packed-priority`；WSD 专用 pan/filter 数值字段位于 `sound/xwsd.lisp`，使用 `xwsd-packed-pan`、`xwsd-packed-filter`，访问器同样带模块前缀。
+`common.lisp` 仅保留输入分派、错误条件与通用引用布局。文件头和文件容器位于 `file.lisp`，区块布局位于 `section.lisp`。`sound/sound.lisp` 在所有 `sound/x___.lisp` 之前加载，共用 codec、byte table、resource ID 和 wave ID 布局统一使用 `nintendo-ware-sound-` 前缀。NintendoWare 专有类型使用库或模块前缀，通用 VLQ 原语保持原名；记录位域类型统一命名为 `*-flags`。SAR 专用的整数表、资源 ID 表、priority 数值字段位于 `sound/xsar.lisp`，使用 `xsar-integer-table`、`xsar-resource-id-table`、`xsar-packed-priority`；WSD 专用 pan/filter 数值字段位于 `sound/xwsd.lisp`，使用 `xwsd-packed-pan`、`xwsd-packed-filter`，访问器同样带模块前缀。
 
-BNK、WSD、SAR 的可选参数各有记录专属位域 set，开关字段使用 binstruct 原生 `(boolean bit)`，名称以 `-p` 结尾。语义字段按位号顺序直接读取，缺席为 `NIL`，不经通用整数数组二次解码。32 位数值位域在定义侧指定 `(:alignment 4)`，由 binstruct 原生处理整数分组和端序；`defbinstruct/me` 直接透传该选项，不重排字段。位号、资料来源及保留位规则见 [ENDIAN.md](ENDIAN.md#optional-parameter-flag-sets)。
+BNK、WSD、SAR 的可选参数各有记录专属位域 set，开关字段使用 binstruct 原生 `(boolean bit)`，名称以 `-p` 结尾。语义字段按位号顺序直接读取，缺席为 `NIL`，不经通用整数数组二次解码。32 位数值位域在定义侧指定 `(:alignment 4)`，由 binstruct 原生处理整数分组和端序；`defbinstruct/me` 直接透传该选项，不重排字段。位号、资料来源及保留位规则见 [ENDIAN.md](ENDIAN.md#optional-parameter-flagss)。
 
 `xwar-waves` 仿照 Nitro 的 `swar-waves`，直接返回按 wave index 排列的 WAV 结构向量；保留空引用为 `NIL`，不压缩索引，也不复制或解码编码音频。调用方不需要遍历 INFO section 和 reference entry。
 
 共用解析布局不等于保证所有游戏、版本和编码组合兼容。原始 ID、引用及可选字段保留；空引用为 `NIL`。外部档案路径只读取为字符串，绝不自动打开。
 
-资源 ID 按原生 32 位数值位域解析为内部 `resource-id`：`resource-id-index` 是低 24 位表索引，`resource-id-type` 是高 8 位类型 tag；`resource-id-value` 可无损取得原值，包括未知 tag 和 `#xffffffff`。WAV/BNK/WSD 的 `wave-id-archive-id`、SAR 的资源引用与资源 ID 表、GRP dependency 均使用此布局；ID 表使用 `xsar-resource-id-table-entries`，普通 File ID 表仍使用 `xsar-integer-table-entries`。消费端不再自行提取位。类型 tag 保留为整数，不擅自拒绝未知资源种类。
+资源 ID 按原生 32 位数值位域解析为内部 `nintendo-ware-sound-resource-id`：`nintendo-ware-sound-resource-id-index` 是低 24 位表索引，`nintendo-ware-sound-resource-id-type` 是高 8 位类型 tag；`nintendo-ware-sound-resource-id-value` 可无损取得原值，包括未知 tag 和 `#xffffffff`。WAV/BNK/WSD 的 `nintendo-ware-sound-wave-id-archive-id`、SAR 的资源引用与资源 ID 表、GRP dependency 均使用此布局；ID 表使用 `xsar-resource-id-table-entries`，普通 File ID 表仍使用 `xsar-integer-table-entries`。消费端不再自行提取位。类型 tag 保留为整数，不擅自拒绝未知资源种类。
 
 ### WAV 原生采样数据
 
@@ -175,7 +175,7 @@ file／section body 均通过原生文件位置锚点恢复 `%header`，不再�
 
 也接受 binstruct 风格的可选参数列表；生产 schema 最多三个参数。递归类型用无 body 的 `(defbinstruct/me name)` 提前注册展开函数，随后提供完整声明，见 `xseq-event-union`。打包为 32 位整数的数值子字段统一用 `(:alignment 4)`，由 binstruct 按位偏移和端序处理，不手写反序布局。
 
-寻址直接使用 binstruct 原生 `pointer`，不使用 `peek` 或自定义 `reference-to` 类型展开。可空引用在字段中声明为原生 `or`：`null-reference` 匹配 `-1` 偏移并返回 `NIL`，非空分支的 pointer 以 `reference-offset-value` 读取并校验 tag／非负偏移。目标使用与 cl-nitro 相同的 typed identity `map`，保留具体语义类型，同时允许原生延迟寻址的默认值为 `NIL`；不分配临时 reference 对象，不引入运行时 parser 参数。
+寻址直接使用 binstruct 原生 `pointer`，不使用 `peek` 或自定义 `reference-to` 类型展开。可空引用在字段中声明为原生 `or`：`nintendo-ware-null-reference` 匹配 `-1` 偏移并返回 `NIL`，非空分支的 pointer 以 `nintendo-ware-reference-offset-value` 读取并校验 tag／非负偏移。目标使用与 cl-nitro 相同的 typed identity `map`，保留具体语义类型，同时允许原生延迟寻址的默认值为 `NIL`；不分配临时 reference 对象，不引入运行时 parser 参数。
 
 `$...` position 可跨结构并参与原生延迟解析，`%...` position 保持局部。pointer 基址直接使用 `$info-start` 等符号，不包 `progn`；嵌套表使用各记录独有的 `$...-start` 锚点，避免子表覆盖外表基址。pointer 不在字段类型最外层时必须包原生 `values`，例如 `or` 分支和数组元素中的 `(values (pointer ...))`，使目标在当前单元内解析完毕，也确保后续字段能读取目标值。不添加目录跨度、重叠或 sized-reference 子文件长度校验；文件／区块 size 参与尾部 padding 读取，截断 padding 也会导致读取失败，不承诺完整格式校验或受限输入沙箱。
 

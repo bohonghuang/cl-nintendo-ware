@@ -338,7 +338,7 @@
          (note (aref events 0)) (tempo (aref events 1))
          (random (aref events 2)) (extended (aref events 3))
          (label (aref (nintendo-ware::xseq-labels-entries (nintendo-ware::xseq-labels sequence)) 0)))
-    (assert (= #x01020300 (nintendo-ware::header-version (nintendo-ware::xseq-header sequence))))
+    (assert (= #x01020300 (nintendo-ware::nintendo-ware-file-header-version (nintendo-ware::xseq-header sequence))))
     (assert (string= "start" (nintendo-ware::xseq-label-entry-name label)))
     (assert (= 0 (nintendo-ware::xseq-label-entry-index label)))
     (assert (typep note 'nintendo-ware::xseq-event-note))
@@ -354,8 +354,8 @@
     (assert (= -2 (nintendo-ware::xseq-event-set-variable-value extended)))
     (assert (typep (aref events 4) 'nintendo-ware::xseq-event-finish))
     (assert (equalp sequence (nintendo-ware::read-file 'nintendo-ware::xseq (flexi-streams:make-in-memory-input-stream bytes))))
-    (rejects nintendo-ware::invalid-file (nintendo-ware::read-file 'nintendo-ware::xwav bytes))
-    (rejects nintendo-ware::invalid-file (nintendo-ware::read-file 'nintendo-ware::xseq (sequence-fixture #(#xff) :label-offset 24))))
+    (rejects nintendo-ware::nintendo-ware-invalid-file (nintendo-ware::read-file 'nintendo-ware::xwav bytes))
+    (rejects nintendo-ware::nintendo-ware-invalid-file (nintendo-ware::read-file 'nintendo-ware::xseq (sequence-fixture #(#xff) :label-offset 24))))
   ;; Enum operands remain semantic under ordinary and nested event readers.
   (let ((events (nintendo-ware::xseq-events
                  (nintendo-ware::read-file 'nintendo-ware::xseq
@@ -403,6 +403,6 @@
                   (nintendo-ware::read-file 'nintendo-ware::xseq (sequence-fixture #(137 0 0 0))))))
     (assert (= 0 (nintendo-ware::xseq-event-jump-index (aref events 0)))))
   (dolist (body '(#(137 0 0 1) #(60 100 129) #(128 128 128 128 128) #(130)))
-    (rejects nintendo-ware::invalid-file
+    (rejects nintendo-ware::nintendo-ware-invalid-file
       (nintendo-ware::read-file 'nintendo-ware::xseq (sequence-fixture body :padded nil))))
   (format t "Typed SEQ events, embedded partials and indexed control flow passed.~%"))

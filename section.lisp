@@ -1,7 +1,7 @@
 (in-package #:nintendo-ware)
 
-(defbinstruct (nintendo-ware-file-header-at-start (:type header) (:constructor progn) (:conc-name nil)) ()
-  (values nil :type (pointer file-header (map null (constantly 0)) $nintendo-ware-file-start)))
+(defbinstruct (nintendo-ware-file-header-at-start (:type nintendo-ware-file-header) (:constructor progn) (:conc-name nil)) ()
+  (values nil :type (pointer nintendo-ware-file-header-reader (map null (constantly 0)) $nintendo-ware-file-start)))
 
 (defbinstruct/me nintendo-ware-section (expected-magic content)
   ($nintendo-ware-section-start 0 :type position)
@@ -31,7 +31,7 @@
                              (- (third %header) (- %position (first %header)))))))
 
 (defbinstruct/me nintendo-ware-section-body ()
-  (%header (make-header) :type nintendo-ware-file-header-at-start))
+  (%header (make-nintendo-ware-file-header) :type nintendo-ware-file-header-at-start))
 
 (defmacro define-nintendo-ware-section (name-and-options &body slots)
   (destructuring-bind (name &rest options) (ensure-list name-and-options)
@@ -59,4 +59,10 @@
                                   (,inner (,(symbolicate name '-body) ,instance)))
                                 (defun (setf ,accessor) (,value ,instance)
                                   (setf (,inner (,(symbolicate name '-body) ,instance)) ,value)))))))))
+
+
+(defbinstruct/me nintendo-ware-section-raw-block (expected-magic)
+  (magic #.(coerce "" 'simple-base-string) :type (satisfies (simple-base-string 4) (lambda (magic) (string= magic expected-magic))))
+  (size 0 :type (unsigned-byte 32))
+  (bytes #.(make-array 0 :element-type '(unsigned-byte 8)) :type (simple-array (unsigned-byte 8) ((- size 8)))))
 

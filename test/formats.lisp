@@ -153,7 +153,7 @@
                                             (list (list #x6800 "INFO" table) (list #x6801 "FILE" bytes)))))
              (waves (nintendo-ware::xwar-waves archive)))
         (let ((embedded (aref waves 0)))
-          (assert (> (nintendo-ware::header-start (nintendo-ware::xwav-header embedded)) 0))
+          (assert (> (nintendo-ware::nintendo-ware-file-header-start (nintendo-ware::xwav-header embedded)) 0))
           (assert (equalp (nintendo-ware::xwav-info-channels information)
                           (nintendo-ware::xwav-info-channels (nintendo-ware::xwav-info embedded)))))
         (assert (null (aref waves 1))))))
@@ -181,7 +181,7 @@
            (data (nintendo-ware::xwav-channel-data (aref (nintendo-ware::xwav-info-channels (nintendo-ware::xwav-info wave)) 0))))
       (assert (typep data `(simple-array ,(ecase codec (0 '(signed-byte 8)) (1 '(signed-byte 16))
                                                      (2 '(unsigned-byte 8)) (3 '(unsigned-byte 4))) (0))))))
-  (rejects nintendo-ware::invalid-file
+  (rejects nintendo-ware::nintendo-ware-invalid-file
     (nintendo-ware::read-file 'nintendo-ware::xwav (wave-fixture 0 :data-magic "JUNK")))
   (dolist (instrument-tag '(#x6000 #x6001 #x6002))
     (dolist (key-tag '(#x6000 #x6001 #x6002))
@@ -199,7 +199,7 @@
                          (#x6002 (aref (nintendo-ware::xbnk-velocity-range-entries velocities) 0))))
              (pan (nintendo-ware::xbnk-velocity-pan-info velocity)))
         (assert (= 0 (nintendo-ware::xbnk-velocity-wave-index velocity)))
-        (assert (= 7 (nintendo-ware::wave-id-index (aref (nintendo-ware::wave-id-table-entries (nintendo-ware::xbnk-info-waves (nintendo-ware::xbnk-info xbnk))) 0))))
+        (assert (= 7 (nintendo-ware::nintendo-ware-sound-wave-id-index (aref (nintendo-ware::nintendo-ware-sound-wave-id-table-entries (nintendo-ware::xbnk-info-waves (nintendo-ware::xbnk-info xbnk))) 0))))
         (assert (= 1.5f0 (nintendo-ware::xbnk-velocity-pitch velocity)))
         (assert (= 64 (nintendo-ware::xbnk-pan-flag-pan pan)))
         (assert (= 32 (nintendo-ware::xbnk-pan-flag-surround-pan pan)))
@@ -208,9 +208,9 @@
           (assert (= 0 (nintendo-ware::xbnk-note-flag-key-group note)))
           (assert (eq 'nintendo-ware::linear (nintendo-ware::xbnk-note-flag-interpolation-type note))))
         (assert (= 4 (nintendo-ware::xbnk-adshr-curve-hold (nintendo-ware::xbnk-velocity-envelope velocity)))))))
-  (rejects nintendo-ware::invalid-file (nintendo-ware::read-file 'nintendo-ware::xbnk (xbnk-fixture #x6000 #x6000 1)))
+  (rejects nintendo-ware::nintendo-ware-invalid-file (nintendo-ware::read-file 'nintendo-ware::xbnk (xbnk-fixture #x6000 #x6000 1)))
   ;; Removing size/overlap validation must not remove section identification.
-  (rejects nintendo-ware::invalid-file
+  (rejects nintendo-ware::nintendo-ware-invalid-file
     (nintendo-ware::read-file 'nintendo-ware::xwav
       (container-fixture "CWAV" (list (list #x7000 "JUNK" #()) (list #x7001 "DATA" #())))))
   (let* ((first (wave-fixture 2))

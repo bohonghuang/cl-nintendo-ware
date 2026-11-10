@@ -7,33 +7,33 @@
 
 (defbinstruct/me xgrp-entry ()
   (file-id 0 :type (unsigned-byte 32))
-  (reference (make-sized-reference) :type sized-reference)
-  (data nil :type (ecase (= (sized-reference-offset reference) -1)
+  (reference (make-nintendo-ware-sized-reference) :type nintendo-ware-sized-reference)
+  (data nil :type (ecase (= (nintendo-ware-sized-reference-offset reference) -1)
                    ((t) null)
-                   ((nil) (values (pointer (simple-array (unsigned-byte 8) ((sized-reference-size reference))) (map null (constantly (sized-reference-target reference 0 #x1f00))) $xgrp-data-start))))))
+                   ((nil) (values (pointer (simple-array (unsigned-byte 8) ((nintendo-ware-sized-reference-size reference))) (map null (constantly (nintendo-ware-sized-reference-target reference 0 #x1f00))) $xgrp-data-start))))))
 
 (defbinstruct/me xgrp-dependency ()
-  (resource-id (make-resource-id) :type resource-id) (load-flags 0 :type (unsigned-byte 32)))
+  (resource-id (make-nintendo-ware-sound-resource-id) :type nintendo-ware-sound-resource-id) (load-flags 0 :type (unsigned-byte 32)))
 
 (define-nintendo-ware-section (xgrp-info (:magic "INFO"))
   (nil nil :type (values (pointer xgrp-data-position (map null (constantly (if (block-reference %header #x7801 nil) (+ 8 (block-start %header #x7801)) 8))))))
   ($xgrp-info-start 0 :type position)
   (count 0 :type (unsigned-byte 32))
   (entries #() :type (simple-array
-                      (or null-reference
+                      (or nintendo-ware-null-reference
                           (values (pointer (map xgrp-entry
                                                 (the (function (t) (or null xgrp-entry)) #'identity))
-                                           (reference-offset-value #x7900)
+                                           (nintendo-ware-reference-offset-value #x7900)
                                            $xgrp-info-start))) (count))))
 
 (define-nintendo-ware-section (xgrp-infx (:magic "INFX"))
   ($xgrp-infx-start 0 :type position)
   (count 0 :type (unsigned-byte 32))
   (entries #() :type (simple-array
-                      (or null-reference
+                      (or nintendo-ware-null-reference
                           (values (pointer (map (xgrp-dependency)
                                                 (the (function (t) (or null xgrp-dependency)) #'identity))
-                                           (reference-offset-value #x7901)
+                                           (nintendo-ware-reference-offset-value #x7901)
                                            $xgrp-infx-start))) (count))))
 
 (define-nintendo-ware-file (xgrp (:magic ("CGRP" "FGRP")))
@@ -41,7 +41,7 @@
   (infx nil :type (ecase (not (null (block-reference %header #x7802 nil))) ((nil) null) ((t) (values (pointer xgrp-infx (map null (constantly (block-start %header #x7802))))))))
   (file nil :type (ecase (not (null (block-reference %header #x7801 nil)))
                      ((nil) null)
-                     ((t) (values (pointer (raw-block "FILE") (map null (constantly (block-start %header #x7801)))))))))
+                     ((t) (values (pointer (nintendo-ware-section-raw-block "FILE") (map null (constantly (block-start %header #x7801)))))))))
 
 (defbinio xgrp stream)
 

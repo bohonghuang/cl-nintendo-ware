@@ -62,7 +62,7 @@
                (tempo (nintendo-ware::xseq-event-if-sub-event (aref events 0)))
                (random (aref events 1))
                (note (nintendo-ware::xseq-event-random-sub-event random)))
-          (assert (eq endian (nintendo-ware::header-endian header)))
+          (assert (eq endian (nintendo-ware::nintendo-ware-file-header-endian header)))
           (assert (= 300 (nintendo-ware::xseq-event-tempo-value tempo)))
           (assert (= -12 (nintendo-ware::xseq-event-random-min random)))
           (assert (= 12 (nintendo-ware::xseq-event-random-max random)))
@@ -102,8 +102,8 @@
              (parsed (nintendo-ware::read-file 'nintendo-ware::xwar archive))
              (embedded (aref (nintendo-ware::xwar-waves parsed) 0))
              (channel (aref (nintendo-ware::xwav-info-channels (nintendo-ware::xwav-info embedded)) 0)))
-        (assert (eq endian (nintendo-ware::header-endian (nintendo-ware::xwar-header parsed))))
-        (assert (eq child-endian (nintendo-ware::header-endian (nintendo-ware::xwav-header embedded))))
+        (assert (eq endian (nintendo-ware::nintendo-ware-file-header-endian (nintendo-ware::xwar-header parsed))))
+        (assert (eq child-endian (nintendo-ware::nintendo-ware-file-header-endian (nintendo-ware::xwav-header embedded))))
         (ecase codec
           (1 (assert (equalp #(-32768 -1 32767) (nintendo-ware::xwav-channel-data channel))))
           (2 (assert (= -123 (aref (nintendo-ware::xwav-dsp-adpcm-info-coefficients
@@ -125,13 +125,13 @@
                                :key #'nintendo-ware::xgrp-entry-file-id))
            (parsed-sequence (nintendo-ware::read-file 'nintendo-ware::xseq
                                                     (nintendo-ware::xgrp-entry-data nested-entry))))
-      (assert (eq endian (nintendo-ware::header-endian (nintendo-ware::xgrp-header group))))
-      (assert (eq child-endian (nintendo-ware::header-endian (nintendo-ware::xgrp-header nested))))
+      (assert (eq endian (nintendo-ware::nintendo-ware-file-header-endian (nintendo-ware::xgrp-header group))))
+      (assert (eq child-endian (nintendo-ware::nintendo-ware-file-header-endian (nintendo-ware::xgrp-header nested))))
       (assert (= 12 (nintendo-ware::xseq-event-note-duration
                       (aref (nintendo-ware::xseq-events parsed-sequence) 0))))
       (dolist (container (list group nested))
         (assert (= #x03000000
-                   (nintendo-ware::resource-id-value
+                   (nintendo-ware::nintendo-ware-sound-resource-id-value
                     (nintendo-ware::xgrp-dependency-resource-id
                      (aref (nintendo-ware::xgrp-infx-entries (nintendo-ware::xgrp-infx container)) 0))))))))
   (assert (not (boundp 'nintendo-ware::*endian*)))
