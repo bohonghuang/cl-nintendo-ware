@@ -11,7 +11,7 @@
   (%stride 0 :type (values (pointer (unsigned-byte 16) (map null (constantly 0))
                                    $xstm-region-info-start)))
   (values #() :type (simple-array (xstm-region channels %stride) (count))))
-(define-nintendo-ware-reference (xstm-region-data-reference (:parameters (channels count)))
+(define-nintendo-ware-reference xstm-region-data-reference (channels count)
   (#x1f00 (xstm-region-data channels count)))
 
 (defbinstruct/me xstm-region-info (channels count)
@@ -23,7 +23,7 @@
 
 (defbinalias/me (xstm-samples (:type (simple-array (unsigned-byte 8) (*)))) (count)
   (simple-array (unsigned-byte 8) (count)))
-(define-nintendo-ware-reference (xstm-samples-reference (:parameters (count)))
+(define-nintendo-ware-reference xstm-samples-reference (count)
   (#x1f00 (xstm-samples count)))
 
 (defbinstruct/me xstm-original-loop-info ()
@@ -58,7 +58,7 @@
   (original-loop-info nil :type (ecase (>= major-version 4) ((nil) null) ((t) xstm-original-loop-info)))
   (secret-info nil :type (ecase (>= major-version 6) ((nil) null) ((t) xstm-secret-info))))
 
-(define-nintendo-ware-reference xstm-channel-indices-reference
+(define-nintendo-ware-reference xstm-channel-indices-reference ()
   (#x0100 (nintendo-ware-sound-channel-indices)))
 
 (defbinstruct/me xstm-track ()
@@ -71,17 +71,19 @@
   (%start 0 :type position)
   (codec-info nil :type (xwav-codec-reference %start)))
 
-(define-nintendo-ware-reference xstm-track-reference
+(define-nintendo-ware-reference xstm-track-reference ()
   (#x4101 (xstm-track)))
-(define-nintendo-ware-reference-array xstm-track-reference)
-(define-nintendo-ware-reference xstm-tracks-reference
+(define-nintendo-ware-reference-array xstm-track-reference-array ()
+  (rcurry #'xstm-track-reference))
+(define-nintendo-ware-reference xstm-tracks-reference ()
   (#x0101 (xstm-track-reference-array)))
-(define-nintendo-ware-reference (xstm-channel-reference (:parameters (encoding)))
+(define-nintendo-ware-reference xstm-channel-reference (encoding)
   (#x4102 (xstm-channel encoding)))
-(define-nintendo-ware-reference-array xstm-channel-reference encoding)
-(define-nintendo-ware-reference (xstm-channels-reference (:parameters (encoding)))
+(define-nintendo-ware-reference-array xstm-channel-reference-array (encoding)
+  (rcurry #'xstm-channel-reference encoding))
+(define-nintendo-ware-reference xstm-channels-reference (encoding)
   (#x0101 (xstm-channel-reference-array encoding)))
-(define-nintendo-ware-reference (xstm-stream-reference (:parameters (version)))
+(define-nintendo-ware-reference xstm-stream-reference (version)
   (#x4100 (xstm-stream-info version)))
 
 (defbinstruct (xstm-data-position (:type non-negative-fixnum)

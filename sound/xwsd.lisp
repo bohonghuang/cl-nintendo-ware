@@ -40,7 +40,7 @@
   (envelope-offset-p nil :type (boolean bit))
   (reserved-10-31 0 :type (unsigned-byte 22)))
 
-(define-nintendo-ware-reference xwsd-envelope-target
+(define-nintendo-ware-reference xwsd-envelope-target ()
   (0 (xwsd-envelope)))
 
 (defbinstruct/me (xwsd-envelope-reference (:type (or null xwsd-envelope))
@@ -101,28 +101,31 @@
   (position 0.0f0 :type single-float) (length 0.0f0 :type single-float)
   (note-index 0 :type (unsigned-byte 32)) (reserved 0 :type (unsigned-byte 32)))
 
-(define-nintendo-ware-reference xwsd-event-reference
+(define-nintendo-ware-reference xwsd-event-reference ()
   (#x4904 (xwsd-event)))
-(define-nintendo-ware-reference-array xwsd-event-reference)
-(define-nintendo-ware-reference xwsd-events-reference
+(define-nintendo-ware-reference-array xwsd-event-reference-array ()
+  (rcurry #'xwsd-event-reference))
+(define-nintendo-ware-reference xwsd-events-reference ()
   (0 (xwsd-event-reference-array)))
 
 (defbinstruct/me xwsd-track ()
   (%track-start 0 :type position)
   (events nil :type (xwsd-events-reference %track-start)))
 
-(define-nintendo-ware-reference xwsd-track-reference
+(define-nintendo-ware-reference xwsd-track-reference ()
   (#x4903 (xwsd-track)))
-(define-nintendo-ware-reference-array xwsd-track-reference)
-(define-nintendo-ware-reference xwsd-tracks-reference
+(define-nintendo-ware-reference-array xwsd-track-reference-array ()
+  (rcurry #'xwsd-track-reference))
+(define-nintendo-ware-reference xwsd-tracks-reference ()
   (#x0101 (xwsd-track-reference-array)))
 
-(define-nintendo-ware-reference xwsd-note-reference
+(define-nintendo-ware-reference xwsd-note-reference ()
   (#x4902 (xwsd-note)))
-(define-nintendo-ware-reference-array xwsd-note-reference)
-(define-nintendo-ware-reference xwsd-notes-reference
+(define-nintendo-ware-reference-array xwsd-note-reference-array ()
+  (rcurry #'xwsd-note-reference))
+(define-nintendo-ware-reference xwsd-notes-reference ()
   (#x0101 (xwsd-note-reference-array)))
-(define-nintendo-ware-reference xwsd-item-parameters-reference
+(define-nintendo-ware-reference xwsd-item-parameters-reference ()
   (#x4901 (xwsd-parameters nil)))
 
 (defbinstruct/me xwsd-item ()
@@ -131,12 +134,13 @@
   (tracks nil :type (xwsd-tracks-reference %item-start))
   (notes nil :type (xwsd-notes-reference %item-start)))
 
-(define-nintendo-ware-reference xwsd-item-reference
+(define-nintendo-ware-reference xwsd-item-reference ()
   (#x4900 (xwsd-item)))
-(define-nintendo-ware-reference-array xwsd-item-reference)
-(define-nintendo-ware-reference xwsd-items-reference
+(define-nintendo-ware-reference-array xwsd-item-reference-array ()
+  (rcurry #'xwsd-item-reference))
+(define-nintendo-ware-reference xwsd-items-reference ()
   (#x0101 (xwsd-item-reference-array)))
-(define-nintendo-ware-reference xwsd-waves-reference
+(define-nintendo-ware-reference xwsd-waves-reference ()
   (#x0100 (nintendo-ware-sound-wave-ids)))
 
 (define-nintendo-ware-section (xwsd-info (:magic "INFO"))

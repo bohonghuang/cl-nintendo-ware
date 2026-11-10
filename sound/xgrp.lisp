@@ -5,7 +5,7 @@
   ($xgrp-data-start 0 :type position)
   (values 0 :type (map null (constantly $xgrp-data-start))))
 
-(define-nintendo-ware-reference (xgrp-data-reference (:sized t))
+(define-nintendo-ware-reference (xgrp-data-reference (:sized t)) ()
   (#x1f00 (nintendo-ware-reference-octets)))
 
 (defbinstruct/me xgrp-entry ()
@@ -16,9 +16,9 @@
 (defbinstruct/me xgrp-dependency ()
   (resource-id (make-nintendo-ware-sound-resource-id) :type nintendo-ware-sound-resource-id) (load-flags 0 :type (unsigned-byte 32)))
 
-(define-nintendo-ware-reference xgrp-entry-reference
+(define-nintendo-ware-reference xgrp-entry-reference ()
   (#x7900 (xgrp-entry)))
-(define-nintendo-ware-reference xgrp-dependency-reference
+(define-nintendo-ware-reference xgrp-dependency-reference ()
   (#x7901 (xgrp-dependency)))
 
 (define-nintendo-ware-section (xgrp-info (:magic "INFO"))

@@ -560,7 +560,7 @@
   (%position 0 :type position)
   (%base 0 :type (values (pointer position (map null (constantly 0)) $xseq-events-start)))
   (values 0 :type (map null (constantly (- %position %base)))))
-(define-nintendo-ware-reference xseq-label-event-reference
+(define-nintendo-ware-reference xseq-label-event-reference ()
   (#x1f00 (xseq-label-event-index)))
 
 (defbinstruct/me xseq-label-entry ()
@@ -570,7 +570,7 @@
   (name #.(coerce "" 'simple-base-string) :type (simple-base-string length))
   (nil 0 :type (satisfies (unsigned-byte 8))))
 
-(define-nintendo-ware-reference xseq-label-reference
+(define-nintendo-ware-reference xseq-label-reference ()
   (#x5100 (xseq-label-entry)))
 
 (define-nintendo-ware-section (xseq-labels (:magic "LABL"))

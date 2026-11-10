@@ -26,11 +26,11 @@
   (initial-context (make-xwav-ima-adpcm-context) :type xwav-ima-adpcm-context)
   (loop-context (make-xwav-ima-adpcm-context) :type xwav-ima-adpcm-context))
 
-(define-nintendo-ware-reference xwav-codec-reference
+(define-nintendo-ware-reference xwav-codec-reference ()
   (#x0300 (xwav-dsp-adpcm-info))
   (#x0301 (xwav-ima-adpcm-info)))
 
-(define-nintendo-ware-reference (xwav-samples-reference (:parameters (codec sample-count)))
+(define-nintendo-ware-reference xwav-samples-reference (codec sample-count)
   (#x1f00 (ecase codec
             (pcm-8 (simple-array (signed-byte 8) (sample-count)))
             (pcm-16 (simple-array (signed-byte 16) (sample-count)))
@@ -45,7 +45,7 @@
   (codec-info nil :type (xwav-codec-reference %start))
   (reserved 0 :type (unsigned-byte 32)))
 
-(define-nintendo-ware-reference (xwav-channel-reference (:parameters (codec sample-count)))
+(define-nintendo-ware-reference xwav-channel-reference (codec sample-count)
   (#x7100 (xwav-channel codec sample-count)))
 
 (define-nintendo-ware-section (xwav-info (:magic "INFO"))

@@ -157,7 +157,7 @@
   (reserved-1-31-values #.(make-array 0 :element-type '(unsigned-byte 32))
     :type (simple-array (unsigned-byte 32) ((logcount (xsar-wave-sound-flags-reserved-1-31 flags))))))
 
-(define-nintendo-ware-reference xsar-channels-reference
+(define-nintendo-ware-reference xsar-channels-reference ()
   (#x0100 (nintendo-ware-sound-channel-indices)))
 
 (defbinstruct/me xsar-stream-track ()
@@ -168,19 +168,20 @@
   (flags 0 :type (unsigned-byte 8))
   (channels nil :type (xsar-channels-reference %track-start)))
 
-(define-nintendo-ware-reference xsar-stream-track-reference
+(define-nintendo-ware-reference xsar-stream-track-reference ()
   (#x220e (xsar-stream-track)))
-(define-nintendo-ware-reference-array xsar-stream-track-reference)
-(define-nintendo-ware-reference xsar-stream-tracks-reference
+(define-nintendo-ware-reference-array xsar-stream-track-reference-array ()
+  (rcurry #'xsar-stream-track-reference))
+(define-nintendo-ware-reference xsar-stream-tracks-reference ()
   (#x0101 (xsar-stream-track-reference-array)))
 
 (defbinstruct/me xsar-stream-extension ()
   (type 0 :type (unsigned-byte 32))
   (loop-start-frame 0 :type (unsigned-byte 32))
   (loop-end-frame 0 :type (unsigned-byte 32)))
-(define-nintendo-ware-reference xsar-stream-extension-reference
+(define-nintendo-ware-reference xsar-stream-extension-reference ()
   (#x2210 (xsar-stream-extension)))
-(define-nintendo-ware-reference xsar-stream-sends-reference
+(define-nintendo-ware-reference xsar-stream-sends-reference ()
   (#x220f (simple-array (unsigned-byte 8) (4))))
 
 (defbinstruct/me xsar-stream-sound-info (tracks-p)
@@ -257,7 +258,7 @@
   (count 0 :type (unsigned-byte 32))
   (nodes #() :type (simple-array xsar-patricia-node (count))))
 
-(define-nintendo-ware-reference (xsar-string-reference (:sized t))
+(define-nintendo-ware-reference (xsar-string-reference (:sized t)) ()
   (#x1f01 (nintendo-ware-reference-string)))
 (defbinstruct/me xsar-string ()
   (%base 0 :type (values (pointer position (map null (constantly 0)) $strings-start)))
@@ -269,9 +270,9 @@
   (%count 0 :type (unsigned-byte 32))
   (values #() :type (simple-array xsar-string (%count))))
 
-(define-nintendo-ware-reference xsar-strings-reference
+(define-nintendo-ware-reference xsar-strings-reference ()
   (#x2400 (xsar-strg-strings)))
-(define-nintendo-ware-reference xsar-tree-reference
+(define-nintendo-ware-reference xsar-tree-reference ()
   (#x2401 (xsar-patricia-tree)))
 
 (define-nintendo-ware-section (xsar-strg (:magic "STRG"))
@@ -279,7 +280,7 @@
   (strings nil :type (xsar-strings-reference %strg-start))
   (tree nil :type (xsar-tree-reference %strg-start)))
 
-(define-nintendo-ware-reference xsar-resource-ids-reference
+(define-nintendo-ware-reference xsar-resource-ids-reference ()
   (#x0100 (xsar-resource-ids)))
 
 (defbinstruct/me xsar-sequence-info ()
@@ -294,7 +295,7 @@
   (reserved-2-31-values #.(make-array 0 :element-type '(unsigned-byte 32))
     :type (simple-array (unsigned-byte 32) ((logcount (xsar-sequence-flags-reserved-2-31 flags))))))
 
-(define-nintendo-ware-reference (xsar-sound-detail-reference (:parameters (tracks-p)))
+(define-nintendo-ware-reference xsar-sound-detail-reference (tracks-p)
   (#x2203 (xsar-sequence-info))
   (#x2202 (xsar-wave-sound-info))
   (#x2201 (xsar-stream-sound-info tracks-p)))
@@ -340,9 +341,9 @@
   (reserved-0-31-values #.(make-array 0 :element-type '(unsigned-byte 32))
     :type (simple-array (unsigned-byte 32) ((logcount (xsar-wave-sound-group-flags-reserved-0-31 flags))))))
 
-(define-nintendo-ware-reference xsar-group-files-reference
+(define-nintendo-ware-reference xsar-group-files-reference ()
   (#x0100 (xsar-sound-group-files)))
-(define-nintendo-ware-reference xsar-wave-group-reference
+(define-nintendo-ware-reference xsar-wave-group-reference ()
   (#x2205 (xsar-wave-sound-group)))
 
 (defbinstruct/me xsar-sound-group ()
@@ -369,7 +370,7 @@
 (defbinstruct/me xsar-external-file ()
   (text #.(coerce "" 'simple-base-string) :type simple-base-string))
 
-(define-nintendo-ware-reference (xsar-data-reference (:sized t))
+(define-nintendo-ware-reference (xsar-data-reference (:sized t)) ()
   (0 (nintendo-ware-reference-octets))
   (#x1f00 (nintendo-ware-reference-octets)))
 
@@ -377,7 +378,7 @@
   (%base 0 :type (values (pointer position (map null (constantly 0)) $xsar-data-start)))
   (data nil :type (xsar-data-reference %base)))
 
-(define-nintendo-ware-reference xsar-file-location-reference
+(define-nintendo-ware-reference xsar-file-location-reference ()
   (#x220c (xsar-internal-file))
   (#x220d (xsar-external-file)))
 
@@ -388,48 +389,55 @@
   (reserved-0-31-values #.(make-array 0 :element-type '(unsigned-byte 32))
     :type (simple-array (unsigned-byte 32) ((logcount (xsar-file-flags-reserved-0-31 flags))))))
 
-(define-nintendo-ware-reference (xsar-sound-reference (:parameters (tracks-p)))
+(define-nintendo-ware-reference xsar-sound-reference (tracks-p)
   (#x2200 (xsar-sound tracks-p)))
-(define-nintendo-ware-reference-array xsar-sound-reference tracks-p)
-(define-nintendo-ware-reference (xsar-sounds-reference (:parameters (tracks-p)))
+(define-nintendo-ware-reference-array xsar-sound-reference-array (tracks-p)
+  (rcurry #'xsar-sound-reference tracks-p))
+(define-nintendo-ware-reference xsar-sounds-reference (tracks-p)
   (#x2100 (xsar-sound-reference-array tracks-p)))
 
-(define-nintendo-ware-reference xsar-sound-group-reference
+(define-nintendo-ware-reference xsar-sound-group-reference ()
   (#x2204 (xsar-sound-group)))
-(define-nintendo-ware-reference-array xsar-sound-group-reference)
-(define-nintendo-ware-reference xsar-sound-groups-reference
+(define-nintendo-ware-reference-array xsar-sound-group-reference-array ()
+  (rcurry #'xsar-sound-group-reference))
+(define-nintendo-ware-reference xsar-sound-groups-reference ()
   (#x2104 (xsar-sound-group-reference-array)))
 
-(define-nintendo-ware-reference xsar-bank-reference
+(define-nintendo-ware-reference xsar-bank-reference ()
   (#x2206 (xsar-bank)))
-(define-nintendo-ware-reference-array xsar-bank-reference)
-(define-nintendo-ware-reference xsar-banks-reference
+(define-nintendo-ware-reference-array xsar-bank-reference-array ()
+  (rcurry #'xsar-bank-reference))
+(define-nintendo-ware-reference xsar-banks-reference ()
   (#x2101 (xsar-bank-reference-array)))
 
-(define-nintendo-ware-reference xsar-wave-archive-reference
+(define-nintendo-ware-reference xsar-wave-archive-reference ()
   (#x2207 (xsar-wave-archive)))
-(define-nintendo-ware-reference-array xsar-wave-archive-reference)
-(define-nintendo-ware-reference xsar-wave-archives-reference
+(define-nintendo-ware-reference-array xsar-wave-archive-reference-array ()
+  (rcurry #'xsar-wave-archive-reference))
+(define-nintendo-ware-reference xsar-wave-archives-reference ()
   (#x2103 (xsar-wave-archive-reference-array)))
 
-(define-nintendo-ware-reference xsar-group-reference
+(define-nintendo-ware-reference xsar-group-reference ()
   (#x2208 (xsar-group)))
-(define-nintendo-ware-reference-array xsar-group-reference)
-(define-nintendo-ware-reference xsar-groups-reference
+(define-nintendo-ware-reference-array xsar-group-reference-array ()
+  (rcurry #'xsar-group-reference))
+(define-nintendo-ware-reference xsar-groups-reference ()
   (#x2105 (xsar-group-reference-array)))
 
-(define-nintendo-ware-reference xsar-player-reference
+(define-nintendo-ware-reference xsar-player-reference ()
   (#x2209 (xsar-player)))
-(define-nintendo-ware-reference-array xsar-player-reference)
-(define-nintendo-ware-reference xsar-players-reference
+(define-nintendo-ware-reference-array xsar-player-reference-array ()
+  (rcurry #'xsar-player-reference))
+(define-nintendo-ware-reference xsar-players-reference ()
   (#x2102 (xsar-player-reference-array)))
 
-(define-nintendo-ware-reference xsar-file-reference
+(define-nintendo-ware-reference xsar-file-reference ()
   (#x220a (xsar-file)))
-(define-nintendo-ware-reference-array xsar-file-reference)
-(define-nintendo-ware-reference xsar-files-reference
+(define-nintendo-ware-reference-array xsar-file-reference-array ()
+  (rcurry #'xsar-file-reference))
+(define-nintendo-ware-reference xsar-files-reference ()
   (#x2106 (xsar-file-reference-array)))
-(define-nintendo-ware-reference xsar-project-reference
+(define-nintendo-ware-reference xsar-project-reference ()
   (#x220b (xsar-project-info)))
 
 (define-nintendo-ware-section (xsar-info (:magic "INFO"))

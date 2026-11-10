@@ -268,7 +268,7 @@
                        :version (* major-version #x1000000))))
 
 ;; Each target captures its declared size before a child shadows the anchors.
-(nintendo-ware::define-nintendo-ware-reference (reference-probe-child (:sized t))
+(nintendo-ware::define-nintendo-ware-reference (reference-probe-child (:sized t)) ()
   (#x7001 (nintendo-ware::nintendo-ware-reference-octets)))
 (nintendo-ware::defbinstruct/me reference-probe-parent ()
   (size 0 :type nintendo-ware::nintendo-ware-reference-size)
@@ -276,7 +276,7 @@
   (value 0 :type (unsigned-byte 32))
   (child nil :type (reference-probe-child %base))
   (tail 0 :type (unsigned-byte 32)))
-(nintendo-ware::define-nintendo-ware-reference (reference-probe-root (:sized t))
+(nintendo-ware::define-nintendo-ware-reference (reference-probe-root (:sized t)) ()
   (#x7000 (reference-probe-parent)))
 (nintendo-ware::define-nintendo-ware-section (reference-probe-info (:magic "INFO"))
   (%base 0 :type position)

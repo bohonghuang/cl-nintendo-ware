@@ -5,7 +5,7 @@
   ($xwar-data-start 0 :type position)
   (values 0 :type (map null (constantly $xwar-data-start))))
 
-(define-nintendo-ware-reference (xwar-wave-reference (:sized t))
+(define-nintendo-ware-reference (xwar-wave-reference (:sized t)) ()
   (#x1f00 (xwav-embedded)))
 
 (define-nintendo-ware-section (xwar-info (:magic "INFO"))

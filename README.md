@@ -196,15 +196,16 @@ file／section body 均通过原生文件位置锚点恢复 `%header`，不再�
 引用通过 `define-nintendo-ware-reference` 声明 tag 与目标布局的对应关系，结果直接是目标值或 `NIL`，不再生成含 tag／offset 的 reference 对象。多个分支使用原生 `or` 分派；同一个 tag 在不同引用声明里可以对应不同目标类型。生成的 alias 使用 ME，以保证 BE 下的目标布局也正确分派：
 
 ```lisp
-(define-nintendo-ware-reference my-reference
+(define-nintendo-ware-reference my-reference ()
   (#x6000 (target-type-1))
   (#x6001 (target-type-2)))
 
 ;; 生成 my-reference-array；count 和每个元素的相对基址均在数组布局内部。
-(define-nintendo-ware-reference-array my-reference)
+(define-nintendo-ware-reference-array my-reference-array ()
+  (rcurry #'my-reference))
 ```
 
-字段使用 `(my-reference %base)`；数组元素类型由 `binstruct::lisp-type` 推导，而不是固定为 `t`。参数化目标通过 `(:parameters (argument ...))` 声明，例如 `(define-nintendo-ware-reference (xbnk-instrument-reference (:parameters (wave-count))) (#x5900 (xbnk-instrument wave-count)))`，对应调用 `(xbnk-instrument-reference %base wave-count)`；数组宏在名称后接相同参数。引用 alias 连同 base 最多三个参数。BNK、WSD、STM、SAR 原有的 15 个纯引用数组布局均已迁移。
+字段使用 `(my-reference %base)`。两个声明宏均接受显式 lambda-list；无参数时写 `()`。例如 `(define-nintendo-ware-reference xbnk-instrument-reference (wave-count) (#x5900 (xbnk-instrument wave-count)))` 生成 `(xbnk-instrument-reference %base wave-count)`。数组名称显式指定：`(define-nintendo-ware-reference-array instruments (wave-count) (rcurry #'xbnk-instrument-reference wave-count))`。`curry`／`rcurry` 只是宏展开标记，不创建闭包：`(curry #'reader a b)` 生成 `(reader a b base)`，`(rcurry #'reader a b)` 生成 `(reader base a b)`；标记必须为这两个符号之一，reader 必须使用 `#'`，即 `(function reader)`。数组元素类型仍由 `binstruct::lisp-type` 推导。引用 alias 连同隐式 base 最多三个参数，数组 lambda-list 不含该隐式 base。
 
 `(:sized t)` 选择 12 字节引用，否则为 8 字节。二者均由原生 `pointer` 定位、共用 `nintendo-ware-reference-target` 的 `inline` 包装；结果不含指针或供用户解引用的偏移。非空引用校验 tag 和 offset；`-1` 为空引用，保留其 tag 未定义的既有语义。Citrus 的非零基址使 pointer 可定位到 base−1，然后由 target 内的位置比较返回 `NIL`；空引用的 size 不参与 endpoint 初始化。框架不承诺零基址空引用。
 

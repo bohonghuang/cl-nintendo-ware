@@ -46,7 +46,7 @@
   (low-pass-p nil :type (boolean bit))
   (reserved-12-31 0 :type (unsigned-byte 20)))
 
-(define-nintendo-ware-reference xbnk-envelope-reference
+(define-nintendo-ware-reference xbnk-envelope-reference ()
   (0 (xbnk-adshr-curve)))
 
 (defbinstruct/me xbnk-velocity (wave-count)
@@ -82,7 +82,7 @@
                (values (pointer (xbnk-envelope-reference (+ %start envelope-offset))
                                 (map null (constantly (+ %start envelope-offset)))))))))
 
-(define-nintendo-ware-reference (xbnk-velocity-reference (:parameters (wave-count)))
+(define-nintendo-ware-reference xbnk-velocity-reference (wave-count)
   (#x5902 (xbnk-velocity wave-count)))
 
 (defbinstruct/me xbnk-velocity-direct (wave-count)
@@ -104,7 +104,7 @@
   (entries #() :type (simple-array (xbnk-velocity-reference %xbnk-velocity-range-start wave-count)
                                  ((1+ (- maximum minimum))))))
 
-(define-nintendo-ware-reference (xbnk-velocity-definition-reference (:parameters (wave-count)))
+(define-nintendo-ware-reference xbnk-velocity-definition-reference (wave-count)
   (#x6000 (xbnk-velocity-direct wave-count))
   (#x6001 (xbnk-velocity-index wave-count))
   (#x6002 (xbnk-velocity-range wave-count)))
@@ -113,7 +113,7 @@
   (%start 0 :type position)
   (definition nil :type (xbnk-velocity-definition-reference %start wave-count)))
 
-(define-nintendo-ware-reference (xbnk-key-reference (:parameters (wave-count)))
+(define-nintendo-ware-reference xbnk-key-reference (wave-count)
   (#x5901 (xbnk-key wave-count)))
 
 (defbinstruct/me xbnk-key-direct (wave-count)
@@ -135,7 +135,7 @@
   (entries #() :type (simple-array (xbnk-key-reference %xbnk-key-range-start wave-count)
                                  ((1+ (- maximum minimum))))))
 
-(define-nintendo-ware-reference (xbnk-key-definition-reference (:parameters (wave-count)))
+(define-nintendo-ware-reference xbnk-key-definition-reference (wave-count)
   (#x6000 (xbnk-key-direct wave-count))
   (#x6001 (xbnk-key-index wave-count))
   (#x6002 (xbnk-key-range wave-count)))
@@ -144,12 +144,13 @@
   (%start 0 :type position)
   (definition nil :type (xbnk-key-definition-reference %start wave-count)))
 
-(define-nintendo-ware-reference (xbnk-instrument-reference (:parameters (wave-count)))
+(define-nintendo-ware-reference xbnk-instrument-reference (wave-count)
   (#x5900 (xbnk-instrument wave-count)))
-(define-nintendo-ware-reference-array xbnk-instrument-reference wave-count)
-(define-nintendo-ware-reference (xbnk-instruments-reference (:parameters (wave-count)))
+(define-nintendo-ware-reference-array xbnk-instrument-reference-array (wave-count)
+  (rcurry #'xbnk-instrument-reference wave-count))
+(define-nintendo-ware-reference xbnk-instruments-reference (wave-count)
   (#x0101 (xbnk-instrument-reference-array wave-count)))
-(define-nintendo-ware-reference xbnk-waves-reference
+(define-nintendo-ware-reference xbnk-waves-reference ()
   (#x0100 (nintendo-ware-sound-wave-ids)))
 
 (define-nintendo-ware-section (xbnk-info (:magic "INFO"))

@@ -78,28 +78,32 @@
                           (:big ',(binstruct::emitter-name-symbol big)))
                        ,binstruct::*output* ,binstruct::*value* ,@arguments)))))))))
 
-(defmacro define-nintendo-ware-reference (name-and-options &body variants)
+(defmacro define-nintendo-ware-reference (name-and-options lambda-list &body variants)
   (destructuring-bind (name &rest options) (ensure-list name-and-options)
     (let ((reference (if (cadr (assoc :sized options))
                          'nintendo-ware-sized-reference
-                         'nintendo-ware-reference))
-          (parameters (cadr (assoc :parameters options))))
+                         'nintendo-ware-reference)))
       (with-gensyms (base)
         `(defbinalias/me (,name (:type (or null ,@(remove-duplicates
                                                   (mapcar (lambda (variant)
                                                             (binstruct::lisp-type (second variant)))
                                                           variants)
                                                   :test #'equal))))
-             (,base ,@parameters)
+             (,base ,@lambda-list)
            (or ,@(loop for (tag type) in variants
                        collect `(,reference ,tag ,type ,base))))))))
 
-(defmacro define-nintendo-ware-reference-array (name &rest parameters)
-  (let ((array (symbolicate name '-array)))
-    (with-gensyms (%position %count)
-      `(defbinstruct/me (,array (:type (simple-array ,(binstruct::lisp-type name) (*)))
-                               (:constructor progn) (:conc-name nil)) ,parameters
-         (,%position 0 :type position)
-         (,%count 0 :type (unsigned-byte 32))
-         (values #() :type (simple-array (,name ,%position ,@parameters) (,%count)))))))
+(defmacro define-nintendo-ware-reference-array
+    (name lambda-list (binding (function reference) &rest arguments))
+  (ecase function
+    ((function)
+     (with-gensyms (%position %count)
+       (let ((type (ecase binding
+                     (curry `(,reference ,@arguments ,%position))
+                     (rcurry `(,reference ,%position ,@arguments)))))
+         `(defbinstruct/me (,name (:type (simple-array ,(binstruct::lisp-type reference) (*)))
+                                 (:constructor progn) (:conc-name nil)) ,lambda-list
+            (,%position 0 :type position)
+            (,%count 0 :type (unsigned-byte 32))
+            (values #() :type (simple-array ,type (,%count)))))))))
 
