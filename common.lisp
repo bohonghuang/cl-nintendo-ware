@@ -39,7 +39,7 @@
   (nil -1 :type (satisfies (signed-byte 32) (curry #'= -1)))
   (values nil :type null))
 
-(defbinstruct/me (nintendo-ware-reference-array (:type (simple-array t (*)))
+(defbinstruct/me (nintendo-ware-reference-array (:type (simple-array * (*)))
                   (:constructor progn) (:conc-name nil)) (tag type)
   (%position 0 :type position)
   (%count 0 :type (unsigned-byte 32))

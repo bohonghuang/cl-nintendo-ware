@@ -190,6 +190,7 @@ file／section body 均通过原生文件位置锚点恢复 `%header`，不再�
 也接受 binstruct 风格的可选参数列表；生产 schema 最多三个参数。递归类型用无 body 的 `(defbinstruct/me name)` 提前注册展开函数，随后提供完整声明，见 `xseq-event-union`。打包为 32 位整数的数值子字段统一用 `(:alignment 4)`，由 binstruct 按位偏移和端序处理，不手写反序布局。
 
 `defbinalias/me` 与 `defbinalias` 使用相同的类型推断和显式 `:type` 约定，但通过 `defbinstruct/me` 创建 LE／BE 的 `(:constructor progn)`、`(:conc-name nil)` 单值布局。15 个仅由 u32 计数和可空引用组成的数组复用 `nintendo-ware-reference-array`，具体 alias 保留原来的语义元素类型、参数和访问器：
+共用布局的返回类型为 `(simple-array * (*))`：元素类型使用通配符 `*`，不是限定元素类型为 `t` 的 `(simple-array t (*))`；具体 alias 仍声明自己的语义元素类型。
 
 ```lisp
 (defbinalias/me (xsar-info-players (:type (simple-array (or null xsar-player) (*)))) ()
