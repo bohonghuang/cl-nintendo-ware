@@ -2,26 +2,21 @@
 
 (defvar *endian*)
 
-;; Same alias definition as cl-nitro/common.lisp.
-(defmacro defbinalias (name-and-options lambda-list parser)
+(defmacro %defbinalias (defbinstruct name-and-options lambda-list parser)
   (destructuring-bind (name &rest options) (ensure-list name-and-options)
     (destructuring-bind (&key (type name typep)) (mappend #'identity options)
       (unless typep
         (let ((inferred-type (binstruct::lisp-type parser)))
           (unless (eq inferred-type t) (setf type inferred-type))))
-      `(defbinstruct (,name (:type ,type) (:constructor progn) (:conc-name nil))
+      `(,defbinstruct (,name (:type ,type) (:constructor progn) (:conc-name nil))
            ,lambda-list
          (values nil :type ,parser)))))
 
+(defmacro defbinalias (name-and-options lambda-list parser)
+  `(%defbinalias defbinstruct ,name-and-options ,lambda-list ,parser))
+
 (defmacro defbinalias/me (name-and-options lambda-list parser)
-  (destructuring-bind (name &rest options) (ensure-list name-and-options)
-    (destructuring-bind (&key (type name typep)) (mappend #'identity options)
-      (unless typep
-        (let ((inferred-type (binstruct::lisp-type parser)))
-          (unless (eq inferred-type t) (setf type inferred-type))))
-      `(defbinstruct/me (,name (:type ,type) (:constructor progn) (:conc-name nil))
-           ,lambda-list
-         (values nil :type ,parser)))))
+  `(%defbinalias defbinstruct/me ,name-and-options ,lambda-list ,parser))
 
 ;; Expand here, not in the outer PROGN: the default definition and its Lisp
 ;; type have been registered before its big-endian reader is expanded.
