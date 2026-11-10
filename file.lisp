@@ -63,11 +63,11 @@
   (body nil :type (ecase (nintendo-ware-file-header-endian header)
                     (:big (inline body/be))
                     (:little (inline body/le))))
-  ($nintendo-ware-file-end 0 :type position)
+  (%nintendo-ware-file-end 0 :type position)
   (nil #.(make-array 0 :element-type '(unsigned-byte 8))
        :type (simple-array (unsigned-byte 8)
                 ((- (nintendo-ware-file-header-file-size header)
-                    (- $nintendo-ware-file-end (nintendo-ware-file-header-start header)))))))
+                    (- %nintendo-ware-file-end (nintendo-ware-file-header-start header)))))))
 
 (defmacro define-nintendo-ware-file (name-and-options &body sections)
   (destructuring-bind (name &rest options) (ensure-list name-and-options)

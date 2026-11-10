@@ -52,14 +52,14 @@
   (loop-start 0 :type (unsigned-byte 32))
   (loop-end 0 :type (unsigned-byte 32))
   (reserved 0 :type (unsigned-byte 32))
-  ($channels-start 0 :type position)
+  (%channels-start 0 :type position)
   (channel-count 0 :type (satisfies (unsigned-byte 32) #'plusp))
   (channels #() :type (simple-array
                       (or nintendo-ware-null-reference
                           (values (pointer (map (xwav-channel codec loop-end)
                                                 (the (function (t) (or null xwav-channel)) #'identity))
                                            (nintendo-ware-reference-offset-value #x7100)
-                                           $channels-start))) (channel-count))))
+                                           %channels-start))) (channel-count))))
 
 ;; Samples are read once through the channel references. DATA retains only its
 ;; section header, not a second copy of the complete encoded payload.

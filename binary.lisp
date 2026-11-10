@@ -13,6 +13,16 @@
            ,lambda-list
          (values nil :type ,parser)))))
 
+(defmacro defbinalias/me (name-and-options lambda-list parser)
+  (destructuring-bind (name &rest options) (ensure-list name-and-options)
+    (destructuring-bind (&key (type name typep)) (mappend #'identity options)
+      (unless typep
+        (let ((inferred-type (binstruct::lisp-type parser)))
+          (unless (eq inferred-type t) (setf type inferred-type))))
+      `(defbinstruct/me (,name (:type ,type) (:constructor progn) (:conc-name nil))
+           ,lambda-list
+         (values nil :type ,parser)))))
+
 ;; Expand here, not in the outer PROGN: the default definition and its Lisp
 ;; type have been registered before its big-endian reader is expanded.
 (defmacro defbinstruct/be (name-and-options lambda-list &body slots)
@@ -32,6 +42,13 @@
     (let* ((defined-p body)
            (lambda-list (when (and body (not (member :type (first body)))) (pop body)))
            (type (or (cadr (assoc :type options)) name))
+           (inline-parameters
+             (labels ((collect-parameters (form)
+                        (when (consp form)
+                          (if (eq (car form) 'inline)
+                              (list (second form))
+                              (mappend #'collect-parameters form)))))
+               (collect-parameters body)))
            (big (symbolicate name '#:/be)))
       `(progn
          ,@(when defined-p
@@ -45,7 +62,16 @@
                  (lambda (&rest arguments)
                    (cons (ecase (or (and (boundp '*endian*) *endian*) :little)
                            (:little ',name) (:big ',big))
-                         arguments))
+                         ,(if inline-parameters
+                              `(mapcar (lambda (argument parameter)
+                                         (if (member parameter ',inline-parameters)
+                                             (binstruct::expand-reader-type-unit
+                                              argument
+                                              :endian (or (and (boundp '*endian*) *endian*) :little)
+                                              :alignment binstruct::+alignment-default+)
+                                             argument))
+                                       arguments ',(parsonic::lambda-list-arguments lambda-list))
+                              'arguments)))
                  (get ',name 'binstruct::expand-writer-type-expr)
                  (lambda (&rest arguments)
                    `(progn

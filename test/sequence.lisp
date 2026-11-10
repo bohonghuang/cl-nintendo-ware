@@ -80,10 +80,10 @@
   (size 0 :type (unsigned-byte 32)))
 
 (defbinstruct xseq-label-entry ()
-  ($label-start 0 :type position)
+  (%label-start 0 :type position)
   (target (make-reference) :type reference)
   (length 0 :type (satisfies (unsigned-byte 32)
-                            (lambda (count) (<= (+ $label-start 13 count) *record-limit*))))
+                            (lambda (count) (<= (+ %label-start 13 count) *record-limit*))))
   (name #.(coerce "" 'simple-base-string) :type (simple-base-string length))
   (nil 0 :type (satisfies (unsigned-byte 8))))
 

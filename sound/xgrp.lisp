@@ -17,24 +17,24 @@
 
 (define-nintendo-ware-section (xgrp-info (:magic "INFO"))
   (nil nil :type (values (pointer xgrp-data-position (map null (constantly (if (block-reference %header #x7801 nil) (+ 8 (block-start %header #x7801)) 8))))))
-  ($xgrp-info-start 0 :type position)
+  (%xgrp-info-start 0 :type position)
   (count 0 :type (unsigned-byte 32))
   (entries #() :type (simple-array
                       (or nintendo-ware-null-reference
                           (values (pointer (map xgrp-entry
                                                 (the (function (t) (or null xgrp-entry)) #'identity))
                                            (nintendo-ware-reference-offset-value #x7900)
-                                           $xgrp-info-start))) (count))))
+                                           %xgrp-info-start))) (count))))
 
 (define-nintendo-ware-section (xgrp-infx (:magic "INFX"))
-  ($xgrp-infx-start 0 :type position)
+  (%xgrp-infx-start 0 :type position)
   (count 0 :type (unsigned-byte 32))
   (entries #() :type (simple-array
                       (or nintendo-ware-null-reference
                           (values (pointer (map (xgrp-dependency)
                                                 (the (function (t) (or null xgrp-dependency)) #'identity))
                                            (nintendo-ware-reference-offset-value #x7901)
-                                           $xgrp-infx-start))) (count))))
+                                           %xgrp-infx-start))) (count))))
 
 (define-nintendo-ware-file (xgrp (:magic ("CGRP" "FGRP")))
   (info nil :type (values (pointer xgrp-info (map null (constantly (block-start %header #x7800))))))

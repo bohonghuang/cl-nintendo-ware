@@ -10,15 +10,14 @@
   (size 8 :type (unsigned-byte 32))
   (%start 0 :type (map null (constantly $nintendo-ware-section-start)))
   (body nil :type (inline content))
-  ($nintendo-ware-section-end 0 :type position)
+  (%nintendo-ware-section-end 0 :type position)
   (nil #.(make-array 0 :element-type '(unsigned-byte 8))
        :type (simple-array (unsigned-byte 8)
-                ((- size (- $nintendo-ware-section-end %start))))))
+                ((- size (- %nintendo-ware-section-end %start))))))
 
-(defbinstruct/me (nintendo-ware-section-start-magic-size (:type list)
-                                                      (:constructor progn) (:conc-name nil)) ()
-  (values nil :type (pointer (list position (simple-base-string 4) (unsigned-byte 32))
-                            (map null (constantly 0) (constantly nil)) $nintendo-ware-section-start)))
+(defbinalias/me (nintendo-ware-section-start-magic-size (:type list)) ()
+  (pointer (list position (simple-base-string 4) (unsigned-byte 32))
+           (map null (constantly 0) (constantly nil)) $nintendo-ware-section-start))
 
 ;; Like Nitro: observe the section header and current position without
 ;; consuming input. Only layouts with an uncounted tail need this type.

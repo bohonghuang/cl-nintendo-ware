@@ -39,6 +39,16 @@
   (nil -1 :type (satisfies (signed-byte 32) (curry #'= -1)))
   (values nil :type null))
 
+(defbinstruct/me (nintendo-ware-reference-array (:type (simple-array t (*)))
+                  (:constructor progn) (:conc-name nil)) (tag type)
+  (%position 0 :type position)
+  (%count 0 :type (unsigned-byte 32))
+  (values #() :type (simple-array
+                     (or nintendo-ware-null-reference
+                         (values (pointer (inline type)
+                                          (nintendo-ware-reference-offset-value tag)
+                                          %position))) (%count))))
+
 (defun nintendo-ware-reference-target (reference base &optional expected-type)
   (let ((offset (nintendo-ware-reference-offset reference)))
     (unless (= offset -1)

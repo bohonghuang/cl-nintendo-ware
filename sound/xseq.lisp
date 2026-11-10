@@ -474,11 +474,11 @@
 
 (defmacro define-xseq-event-unions ()
   `(progn
-     (defbinstruct/me (xseq-event-union (:type xseq-event) (:constructor progn) (:conc-name nil)) ()
-       (values nil :type (or ,@(loop for type in *xseq-events* collect `(,type)))))
-     (defbinstruct/me (xseq-event-partial-union (:type xseq-event) (:constructor progn) (:conc-name nil)) (status)
-       (values nil :type (or ,@(loop for type in *xseq-events*
-                                    collect `(,(symbolicate type '/partial) status)))))))
+     (defbinalias/me (xseq-event-union (:type xseq-event)) ()
+       (or ,@(loop for type in *xseq-events* collect `(,type))))
+     (defbinalias/me (xseq-event-partial-union (:type xseq-event)) (status)
+       (or ,@(loop for type in *xseq-events*
+                   collect `(,(symbolicate type '/partial) status))))))
 (define-xseq-event-unions)
 
 
@@ -564,14 +564,14 @@
   (nil 0 :type (satisfies (unsigned-byte 8))))
 
 (define-nintendo-ware-section (xseq-labels (:magic "LABL"))
-  ($labels-start 0 :type position)
+  (%labels-start 0 :type position)
   (count 0 :type (unsigned-byte 32))
   (entries #() :type (simple-array
                       (or nintendo-ware-null-reference
                           (values (pointer (map xseq-label-entry
                                                 (the (function (t) (or null xseq-label-entry)) #'identity))
                                            (nintendo-ware-reference-offset-value #x5100)
-                                           $labels-start))) (count))))
+                                           %labels-start))) (count))))
 
 (define-nintendo-ware-section (xseq-data (:magic "DATA"))
   ;; Unlike counted records, this event stream ends at the DATA boundary.

@@ -42,15 +42,15 @@
 
 (defbinstruct/me (xwsd-envelope-reference (:type (or null xwsd-envelope))
                                                 (:constructor progn) (:conc-name nil)) ()
-  ($xwsd-envelope-start 0 :type position)
+  (%xwsd-envelope-start 0 :type position)
   (values nil :type (or nintendo-ware-null-reference
                         (values (pointer (map xwsd-envelope
                                               (the (function (t) (or null xwsd-envelope)) #'identity))
                                          (nintendo-ware-reference-offset-value 0)
-                                         $xwsd-envelope-start)))))
+                                         %xwsd-envelope-start)))))
 
 (defbinstruct/me xwsd-parameters (note-p)
-  ($xwsd-parameters-start 0 :type position)
+  (%xwsd-parameters-start 0 :type position)
   (flags nil :type (ecase note-p
                     ((nil) xwsd-item-flags) ((t) xwsd-note-flags)))
   (key-info nil :type (ecase (and note-p (xwsd-note-flags-key-info-p flags))
@@ -82,7 +82,7 @@
                            ((t) (values (pointer xwsd-sends (map null (constantly sends-offset))
                                                  $xwsd-note-start)))
                            ((nil) (values (pointer xwsd-sends (map null (constantly sends-offset))
-                                                   $xwsd-parameters-start)))))))
+                                                   %xwsd-parameters-start)))))))
   (envelope nil :type (ecase (and envelope-offset (/= envelope-offset #xffffffff))
                        ((nil) null)
                        ((t) (ecase note-p
@@ -91,7 +91,7 @@
                                                     $xwsd-note-start)))
                               ((nil) (values (pointer xwsd-envelope-reference
                                                       (map null (constantly envelope-offset))
-                                                      $xwsd-parameters-start))))))))
+                                                      %xwsd-parameters-start))))))))
 
 (defbinstruct/me xwsd-note ()
   ($xwsd-note-start 0 :type position)
@@ -102,88 +102,56 @@
   (position 0.0f0 :type single-float) (length 0.0f0 :type single-float)
   (note-index 0 :type (unsigned-byte 32)) (reserved 0 :type (unsigned-byte 32)))
 
-(defbinstruct/me (xwsd-track-events (:type (simple-array (or null xwsd-event) (*)))
-                  (:constructor progn) (:conc-name nil)) ()
-  ($events-start 0 :type position)
-  (%count 0 :type (unsigned-byte 32))
-  (values #() :type (simple-array
-                     (or nintendo-ware-null-reference
-                         (values (pointer (map (xwsd-event)
-                                               (the (function (t) (or null xwsd-event)) #'identity))
-                                          (nintendo-ware-reference-offset-value #x4904)
-                                          $events-start))) (%count))))
+(defbinalias/me (xwsd-track-events (:type (simple-array (or null xwsd-event) (*)))) ()
+  (nintendo-ware-reference-array #x4904 (xwsd-event)))
 
 (defbinstruct/me xwsd-track ()
-  ($track-start 0 :type position)
+  (%track-start 0 :type position)
   (events nil :type (or nintendo-ware-null-reference
                         (values (pointer (map xwsd-track-events
                                               (the (function (t) (or null (simple-array (or null xwsd-event) (*)))) #'identity))
                                          (nintendo-ware-reference-offset-value 0)
-                                         $track-start)))))
+                                         %track-start)))))
 
-(defbinstruct/me (xwsd-item-tracks (:type (simple-array (or null xwsd-track) (*)))
-                  (:constructor progn) (:conc-name nil)) ()
-  ($xwsd-item-tracks-start 0 :type position)
-  (%count 0 :type (unsigned-byte 32))
-  (values #() :type (simple-array
-                     (or nintendo-ware-null-reference
-                         (values (pointer (map xwsd-track
-                                               (the (function (t) (or null xwsd-track)) #'identity))
-                                          (nintendo-ware-reference-offset-value #x4903)
-                                          $xwsd-item-tracks-start))) (%count))))
+(defbinalias/me (xwsd-item-tracks (:type (simple-array (or null xwsd-track) (*)))) ()
+  (nintendo-ware-reference-array #x4903 (xwsd-track)))
 
-(defbinstruct/me (xwsd-item-notes (:type (simple-array (or null xwsd-note) (*)))
-                  (:constructor progn) (:conc-name nil)) ()
-  ($xwsd-item-notes-start 0 :type position)
-  (%count 0 :type (unsigned-byte 32))
-  (values #() :type (simple-array
-                     (or nintendo-ware-null-reference
-                         (values (pointer (map xwsd-note
-                                               (the (function (t) (or null xwsd-note)) #'identity))
-                                          (nintendo-ware-reference-offset-value #x4902)
-                                          $xwsd-item-notes-start))) (%count))))
+(defbinalias/me (xwsd-item-notes (:type (simple-array (or null xwsd-note) (*)))) ()
+  (nintendo-ware-reference-array #x4902 (xwsd-note)))
 
 (defbinstruct/me xwsd-item ()
-  ($item-start 0 :type position)
+  (%item-start 0 :type position)
   (parameters nil :type (or nintendo-ware-null-reference
                             (values (pointer (map (xwsd-parameters nil)
                                                   (the (function (t) (or null xwsd-parameters)) #'identity))
                                              (nintendo-ware-reference-offset-value #x4901)
-                                             $item-start))))
+                                             %item-start))))
   (tracks nil :type (or nintendo-ware-null-reference
                         (values (pointer (map xwsd-item-tracks
                                               (the (function (t) (or null (simple-array (or null xwsd-track) (*)))) #'identity))
                                          (nintendo-ware-reference-offset-value #x0101)
-                                         $item-start))))
+                                         %item-start))))
   (notes nil :type (or nintendo-ware-null-reference
                        (values (pointer (map xwsd-item-notes
                                              (the (function (t) (or null (simple-array (or null xwsd-note) (*)))) #'identity))
                                         (nintendo-ware-reference-offset-value #x0101)
-                                        $item-start)))))
+                                        %item-start)))))
 
-(defbinstruct/me (xwsd-info-items (:type (simple-array (or null xwsd-item) (*)))
-                  (:constructor progn) (:conc-name nil)) ()
-  ($xwsd-info-items-start 0 :type position)
-  (%count 0 :type (unsigned-byte 32))
-  (values #() :type (simple-array
-                     (or nintendo-ware-null-reference
-                         (values (pointer (map xwsd-item
-                                               (the (function (t) (or null xwsd-item)) #'identity))
-                                          (nintendo-ware-reference-offset-value #x4900)
-                                          $xwsd-info-items-start))) (%count))))
+(defbinalias/me (xwsd-info-items (:type (simple-array (or null xwsd-item) (*)))) ()
+  (nintendo-ware-reference-array #x4900 (xwsd-item)))
 
 (define-nintendo-ware-section (xwsd-info (:magic "INFO"))
-  ($info-start 0 :type position)
+  (%info-start 0 :type position)
   (waves nil :type (or nintendo-ware-null-reference
                        (values (pointer (map nintendo-ware-sound-wave-ids
                                              (the (function (t) (or null (simple-array nintendo-ware-sound-wave-id (*)))) #'identity))
                                         (nintendo-ware-reference-offset-value #x0100)
-                                        $info-start))))
+                                        %info-start))))
   (items nil :type (or nintendo-ware-null-reference
                        (values (pointer (map xwsd-info-items
                                              (the (function (t) (or null (simple-array (or null xwsd-item) (*)))) #'identity))
                                         (nintendo-ware-reference-offset-value #x0101)
-                                        $info-start)))))
+                                        %info-start)))))
 
 (define-nintendo-ware-file (xwsd (:magic ("CWSD" "FWSD")))
   (%tag #x6800 :type (map null (lambda (ignored) (declare (ignore ignored)) (if (block-reference %header #x6800 nil) #x6800 #x4800))))

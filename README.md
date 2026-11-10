@@ -156,7 +156,7 @@ CSTM SEEK 上下文固定小端；当前 FSTM SEEK 布局按 Citric 的参考实
 
 ## 声明模式
 
-`define-nintendo-ware-file`、`define-nintendo-ware-section` 按 `cl-nitro` 的声明方式，名称／选项后直接写字段，不带参数表；具体 file、section 及其 body reader 均无参数。公共 file／section 均以 `inline` 读取具体 body，随后记录 `$nintendo-ware-file-end`／`$nintendo-ware-section-end`，再声明式读取剩余 padding。终点标记位于 padding 之前，为将来的 size 回写保留结构；目前不实现回写，也不保证 writer 可用。每个完整文件仍只有一个 reader，由 BOM 选择 BE 或默认 LE body。section 的 inline 参数显式选择对应 body parser，不能把 parser 参数误当成会自动 ME 分派的字段类型。区块仍通过 sized reference 独立定位，不假设连续排列。
+`define-nintendo-ware-file`、`define-nintendo-ware-section` 按 `cl-nitro` 的声明方式，名称／选项后直接写字段，不带参数表；具体 file、section 及其 body reader 均无参数。公共 file／section 均以 `inline` 读取具体 body，随后记录局部 `%nintendo-ware-file-end`／`%nintendo-ware-section-end`，再声明式读取剩余 padding。终点标记位于 padding 之前，为将来的 size 回写保留结构；目前不实现回写，也不保证 writer 可用。每个完整文件仍只有一个 reader，由 BOM 选择 BE 或默认 LE body。section 的 inline 参数显式选择对应 body parser；ME 高阶布局会先将其 inline 类型参数展开为对应端序的 parser。区块仍通过 sized reference 独立定位，不假设连续排列。
 
 ```lisp
 (define-nintendo-ware-section (sample-info (:magic "INFO"))
@@ -167,7 +167,7 @@ CSTM SEEK 上下文固定小端；当前 FSTM SEEK 布局按 Citric 的参考实
                                   (map null (constantly (block-start %header #x1000)))))))
 ```
 
-file／section body 均通过原生文件位置锚点恢复 `%header`，不再把 header 或文件起点作为 body 参数传递。每个文件字段读取前以原生 pointer 恢复 owning-file 锚点，避免 WAR 内嵌文件影响外层后续区块。WAV／WAR／GRP／SAR 的跨结构数据基址、SAR 字符串表及 WSD note／flags 基址使用各自 `$...` position 标记，删除对应位置参数传递链。GRP／XSAR 只读取原始子文件数据；显式读取子文件时，由其自身容器读取 BOM。高阶 parser（`inline` 等）仅用于 file／section 容器。
+file／section body 均通过原生文件位置锚点恢复 `%header`，不再把 header 或文件起点作为 body 参数传递。每个文件字段读取前以原生 pointer 恢复 owning-file 锚点，避免 WAR 内嵌文件影响外层后续区块。WAV／WAR／GRP／SAR 的跨结构数据基址、SAR 字符串表及 WSD note 基址使用各自 `$...` position 标记；仅在参数结构内使用的 WSD flags 基址是局部 `%xwsd-parameters-start`。GRP／XSAR 只读取原始子文件数据；显式读取子文件时，由其自身容器读取 BOM。高阶 parser（`inline` 等）仅用于 file／section 容器及共用的 `nintendo-ware-reference-array`；具体记录和事件不直接使用高阶 parser。
 
 只有确实需要剩余长度的布局使用零宽类型 `nintendo-ware-section-tail-size`，保存在 `%size`：它返回“区块大小 −（当前位置 − 区块起点）”，不消费输入，并遵循区块头端序。需要绝对结束位置时，就地用 `%position + %size` 计算。目前仅 SEQ 的无计数事件流需要结束位置，SEEK 需要剩余长度来读取尾部 padding；不向其他布局注入尾部上下文。
 
@@ -189,9 +189,18 @@ file／section body 均通过原生文件位置锚点恢复 `%header`，不再�
 
 也接受 binstruct 风格的可选参数列表；生产 schema 最多三个参数。递归类型用无 body 的 `(defbinstruct/me name)` 提前注册展开函数，随后提供完整声明，见 `xseq-event-union`。打包为 32 位整数的数值子字段统一用 `(:alignment 4)`，由 binstruct 按位偏移和端序处理，不手写反序布局。
 
+`defbinalias/me` 与 `defbinalias` 使用相同的类型推断和显式 `:type` 约定，但通过 `defbinstruct/me` 创建 LE／BE 的 `(:constructor progn)`、`(:conc-name nil)` 单值布局。15 个仅由 u32 计数和可空引用组成的数组复用 `nintendo-ware-reference-array`，具体 alias 保留原来的语义元素类型、参数和访问器：
+
+```lisp
+(defbinalias/me (xsar-info-players (:type (simple-array (or null xsar-player) (*)))) ()
+  (nintendo-ware-reference-array #x2209 (xsar-player)))
+```
+
+共用布局以局部 `%position` 为引用基址、`%count` 为数组长度，直接用原生 `or`／`values`／`pointer`／`inline` 解析目标，不生成中间 reference 或包装对象。ME 编译期先按当前端序展开 inline 元素类型，再交给原生 parser；因此带参数的 BNK instrument、STM channel 和 SAR sound 也可复用同一布局。SEQ 完整／partial union、SEEK row、引用 stream-info 和 section-header tuple 等单值 ME 布局同样使用 `defbinalias/me`。文件头、SEQ track、SEEK row 的强制 LE alias 仍使用普通 `defbinalias`。
+
 寻址直接使用 binstruct 原生 `pointer`，不使用 `peek` 或自定义 `reference-to` 类型展开。可空引用在字段中声明为原生 `or`：`nintendo-ware-null-reference` 匹配 `-1` 偏移并返回 `NIL`，非空分支的 pointer 以 `nintendo-ware-reference-offset-value` 读取并校验 tag／非负偏移。目标使用与 cl-nitro 相同的 typed identity `map`，保留具体语义类型，同时允许原生延迟寻址的默认值为 `NIL`；不分配临时 reference 对象，不引入运行时 parser 参数。
 
-`$...` position 可跨结构并参与原生延迟解析，`%...` position 保持局部。pointer 基址直接使用 `$info-start` 等符号，不包 `progn`；嵌套表使用各记录独有的 `$...-start` 锚点，避免子表覆盖外表基址。pointer 不在字段类型最外层时必须包原生 `values`，例如 `or` 分支和数组元素中的 `(values (pointer ...))`，使目标在当前单元内解析完毕，也确保后续字段能读取目标值。不添加目录跨度、重叠或 sized-reference 子文件长度校验；文件／区块 size 参与尾部 padding 读取，截断 padding 也会导致读取失败，不承诺完整格式校验或受限输入沙箱。
+`$...` 是供其他结构访问的 global position，并支持原生延迟解析；仅当前结构使用的位置和解析变量统一为局部 `%...`。例如 INFO、track、BNK key／velocity 的引用基址、文件／区块 padding 终点都使用 `%...`；跨结构的数据、字符串和 note 基址仍使用 `$...`。pointer 基址直接传 `%info-start` 或 `$xwav-data-start` 等符号，不包 `progn`；嵌套引用数组各自捕获局部 `%position`，不会覆盖外层基址。pointer 不在字段类型最外层时必须包原生 `values`，例如 `or` 分支和数组元素中的 `(values (pointer ...))`，使目标在当前单元内解析完毕，也确保后续字段能读取目标值。不添加目录跨度、重叠或 sized-reference 子文件长度校验；文件／区块 size 参与尾部 padding 读取，截断 padding 也会导致读取失败，不承诺完整格式校验或受限输入沙箱。
 
 **本库只保证 reader。** ME 同时注册 reader／writer 的编译期端序展开，以保持 binstruct 声明一致；不测试、不保证自动生成的 writer 正确性，也不提供文件写入 API。
 
