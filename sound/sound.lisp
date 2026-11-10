@@ -6,9 +6,10 @@
   (dsp-adpcm 2)
   (ima-adpcm 3))
 
-(defbinstruct/me nintendo-ware-sound-byte-table ()
-  (count 0 :type (unsigned-byte 32))
-  (entries #.(make-array 0 :element-type '(unsigned-byte 8)) :type (simple-array (unsigned-byte 8) (count))))
+(defbinstruct/me (nintendo-ware-sound-channel-indices (:type (simple-array (unsigned-byte 8) (*)))
+                  (:constructor progn) (:conc-name nil)) ()
+  (%count 0 :type (unsigned-byte 32))
+  (values #.(make-array 0 :element-type '(unsigned-byte 8)) :type (simple-array (unsigned-byte 8) (%count))))
 
 (defbinstruct/me (nintendo-ware-sound-resource-id (:alignment 4)) ()
   (index 0 :type (unsigned-byte 24))
@@ -22,7 +23,8 @@
   (archive-id (make-nintendo-ware-sound-resource-id) :type nintendo-ware-sound-resource-id)
   (index 0 :type (unsigned-byte 32)))
 
-(defbinstruct/me nintendo-ware-sound-wave-id-table ()
-  (count 0 :type (unsigned-byte 32))
-  (entries #() :type (simple-array nintendo-ware-sound-wave-id (count))))
+(defbinstruct/me (nintendo-ware-sound-wave-ids (:type (simple-array nintendo-ware-sound-wave-id (*)))
+                  (:constructor progn) (:conc-name nil)) ()
+  (%count 0 :type (unsigned-byte 32))
+  (values #() :type (simple-array nintendo-ware-sound-wave-id (%count))))
 

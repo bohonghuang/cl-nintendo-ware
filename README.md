@@ -48,7 +48,19 @@ sbcl --dynamic-space-size 4096 --non-interactive --eval '(ql:quickload :cl-ninte
 
 模块和所属类型、函数、宏统一使用 `x` 加 magic 后三位的前缀；`x` 同时涵盖 C/F 两种容器。例如事件声明宏为 `define-xseq-event`，音符类型为 `xseq-event-note`。这是直接重命名，旧名称不再提供兼容别名。
 
-`common.lisp` 仅保留输入分派与通用引用布局。文件头和文件容器位于 `file.lisp`，区块布局位于 `section.lisp`。`sound/sound.lisp` 在所有 `sound/x___.lisp` 之前加载，共用 codec、byte table、resource ID 和 wave ID 布局统一使用 `nintendo-ware-sound-` 前缀。NintendoWare 专有类型使用库或模块前缀，通用 VLQ 原语保持原名；记录位域类型统一命名为 `*-flags`。SAR 专用的整数表、资源 ID 表、priority 数值字段位于 `sound/xsar.lisp`，使用 `xsar-integer-table`、`xsar-resource-id-table`、`xsar-packed-priority`；WSD 专用 pan/filter 数值字段位于 `sound/xwsd.lisp`，使用 `xwsd-packed-pan`、`xwsd-packed-filter`，访问器同样带模块前缀。
+`common.lisp` 仅保留输入分派与通用引用布局。文件头和文件容器位于 `file.lisp`，区块布局位于 `section.lisp`。`sound/sound.lisp` 在所有 `sound/x___.lisp` 之前加载，共用 codec、channel-index 数组、resource ID 和 wave ID 布局统一使用 `nintendo-ware-sound-` 前缀。NintendoWare 专有类型使用库或模块前缀，通用 VLQ 原语保持原名；记录位域类型统一命名为 `*-flags`。SAR 专用的 File ID 数组、资源 ID 数组、priority 数值字段位于 `sound/xsar.lisp`，使用 `xsar-sound-group-files`、`xsar-resource-ids`、`xsar-packed-priority`；WSD 专用 pan/filter 数值字段位于 `sound/xwsd.lisp`，使用 `xwsd-packed-pan`、`xwsd-packed-filter`，访问器同样带模块前缀。
+
+仅含计数、定位锚点和元素数组的布局使用 `(:constructor progn)`、`(:conc-name nil)` 和显式的 `(:type (simple-array ... (*)))`，直接返回数组，不再生成 `*-table` 结构或要求调用 `*-table-entries`／`*-table-count`。计数只用于解析，调用方使用 `length`。单一所属字段的布局与访问器同名，例如 `xwsd-track-events`、`xwsd-item-tracks`、`xwsd-item-notes`、`xwsd-info-items`、`xbnk-info-instruments`、`xstm-info-tracks`／`xstm-info-channels`、`xsar-strg-strings` 和 `xsar-info-sounds` 等 SAR 资源数组；共用布局为 `nintendo-ware-sound-channel-indices`、`nintendo-ware-sound-wave-ids` 和 `xsar-resource-ids`。`xstm-seek-row` 同样直接返回 SEEK entry 数组。空引用保持 `NIL`，非空引用的零计数返回空数组，数组内空引用不压缩索引；不提供旧包装的兼容别名。具有 upper bounds、range 或 Patricia root 等独立语义字段的记录以及原生 section 容器保持结构。
+
+```lisp
+(let* ((items (nintendo-ware::xwsd-info-items (nintendo-ware::xwsd-info wsd)))
+       (item (aref items 0))
+       (track (aref (nintendo-ware::xwsd-item-tracks item) 0)))
+  (loop for event across (nintendo-ware::xwsd-track-events track)
+        when event collect (nintendo-ware::xwsd-event-note-index event)))
+```
+
+这次迁移覆盖 21 个纯数组布局；回归使用直接数组访问，并检查 C/F、双端序下 WSD 的空引用、空数组和中间含有效事件的稀疏数组。默认测试继续完整解析 MSET、TigerSound 和 menu 真实归档。
 
 简单 `satisfies` 谓词优先使用 Alexandria 的 `curry`／`rcurry`，无额外参数时直接使用函数引用；参数位于中间、需要字段提取／计算或包含多个条件时保留 lambda。
 
@@ -58,7 +70,7 @@ BNK、WSD、SAR 的可选参数各有记录专属位域 set，开关字段使用
 
 共用解析布局不等于保证所有游戏、版本和编码组合兼容。原始 ID、引用及可选字段保留；空引用为 `NIL`。外部档案路径只读取为字符串，绝不自动打开。
 
-资源 ID 按原生 32 位数值位域解析为内部 `nintendo-ware-sound-resource-id`：`nintendo-ware-sound-resource-id-index` 是低 24 位表索引，`nintendo-ware-sound-resource-id-type` 是高 8 位类型 tag；`nintendo-ware-sound-resource-id-value` 可无损取得原值，包括未知 tag 和 `#xffffffff`。WAV/BNK/WSD 的 `nintendo-ware-sound-wave-id-archive-id`、SAR 的资源引用与资源 ID 表、GRP dependency 均使用此布局；ID 表使用 `xsar-resource-id-table-entries`，普通 File ID 表仍使用 `xsar-integer-table-entries`。消费端不再自行提取位。类型 tag 保留为整数，不擅自拒绝未知资源种类。
+资源 ID 按原生 32 位数值位域解析为内部 `nintendo-ware-sound-resource-id`：`nintendo-ware-sound-resource-id-index` 是低 24 位表索引，`nintendo-ware-sound-resource-id-type` 是高 8 位类型 tag；`nintendo-ware-sound-resource-id-value` 可无损取得原值，包括未知 tag 和 `#xffffffff`。WAV/BNK/WSD 的 `nintendo-ware-sound-wave-id-archive-id`、SAR 的资源引用与资源 ID 数组、GRP dependency 均使用此布局；`xsar-sequence-info-banks`、`xsar-bank-wave-archives` 和 `xsar-wave-sound-group-wave-archives` 直接返回资源 ID 数组，`xsar-sound-group-files` 直接返回普通 File ID 的 `(unsigned-byte 32)` 数组。消费端不再自行提取位。类型 tag 保留为整数，不擅自拒绝未知资源种类。
 
 ### WAV 原生采样数据
 

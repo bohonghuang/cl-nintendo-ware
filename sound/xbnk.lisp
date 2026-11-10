@@ -170,15 +170,16 @@
                                    (#x6001 (values (pointer (xbnk-key-index wave-count) (map null (constantly (nintendo-ware-reference-target reference %start #x6001))))))
                                    (#x6002 (values (pointer (xbnk-key-range wave-count) (map null (constantly (nintendo-ware-reference-target reference %start #x6002)))))))))))
 
-(defbinstruct/me xbnk-instrument-table (wave-count)
-  ($xbnk-instrument-table-start 0 :type position)
-  (count 0 :type (unsigned-byte 32))
-  (entries #() :type (simple-array
-                      (or nintendo-ware-null-reference
-                          (values (pointer (map (xbnk-instrument wave-count)
-                                                (the (function (t) (or null xbnk-instrument)) #'identity))
-                                           (nintendo-ware-reference-offset-value #x5900)
-                                           $xbnk-instrument-table-start))) (count))))
+(defbinstruct/me (xbnk-info-instruments (:type (simple-array (or null xbnk-instrument) (*)))
+                  (:constructor progn) (:conc-name nil)) (wave-count)
+  ($xbnk-info-instruments-start 0 :type position)
+  (%count 0 :type (unsigned-byte 32))
+  (values #() :type (simple-array
+                     (or nintendo-ware-null-reference
+                         (values (pointer (map (xbnk-instrument wave-count)
+                                               (the (function (t) (or null xbnk-instrument)) #'identity))
+                                          (nintendo-ware-reference-offset-value #x5900)
+                                          $xbnk-info-instruments-start))) (%count))))
 
 (define-nintendo-ware-section (xbnk-info (:magic "INFO"))
   ($info-start 0 :type position)
@@ -186,10 +187,10 @@
   (instruments-reference (make-nintendo-ware-reference) :type nintendo-ware-reference)
   (waves nil :type (ecase (= (nintendo-ware-reference-offset waves-reference) -1)
                      ((t) null)
-                     ((nil) (values (pointer nintendo-ware-sound-wave-id-table (map null (constantly (nintendo-ware-reference-target waves-reference $info-start #x0100))))))))
+                     ((nil) (values (pointer nintendo-ware-sound-wave-ids (map null (constantly (nintendo-ware-reference-target waves-reference $info-start #x0100))))))))
   (instruments nil :type (ecase (= (nintendo-ware-reference-offset instruments-reference) -1)
                            ((t) null)
-                           ((nil) (values (pointer (xbnk-instrument-table (if waves (nintendo-ware-sound-wave-id-table-count waves) 0)) (map null (constantly (nintendo-ware-reference-target instruments-reference $info-start #x0101)))))))))
+                           ((nil) (values (pointer (xbnk-info-instruments (length waves)) (map null (constantly (nintendo-ware-reference-target instruments-reference $info-start #x0101)))))))))
 
 (define-nintendo-ware-file (xbnk (:magic ("CBNK" "FBNK")))
   (info nil :type (values (pointer xbnk-info (map null (constantly (block-start %header #x5800)))))))

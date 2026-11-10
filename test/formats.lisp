@@ -186,7 +186,7 @@
   (dolist (instrument-tag '(#x6000 #x6001 #x6002))
     (dolist (key-tag '(#x6000 #x6001 #x6002))
       (let* ((xbnk (nintendo-ware::read-file 'nintendo-ware::xbnk (xbnk-fixture instrument-tag key-tag)))
-             (instrument (aref (nintendo-ware::xbnk-instrument-table-entries (nintendo-ware::xbnk-info-instruments (nintendo-ware::xbnk-info xbnk))) 0))
+             (instrument (aref (nintendo-ware::xbnk-info-instruments (nintendo-ware::xbnk-info xbnk)) 0))
              (keys (nintendo-ware::xbnk-instrument-definition instrument))
              (key (ecase instrument-tag
                     (#x6000 (nintendo-ware::xbnk-key-direct-entry keys))
@@ -199,7 +199,7 @@
                          (#x6002 (aref (nintendo-ware::xbnk-velocity-range-entries velocities) 0))))
              (pan (nintendo-ware::xbnk-velocity-pan-info velocity)))
         (assert (= 0 (nintendo-ware::xbnk-velocity-wave-index velocity)))
-        (assert (= 7 (nintendo-ware::nintendo-ware-sound-wave-id-index (aref (nintendo-ware::nintendo-ware-sound-wave-id-table-entries (nintendo-ware::xbnk-info-waves (nintendo-ware::xbnk-info xbnk))) 0))))
+        (assert (= 7 (nintendo-ware::nintendo-ware-sound-wave-id-index (aref (nintendo-ware::xbnk-info-waves (nintendo-ware::xbnk-info xbnk)) 0))))
         (assert (= 1.5f0 (nintendo-ware::xbnk-velocity-pitch velocity)))
         (assert (= 64 (nintendo-ware::xbnk-pan-flag-pan pan)))
         (assert (= 32 (nintendo-ware::xbnk-pan-flag-surround-pan pan)))

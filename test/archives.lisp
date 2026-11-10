@@ -21,7 +21,7 @@
   (cl-nintendo-ware.test::make-fixture-parameter-words :mask mask
                           :values (make-array (length values) :element-type '(unsigned-byte 32) :initial-contents values)))
 
-(defun xwsd-fixture (&key item-flags note-flags)
+(defun xwsd-fixture (&key item-flags note-flags (events :single))
   (let ((body
           (layout-fixture
            (list
@@ -62,9 +62,21 @@
                     (cl-nintendo-ware.test::make-byte-payload :bytes (make-array 3 :element-type '(unsigned-byte 8) :initial-element 0))) 3)
             (list 'tracks 'cl-nintendo-ware.test::reference-table
                   (lambda (address) (cl-nintendo-ware.test::make-reference-table :count 1 :entries (vector (fixture-reference address #x4903 'track 'tracks)))))
-            (list 'track 'cl-nintendo-ware.test::reference (lambda (address) (fixture-reference address 0 'events 'track)))
+            (list 'track 'cl-nintendo-ware.test::reference
+                  (lambda (address)
+                    (if (eq events :absent)
+                        (make-reference :type #xbeef :offset -1)
+                        (fixture-reference address 0 'events 'track))))
             (list 'events 'cl-nintendo-ware.test::reference-table
-                  (lambda (address) (cl-nintendo-ware.test::make-reference-table :count 1 :entries (vector (fixture-reference address #x4904 'event 'events)))))
+                  (lambda (address)
+                    (let ((entries
+                            (ecase events
+                              ((:single :absent) (vector (fixture-reference address #x4904 'event 'events)))
+                              (:empty #())
+                              (:sparse (vector (make-reference :type #xbeef :offset -1)
+                                               (fixture-reference address #x4904 'event 'events)
+                                               (make-reference :type 0 :offset -1))))))
+                      (make-reference-table :count (length entries) :entries entries))))
             (list 'event 'cl-nintendo-ware.test::xwsd-event
                   (lambda (address) (declare (ignore address))
                     (cl-nintendo-ware.test::make-xwsd-event :position 0.5f0 :length 2.0f0 :note-index 0)))
@@ -291,8 +303,7 @@
   (let* ((file (nintendo-ware::read-file 'nintendo-ware::xwsd
                  (xwsd-fixture :item-flags (flags 5 #xa55a7f80 #xa5f3b271))))
          (parameters (nintendo-ware::xwsd-item-parameters
-                       (aref (nintendo-ware::xwsd-item-table-entries
-                               (nintendo-ware::xwsd-info-items (nintendo-ware::xwsd-info file))) 0)))
+                       (aref (nintendo-ware::xwsd-info-items (nintendo-ware::xwsd-info file)) 0)))
          (pan (nintendo-ware::xwsd-parameters-pan-info parameters))
          (filter (nintendo-ware::xwsd-parameters-filter-info parameters)))
     (assert (= -128 (nintendo-ware::xwsd-packed-pan-pan pan)))
@@ -304,8 +315,7 @@
   (let* ((archive (nintendo-ware::read-file 'nintendo-ware::xsar
                     (xsar-fixture #() :sound-flags (flags 6 #xa55a0801 #x5aa57f80)
                                       :sequence-flags (flags 2 #xa55aff47))))
-         (sound (aref (nintendo-ware::xsar-sounds-table-entries
-                        (nintendo-ware::xsar-info-sounds (nintendo-ware::xsar-info archive))) 0))
+         (sound (aref (nintendo-ware::xsar-info-sounds (nintendo-ware::xsar-info archive)) 0))
          (player (nintendo-ware::xsar-sound-player-info sound))
          (priority (nintendo-ware::xsar-sequence-info-priority (nintendo-ware::xsar-sound-detail sound))))
     (assert (= -128 (nintendo-ware::xsar-player-info-priority player)))
@@ -317,8 +327,7 @@
     (assert (= 127 (nintendo-ware::xsar-packed-priority-release-reserved priority))))
   (let* ((archive (nintendo-ware::read-file 'nintendo-ware::xsar
                     (xsar-fixture #() :sound-flags (flags 2 #x0801))))
-         (sound (aref (nintendo-ware::xsar-sounds-table-entries
-                        (nintendo-ware::xsar-info-sounds (nintendo-ware::xsar-info archive))) 0))
+         (sound (aref (nintendo-ware::xsar-info-sounds (nintendo-ware::xsar-info archive)) 0))
          (pan (nintendo-ware::xsar-sound-pan-mode-info sound)))
     (assert (eq 'nintendo-ware::balance (nintendo-ware::xsar-pan-mode-info-mode pan)))
     (assert (eq 'nintendo-ware::linear-0-clamp (nintendo-ware::xsar-pan-mode-info-curve pan)))
@@ -330,8 +339,7 @@
                     (xsar-fixture (sequence-fixture #(#xff))
                       :sound-flags (flags #x90020009 0 #x10203040 1 #x55667788 #xaabbccdd)
                       :sequence-flags (flags 2 #x0147))))
-         (sound (aref (nintendo-ware::xsar-sounds-table-entries
-                       (nintendo-ware::xsar-info-sounds (nintendo-ware::xsar-info archive))) 0))
+         (sound (aref (nintendo-ware::xsar-info-sounds (nintendo-ware::xsar-info archive)) 0))
          (sequence (nintendo-ware::xsar-sound-detail sound)))
     (assert (nintendo-ware::xsar-sound-flags-user-parameter-0-p
               (nintendo-ware::xsar-sound-flags sound)))
@@ -348,27 +356,43 @@
   (let* ((file (nintendo-ware::read-file 'nintendo-ware::xwsd
                  (xwsd-fixture :item-flags (flags #x302 #x40000000 #xffffffff #xffffffff)
                                :note-flags (flags 0))))
-         (item (aref (nintendo-ware::xwsd-item-table-entries
-                      (nintendo-ware::xwsd-info-items (nintendo-ware::xwsd-info file))) 0))
+         (item (aref (nintendo-ware::xwsd-info-items (nintendo-ware::xwsd-info file)) 0))
          (parameters (nintendo-ware::xwsd-item-parameters item))
-         (note (aref (nintendo-ware::xwsd-note-table-entries
-                      (nintendo-ware::xwsd-item-notes item)) 0)))
+         (note (aref (nintendo-ware::xwsd-item-notes item) 0)))
     (assert (= 2.0f0 (nintendo-ware::xwsd-parameters-pitch parameters)))
     (assert (null (nintendo-ware::xwsd-parameters-pan-info parameters)))
     (assert (null (nintendo-ware::xwsd-parameters-sends parameters)))
     (assert (null (nintendo-ware::xwsd-parameters-envelope parameters)))
     (assert (null (nintendo-ware::xwsd-parameters-pitch
                    (nintendo-ware::xwsd-note-parameters note)))))
+  ;; A null reference, an empty array and null array elements remain distinct.
+  (dolist (*fixture-endian* '(:little :big))
+    (dolist (*fixture-family* '(:c :f))
+      (dolist (layout '(:absent :empty :sparse))
+        (let* ((file (nintendo-ware::read-file 'nintendo-ware::xwsd (xwsd-fixture :events layout)))
+               (items (nintendo-ware::xwsd-info-items (nintendo-ware::xwsd-info file)))
+               (tracks (nintendo-ware::xwsd-item-tracks (aref items 0)))
+               (events (nintendo-ware::xwsd-track-events (aref tracks 0))))
+          (ecase layout
+            (:absent (assert (null events)))
+            (:empty (assert (typep events '(simple-array t (0)))))
+            (:sparse
+             (assert (typep events '(simple-array t (3))))
+             (assert (null (aref events 0)))
+             (assert (= 0.5f0 (nintendo-ware::xwsd-event-position (aref events 1))))
+             (assert (= 2.0f0 (nintendo-ware::xwsd-event-length (aref events 1))))
+             (assert (zerop (nintendo-ware::xwsd-event-note-index (aref events 1))))
+             (assert (null (aref events 2)))))))))
   (let* ((sound (nintendo-ware::read-file 'nintendo-ware::xwsd (xwsd-fixture)))
          (information (nintendo-ware::xwsd-info sound))
-         (item (aref (nintendo-ware::xwsd-item-table-entries (nintendo-ware::xwsd-info-items information)) 0))
+         (item (aref (nintendo-ware::xwsd-info-items information) 0))
          (parameters (nintendo-ware::xwsd-item-parameters item))
          (pan (nintendo-ware::xwsd-parameters-pan-info parameters))
          (filter (nintendo-ware::xwsd-parameters-filter-info parameters))
-         (track (aref (nintendo-ware::xwsd-track-table-entries (nintendo-ware::xwsd-item-tracks item)) 0))
-         (event (aref (nintendo-ware::xwsd-event-table-entries (nintendo-ware::xwsd-track-events track)) 0))
-         (note (aref (nintendo-ware::xwsd-note-table-entries (nintendo-ware::xwsd-item-notes item)) (nintendo-ware::xwsd-event-note-index event))))
-    (assert (= 9 (nintendo-ware::nintendo-ware-sound-wave-id-index (aref (nintendo-ware::nintendo-ware-sound-wave-id-table-entries (nintendo-ware::xwsd-info-waves information)) 0))))
+         (track (aref (nintendo-ware::xwsd-item-tracks item) 0))
+         (event (aref (nintendo-ware::xwsd-track-events track) 0))
+         (note (aref (nintendo-ware::xwsd-item-notes item) (nintendo-ware::xwsd-event-note-index event))))
+    (assert (= 9 (nintendo-ware::nintendo-ware-sound-wave-id-index (aref (nintendo-ware::xwsd-info-waves information) 0))))
     (assert (= 0.5f0 (nintendo-ware::xwsd-event-position event)))
     (assert (= 2.0f0 (nintendo-ware::xwsd-event-length event)))
     (assert (= 64 (nintendo-ware::xwsd-packed-pan-pan pan)))
@@ -389,28 +413,28 @@
          (archive (nintendo-ware::read-file 'nintendo-ware::xsar (xsar-fixture embedded)))
          (information (nintendo-ware::xsar-info archive))
          (strings (nintendo-ware::xsar-strg-strings (nintendo-ware::xsar-strg archive)))
-         (sound (aref (nintendo-ware::xsar-sounds-table-entries (nintendo-ware::xsar-info-sounds information)) 0))
+         (sound (aref (nintendo-ware::xsar-info-sounds information) 0))
          (sequence (nintendo-ware::xsar-sound-detail sound))
          (priority (nintendo-ware::xsar-sequence-info-priority sequence))
          (files (nintendo-ware::xsar-files archive))
-         (external (aref (nintendo-ware::xsar-files-table-entries (nintendo-ware::xsar-info-files information)) 1)))
+         (external (aref (nintendo-ware::xsar-info-files information) 1)))
     (assert (= 7 (nintendo-ware::xgrp-entry-file-id (aref (nintendo-ware::xgrp-info-entries (nintendo-ware::xgrp-info group)) 0))))
     (assert (equalp embedded (nintendo-ware::xgrp-entry-data
                               (find 7 (nintendo-ware::xgrp-info-entries (nintendo-ware::xgrp-info group))
                                     :key #'nintendo-ware::xgrp-entry-file-id))))
     (assert (= #x03000000 (nintendo-ware::nintendo-ware-sound-resource-id-value (nintendo-ware::xgrp-dependency-resource-id (aref (nintendo-ware::xgrp-infx-entries (nintendo-ware::xgrp-infx group)) 0)))))
-    (assert (string= "song" (nintendo-ware::xsar-string-text (aref (nintendo-ware::xsar-string-table-entries strings) 0))))
+    (assert (string= "song" (nintendo-ware::xsar-string-text (aref strings 0))))
     (assert (= #x01000000 (nintendo-ware::nintendo-ware-sound-resource-id-value (nintendo-ware::xsar-patricia-node-resource-id (aref (nintendo-ware::xsar-patricia-tree-nodes (nintendo-ware::xsar-strg-tree (nintendo-ware::xsar-strg archive))) 0)))))
     (assert (= 4 (nintendo-ware::xsar-sequence-info-start-offset sequence)))
     (assert (= 80 (nintendo-ware::xsar-packed-priority-channel-priority priority)))
     (assert (nintendo-ware::xsar-packed-priority-release-priority-p priority))
-    (let ((bank (aref (nintendo-ware::xsar-resource-id-table-entries (nintendo-ware::xsar-sequence-info-banks sequence)) 0))
-          (wave (aref (nintendo-ware::xsar-resource-id-table-entries (nintendo-ware::xsar-bank-wave-archives (aref (nintendo-ware::xsar-banks-table-entries (nintendo-ware::xsar-info-banks information)) 0))) 0)))
+    (let ((bank (aref (nintendo-ware::xsar-sequence-info-banks sequence) 0))
+          (wave (aref (nintendo-ware::xsar-bank-wave-archives (aref (nintendo-ware::xsar-info-banks information) 0)) 0)))
       (assert (= 3 (nintendo-ware::nintendo-ware-sound-resource-id-type bank)))
       (assert (zerop (nintendo-ware::nintendo-ware-sound-resource-id-index bank)))
       (assert (= 5 (nintendo-ware::nintendo-ware-sound-resource-id-type wave)))
       (assert (= 2 (nintendo-ware::nintendo-ware-sound-resource-id-index wave))))
-    (assert (= 4 (nintendo-ware::xsar-player-sound-limit (aref (nintendo-ware::xsar-players-table-entries (nintendo-ware::xsar-info-players information)) 0))))
+    (assert (= 4 (nintendo-ware::xsar-player-sound-limit (aref (nintendo-ware::xsar-info-players information) 0))))
     (assert (= 12 (nintendo-ware::xsar-project-info-maximum-sequences (nintendo-ware::xsar-info-project-info information))))
     (assert (= 24 (nintendo-ware::xsar-project-info-maximum-sequence-tracks (nintendo-ware::xsar-info-project-info information))))
     (assert (= #x12345678 (nintendo-ware::xsar-project-info-options (nintendo-ware::xsar-info-project-info information))))
@@ -492,12 +516,12 @@
     (let* ((stream (nintendo-ware::read-file 'nintendo-ware::xstm (xstm-fixture major)))
            (information (nintendo-ware::xstm-info stream))
            (metadata (nintendo-ware::xstm-info-stream information))
-           (seek (nintendo-ware::xstm-seek-entry-context (aref (nintendo-ware::xstm-seek-row-entries (aref (nintendo-ware::xstm-seek-rows (nintendo-ware::xstm-seek stream)) 1)) 1)))
-           (channel (aref (nintendo-ware::xstm-channel-table-entries (nintendo-ware::xstm-info-channels information)) 1))
-           (track (aref (nintendo-ware::xstm-track-table-entries (nintendo-ware::xstm-info-tracks information)) 0)))
+           (seek (nintendo-ware::xstm-seek-entry-context (aref (aref (nintendo-ware::xstm-seek-rows (nintendo-ware::xstm-seek stream)) 1) 1)))
+           (channel (aref (nintendo-ware::xstm-info-channels information) 1))
+           (track (aref (nintendo-ware::xstm-info-tracks information) 0)))
       (assert (eq 'nintendo-ware::dsp-adpcm (nintendo-ware::xstm-stream-info-encoding metadata)))
       (assert (eq t (nintendo-ware::xstm-stream-info-loop-p metadata)))
-      (assert (equalp #(0 1) (nintendo-ware::nintendo-ware-sound-byte-table-entries (nintendo-ware::xstm-track-channels track))))
+      (assert (equalp #(0 1) (nintendo-ware::xstm-track-channels track)))
       (assert (= -4 (nintendo-ware::xstm-dsp-seek-context-history-1 seek)))
       (assert (= 400 (nintendo-ware::xstm-dsp-seek-context-history-2 seek)))
       (assert (equalp #(4 4 4 4 4 4 4 4) (subseq (nintendo-ware::nintendo-ware-section-raw-block-bytes (nintendo-ware::xstm-data stream)) 24 32)))
