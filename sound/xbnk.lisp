@@ -72,26 +72,51 @@
                         ((nil) null) ((t) (unsigned-byte 32))))
   (reserved-12-31-values #.(make-array 0 :element-type '(unsigned-byte 32))
     :type (simple-array (unsigned-byte 32) ((logcount (xbnk-velocity-flag-set-reserved-12-31 flags)))))
-  (envelope nil :type (ecase (and envelope-offset (/= envelope-offset #xffffffff))
-                        ((nil) null) ((t) (values (pointer (reference-to 0 (+ %start envelope-offset) xbnk-adshr-curve) (map null (constantly (+ %start envelope-offset)))))))))
+  (envelope nil :type
+            (ecase (and envelope-offset (/= envelope-offset #xffffffff))
+              ((nil) null)
+              ((t)
+               (values
+                (pointer
+                 (or null-reference
+                     (values
+                      (pointer (map xbnk-adshr-curve
+                                    (the (function (t) (or null xbnk-adshr-curve)) #'identity))
+                               (reference-offset-value 0)
+                               (+ %start envelope-offset))))
+                 (map null (constantly (+ %start envelope-offset)))))))))
 
 (defbinstruct/me xbnk-velocity-direct (wave-count)
-  ($table-start 0 :type position)
-  (entry nil :type (reference-to #x5902 $table-start (xbnk-velocity wave-count))))
+  ($xbnk-velocity-direct-start 0 :type position)
+  (entry nil :type (or null-reference
+                       (values (pointer (map (xbnk-velocity wave-count)
+                                             (the (function (t) (or null xbnk-velocity)) #'identity))
+                                        (reference-offset-value #x5902)
+                                        $xbnk-velocity-direct-start)))))
 
 (defbinstruct/me xbnk-velocity-index (wave-count)
-  ($table-start 0 :type position)
+  ($xbnk-velocity-index-start 0 :type position)
   (count 0 :type (satisfies (unsigned-byte 32) (lambda (count) (<= count 128))))
   (upper-bounds #.(make-array 0 :element-type '(unsigned-byte 8)) :type (simple-array (unsigned-byte 8) (count)))
   (padding #.(make-array 0 :element-type '(unsigned-byte 8)) :type (simple-array (unsigned-byte 8) ((mod (- count) 4))))
-  (entries #() :type (simple-array (reference-to #x5902 $table-start (xbnk-velocity wave-count)) (count))))
+  (entries #() :type (simple-array
+                      (or null-reference
+                          (values (pointer (map (xbnk-velocity wave-count)
+                                                (the (function (t) (or null xbnk-velocity)) #'identity))
+                                           (reference-offset-value #x5902)
+                                           $xbnk-velocity-index-start))) (count))))
 
 (defbinstruct/me xbnk-velocity-range (wave-count)
-  ($table-start 0 :type position)
+  ($xbnk-velocity-range-start 0 :type position)
   (minimum 0 :type (unsigned-byte 8))
   (maximum 0 :type (satisfies (unsigned-byte 8) (lambda (maximum) (<= minimum maximum 127))))
   (padding 0 :type (unsigned-byte 16))
-  (entries #() :type (simple-array (reference-to #x5902 $table-start (xbnk-velocity wave-count)) ((1+ (- maximum minimum))))))
+  (entries #() :type (simple-array
+                      (or null-reference
+                          (values (pointer (map (xbnk-velocity wave-count)
+                                                (the (function (t) (or null xbnk-velocity)) #'identity))
+                                           (reference-offset-value #x5902)
+                                           $xbnk-velocity-range-start))) ((1+ (- maximum minimum))))))
 
 (defbinstruct/me xbnk-key (wave-count)
   (%start 0 :type position)
@@ -104,22 +129,36 @@
                                    (#x6002 (values (pointer (xbnk-velocity-range wave-count) (map null (constantly (reference-target reference %start #x6002)))))))))))
 
 (defbinstruct/me xbnk-key-direct (wave-count)
-  ($table-start 0 :type position)
-  (entry nil :type (reference-to #x5901 $table-start (xbnk-key wave-count))))
+  ($xbnk-key-direct-start 0 :type position)
+  (entry nil :type (or null-reference
+                       (values (pointer (map (xbnk-key wave-count)
+                                             (the (function (t) (or null xbnk-key)) #'identity))
+                                        (reference-offset-value #x5901)
+                                        $xbnk-key-direct-start)))))
 
 (defbinstruct/me xbnk-key-index (wave-count)
-  ($table-start 0 :type position)
+  ($xbnk-key-index-start 0 :type position)
   (count 0 :type (satisfies (unsigned-byte 32) (lambda (count) (<= count 128))))
   (upper-bounds #.(make-array 0 :element-type '(unsigned-byte 8)) :type (simple-array (unsigned-byte 8) (count)))
   (padding #.(make-array 0 :element-type '(unsigned-byte 8)) :type (simple-array (unsigned-byte 8) ((mod (- count) 4))))
-  (entries #() :type (simple-array (reference-to #x5901 $table-start (xbnk-key wave-count)) (count))))
+  (entries #() :type (simple-array
+                      (or null-reference
+                          (values (pointer (map (xbnk-key wave-count)
+                                                (the (function (t) (or null xbnk-key)) #'identity))
+                                           (reference-offset-value #x5901)
+                                           $xbnk-key-index-start))) (count))))
 
 (defbinstruct/me xbnk-key-range (wave-count)
-  ($table-start 0 :type position)
+  ($xbnk-key-range-start 0 :type position)
   (minimum 0 :type (unsigned-byte 8))
   (maximum 0 :type (satisfies (unsigned-byte 8) (lambda (maximum) (<= minimum maximum 127))))
   (padding 0 :type (unsigned-byte 16))
-  (entries #() :type (simple-array (reference-to #x5901 $table-start (xbnk-key wave-count)) ((1+ (- maximum minimum))))))
+  (entries #() :type (simple-array
+                      (or null-reference
+                          (values (pointer (map (xbnk-key wave-count)
+                                                (the (function (t) (or null xbnk-key)) #'identity))
+                                           (reference-offset-value #x5901)
+                                           $xbnk-key-range-start))) ((1+ (- maximum minimum))))))
 
 (defbinstruct/me xbnk-instrument (wave-count)
   (%start 0 :type position)
@@ -132,9 +171,14 @@
                                    (#x6002 (values (pointer (xbnk-key-range wave-count) (map null (constantly (reference-target reference %start #x6002)))))))))))
 
 (defbinstruct/me xbnk-instrument-table (wave-count)
-  ($table-start 0 :type position)
+  ($xbnk-instrument-table-start 0 :type position)
   (count 0 :type (unsigned-byte 32))
-  (entries #() :type (simple-array (reference-to #x5900 $table-start (xbnk-instrument wave-count)) (count))))
+  (entries #() :type (simple-array
+                      (or null-reference
+                          (values (pointer (map (xbnk-instrument wave-count)
+                                                (the (function (t) (or null xbnk-instrument)) #'identity))
+                                           (reference-offset-value #x5900)
+                                           $xbnk-instrument-table-start))) (count))))
 
 (define-nintendo-ware-section (xbnk-info (:magic "INFO"))
   ($info-start 0 :type position)

@@ -161,20 +161,35 @@
   (pan 0 :type (unsigned-byte 8))
   (span 0 :type (unsigned-byte 8))
   (flags 0 :type (unsigned-byte 8))
-  (channels nil :type (reference-to #x0100 $track-start byte-table)))
+  (channels nil :type (or null-reference
+                          (values (pointer (map byte-table
+                                                (the (function (t) (or null byte-table)) #'identity))
+                                           (reference-offset-value #x0100)
+                                           $track-start)))))
 
 (defbinstruct/me xsar-stream-track-table ()
-  ($table-start 0 :type position)
+  ($xsar-stream-track-table-start 0 :type position)
   (count 0 :type (unsigned-byte 32))
-  (entries #() :type (simple-array (reference-to #x220e $table-start xsar-stream-track) (count))))
+  (entries #() :type (simple-array
+                      (or null-reference
+                          (values (pointer (map xsar-stream-track
+                                                (the (function (t) (or null xsar-stream-track)) #'identity))
+                                           (reference-offset-value #x220e)
+                                           $xsar-stream-track-table-start))) (count))))
 
 (defbinstruct/me xsar-stream-sound-info (tracks-p)
   (%stream-start 0 :type position)
   (allocate-track-flags 0 :type (unsigned-byte 16))
   (channel-count 0 :type (unsigned-byte 16))
-  (tracks nil :type (ecase (plusp tracks-p)
-                     ((nil) null)
-                     ((t) (reference-to #x0101 %stream-start xsar-stream-track-table))))
+  (tracks nil :type
+          (ecase (plusp tracks-p)
+            ((nil) null)
+            ((t)
+             (or null-reference
+                 (values (pointer (map xsar-stream-track-table
+                                       (the (function (t) (or null xsar-stream-track-table)) #'identity))
+                                  (reference-offset-value #x0101)
+                                  %stream-start))))))
   (pitch nil :type (ecase (= tracks-p 2) ((nil) null) ((t) single-float)))
   (sends-reference nil :type (ecase (= tracks-p 2) ((nil) null) ((t) reference)))
   (extension-reference nil :type (ecase (= tracks-p 2) ((nil) null) ((t) reference)))
@@ -254,12 +269,24 @@
 
 (define-nintendo-ware-section (xsar-strg (:magic "STRG"))
   ($strg-start 0 :type position)
-  (strings nil :type (reference-to #x2400 $strg-start xsar-string-table))
-  (tree nil :type (reference-to #x2401 $strg-start xsar-patricia-tree)))
+  (strings nil :type (or null-reference
+                         (values (pointer (map xsar-string-table
+                                               (the (function (t) (or null xsar-string-table)) #'identity))
+                                          (reference-offset-value #x2400)
+                                          $strg-start))))
+  (tree nil :type (or null-reference
+                      (values (pointer (map xsar-patricia-tree
+                                            (the (function (t) (or null xsar-patricia-tree)) #'identity))
+                                       (reference-offset-value #x2401)
+                                       $strg-start)))))
 
 (defbinstruct/me xsar-sequence-info ()
   ($sequence-start 0 :type position)
-  (banks nil :type (reference-to #x0100 $sequence-start xsar-resource-id-table))
+  (banks nil :type (or null-reference
+                       (values (pointer (map xsar-resource-id-table
+                                             (the (function (t) (or null xsar-resource-id-table)) #'identity))
+                                        (reference-offset-value #x0100)
+                                        $sequence-start))))
   (allocate-track-flags 0 :type (unsigned-byte 32))
   (flags (make-xsar-sequence-flag-set) :type xsar-sequence-flag-set)
   (start-offset nil :type (ecase (xsar-sequence-flag-set-start-offset-p flags)
@@ -308,17 +335,29 @@
                         ((nil) null) ((t) (values (pointer xsar-sound-3d-info (map null (constantly (+ %start sound-3d-offset)))))))))
 
 (defbinstruct/me xsar-wave-sound-group ()
-  ($group-start 0 :type position)
-  (wave-archives nil :type (reference-to #x0100 $group-start xsar-resource-id-table))
+  ($xsar-wave-sound-group-start 0 :type position)
+  (wave-archives nil :type (or null-reference
+                               (values (pointer (map xsar-resource-id-table
+                                                     (the (function (t) (or null xsar-resource-id-table)) #'identity))
+                                                (reference-offset-value #x0100)
+                                                $xsar-wave-sound-group-start))))
   (flags (make-xsar-wave-sound-group-flag-set) :type xsar-wave-sound-group-flag-set)
   (reserved-0-31-values #.(make-array 0 :element-type '(unsigned-byte 32))
     :type (simple-array (unsigned-byte 32) ((logcount (xsar-wave-sound-group-flag-set-reserved-0-31 flags))))))
 
 (defbinstruct/me xsar-sound-group ()
-  ($group-start 0 :type position)
+  ($xsar-sound-group-start 0 :type position)
   (first-id (make-resource-id) :type resource-id) (last-id (make-resource-id) :type resource-id)
-  (files nil :type (reference-to #x0100 $group-start xsar-integer-table))
-  (wave-group nil :type (reference-to #x2205 $group-start xsar-wave-sound-group))
+  (files nil :type (or null-reference
+                       (values (pointer (map xsar-integer-table
+                                             (the (function (t) (or null xsar-integer-table)) #'identity))
+                                        (reference-offset-value #x0100)
+                                        $xsar-sound-group-start))))
+  (wave-group nil :type (or null-reference
+                            (values (pointer (map xsar-wave-sound-group
+                                                  (the (function (t) (or null xsar-wave-sound-group)) #'identity))
+                                             (reference-offset-value #x2205)
+                                             $xsar-sound-group-start))))
   (flags (make-xsar-sound-group-flag-set) :type xsar-sound-group-flag-set)
   (string-index nil :type (ecase (xsar-sound-group-flag-set-string-index-p flags)
                         ((nil) null) ((t) (unsigned-byte 32))))
@@ -328,7 +367,11 @@
 (defbinstruct/me xsar-bank ()
   ($xbnk-start 0 :type position)
   (file-id 0 :type (unsigned-byte 32))
-  (wave-archives nil :type (reference-to #x0100 $xbnk-start xsar-resource-id-table))
+  (wave-archives nil :type (or null-reference
+                               (values (pointer (map xsar-resource-id-table
+                                                     (the (function (t) (or null xsar-resource-id-table)) #'identity))
+                                                (reference-offset-value #x0100)
+                                                $xbnk-start))))
   (flags (make-xsar-bank-flag-set) :type xsar-bank-flag-set)
   (string-index nil :type (ecase (xsar-bank-flag-set-string-index-p flags)
                         ((nil) null) ((t) (unsigned-byte 32))))
@@ -360,57 +403,126 @@
                                  (#x220d (values (pointer xsar-external-file (map null (constantly (reference-target location-reference %start #x220d)))))))))))
 
 (defbinstruct/me xsar-sounds-table (tracks-p)
-  ($table-start 0 :type position)
+  ($xsar-sounds-table-start 0 :type position)
   (count 0 :type (unsigned-byte 32))
-  (entries #() :type (simple-array (reference-to #x2200 $table-start (xsar-sound tracks-p)) (count))))
+  (entries #() :type (simple-array
+                      (or null-reference
+                          (values (pointer (map (xsar-sound tracks-p)
+                                                (the (function (t) (or null xsar-sound)) #'identity))
+                                           (reference-offset-value #x2200)
+                                           $xsar-sounds-table-start))) (count))))
 
 (defbinstruct/me xsar-sound-groups-table ()
-  ($table-start 0 :type position)
+  ($xsar-sound-groups-table-start 0 :type position)
   (count 0 :type (unsigned-byte 32))
-  (entries #() :type (simple-array (reference-to #x2204 $table-start xsar-sound-group) (count))))
+  (entries #() :type (simple-array
+                      (or null-reference
+                          (values (pointer (map xsar-sound-group
+                                                (the (function (t) (or null xsar-sound-group)) #'identity))
+                                           (reference-offset-value #x2204)
+                                           $xsar-sound-groups-table-start))) (count))))
 
 (defbinstruct/me xsar-banks-table ()
-  ($table-start 0 :type position)
+  ($xsar-banks-table-start 0 :type position)
   (count 0 :type (unsigned-byte 32))
-  (entries #() :type (simple-array (reference-to #x2206 $table-start xsar-bank) (count))))
+  (entries #() :type (simple-array
+                      (or null-reference
+                          (values (pointer (map xsar-bank
+                                                (the (function (t) (or null xsar-bank)) #'identity))
+                                           (reference-offset-value #x2206)
+                                           $xsar-banks-table-start))) (count))))
 
 (defbinstruct/me xsar-wave-archives-table ()
-  ($table-start 0 :type position)
+  ($xsar-wave-archives-table-start 0 :type position)
   (count 0 :type (unsigned-byte 32))
-  (entries #() :type (simple-array (reference-to #x2207 $table-start xsar-wave-archive) (count))))
+  (entries #() :type (simple-array
+                      (or null-reference
+                          (values (pointer (map xsar-wave-archive
+                                                (the (function (t) (or null xsar-wave-archive)) #'identity))
+                                           (reference-offset-value #x2207)
+                                           $xsar-wave-archives-table-start))) (count))))
 
 (defbinstruct/me xsar-groups-table ()
-  ($table-start 0 :type position)
+  ($xsar-groups-table-start 0 :type position)
   (count 0 :type (unsigned-byte 32))
-  (entries #() :type (simple-array (reference-to #x2208 $table-start xsar-group) (count))))
+  (entries #() :type (simple-array
+                      (or null-reference
+                          (values (pointer (map xsar-group
+                                                (the (function (t) (or null xsar-group)) #'identity))
+                                           (reference-offset-value #x2208)
+                                           $xsar-groups-table-start))) (count))))
 
 (defbinstruct/me xsar-players-table ()
-  ($table-start 0 :type position)
+  ($xsar-players-table-start 0 :type position)
   (count 0 :type (unsigned-byte 32))
-  (entries #() :type (simple-array (reference-to #x2209 $table-start xsar-player) (count))))
+  (entries #() :type (simple-array
+                      (or null-reference
+                          (values (pointer (map xsar-player
+                                                (the (function (t) (or null xsar-player)) #'identity))
+                                           (reference-offset-value #x2209)
+                                           $xsar-players-table-start))) (count))))
 
 (defbinstruct/me xsar-files-table ()
-  ($table-start 0 :type position)
+  ($xsar-files-table-start 0 :type position)
   (count 0 :type (unsigned-byte 32))
-  (entries #() :type (simple-array (reference-to #x220a $table-start xsar-file) (count))))
+  (entries #() :type (simple-array
+                      (or null-reference
+                          (values (pointer (map xsar-file
+                                                (the (function (t) (or null xsar-file)) #'identity))
+                                           (reference-offset-value #x220a)
+                                           $xsar-files-table-start))) (count))))
 
 (define-nintendo-ware-section (xsar-info (:magic "INFO"))
   (nil nil :type (values (pointer xsar-data-position (map null (constantly (if (block-reference %header #x2002 nil) (+ 8 (block-start %header #x2002)) 8))))))
   ($info-start 0 :type position)
-  (sounds nil :type (reference-to #x2100 $info-start
-                                 (xsar-sounds-table
-                                  (if (string= (header-magic %header) "CSAR")
-                                      (cond ((>= (header-version %header) #x02030200) 2)
-                                            ((>= (header-version %header) #x02030000) 1)
-                                            (t 0))
-                                      0))))
-  (sound-groups nil :type (reference-to #x2104 $info-start xsar-sound-groups-table))
-  (banks nil :type (reference-to #x2101 $info-start xsar-banks-table))
-  (wave-archives nil :type (reference-to #x2103 $info-start xsar-wave-archives-table))
-  (groups nil :type (reference-to #x2105 $info-start xsar-groups-table))
-  (players nil :type (reference-to #x2102 $info-start xsar-players-table))
-  (files nil :type (reference-to #x2106 $info-start xsar-files-table))
-  (project-info nil :type (reference-to #x220b $info-start xsar-project-info)))
+  (sounds nil :type
+          (or null-reference
+              (values
+               (pointer
+                (map (xsar-sounds-table
+                      (if (string= (header-magic %header) "CSAR")
+                          (cond ((>= (header-version %header) #x02030200) 2)
+                                ((>= (header-version %header) #x02030000) 1)
+                                (t 0))
+                          0))
+                     (the (function (t) (or null xsar-sounds-table)) #'identity))
+                (reference-offset-value #x2100)
+                $info-start))))
+  (sound-groups nil :type (or null-reference
+                              (values (pointer (map xsar-sound-groups-table
+                                                    (the (function (t) (or null xsar-sound-groups-table)) #'identity))
+                                               (reference-offset-value #x2104)
+                                               $info-start))))
+  (banks nil :type (or null-reference
+                       (values (pointer (map xsar-banks-table
+                                             (the (function (t) (or null xsar-banks-table)) #'identity))
+                                        (reference-offset-value #x2101)
+                                        $info-start))))
+  (wave-archives nil :type (or null-reference
+                               (values (pointer (map xsar-wave-archives-table
+                                                     (the (function (t) (or null xsar-wave-archives-table)) #'identity))
+                                                (reference-offset-value #x2103)
+                                                $info-start))))
+  (groups nil :type (or null-reference
+                        (values (pointer (map xsar-groups-table
+                                              (the (function (t) (or null xsar-groups-table)) #'identity))
+                                         (reference-offset-value #x2105)
+                                         $info-start))))
+  (players nil :type (or null-reference
+                         (values (pointer (map xsar-players-table
+                                               (the (function (t) (or null xsar-players-table)) #'identity))
+                                          (reference-offset-value #x2102)
+                                          $info-start))))
+  (files nil :type (or null-reference
+                       (values (pointer (map xsar-files-table
+                                             (the (function (t) (or null xsar-files-table)) #'identity))
+                                        (reference-offset-value #x2106)
+                                        $info-start))))
+  (project-info nil :type (or null-reference
+                              (values (pointer (map xsar-project-info
+                                                    (the (function (t) (or null xsar-project-info)) #'identity))
+                                               (reference-offset-value #x220b)
+                                               $info-start)))))
 
 (define-nintendo-ware-file (xsar (:magic ("CSAR" "FSAR")))
   (strg nil :type (ecase (not (null (block-reference %header #x2000 nil))) ((nil) null) ((t) (values (pointer xsar-strg (map null (constantly (block-start %header #x2000))))))))

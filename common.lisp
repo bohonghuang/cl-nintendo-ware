@@ -42,13 +42,19 @@
   (offset -1 :type (signed-byte 32))
   (size 0 :type (unsigned-byte 32)))
 
-;; Pointer fields need an offset, not a temporary REFERENCE object. Keep the
-;; same wire declaration and validation while returning the scalar directly.
+;; Native pointer offsets validate non-null references without allocating a
+;; temporary REFERENCE. NULL-REFERENCE handles the separate -1 sentinel.
 (defbinstruct/me (reference-offset-value (:type (signed-byte 32)) (:constructor progn) (:conc-name nil)) (tag)
   (%tag tag :type (unsigned-byte 16))
   (nil 0 :type (unsigned-byte 16))
   (values -1 :type (satisfies (signed-byte 32)
-                             (lambda (offset) (valid-reference-offset-p offset %tag tag)))))
+                             (lambda (offset) (and (not (minusp offset)) (= %tag tag))))))
+
+(defbinstruct/me (null-reference (:type null) (:constructor progn) (:conc-name nil)) ()
+  (nil 0 :type (unsigned-byte 16))
+  (nil 0 :type (unsigned-byte 16))
+  (nil -1 :type (satisfies (signed-byte 32) (curry #'= -1)))
+  (values nil :type null))
 
 (defun reference-target (reference base &optional expected-type)
   (let ((offset (reference-offset reference)))
@@ -65,30 +71,6 @@
         (fail-file "Sized reference tag mismatch"))
       (when (minusp offset) (fail-file "Invalid sized relative offset ~D" offset))
       (+ base offset))))
-
-(eval-when (:compile-toplevel :load-toplevel :execute)
-  (defmethod binstruct::lisp-type-expr ((name (eql 'reference-to)) &rest arguments)
-    `(or null ,(binstruct::lisp-type (third arguments))))
-  (defmethod binstruct::expand-reader-type-expr ((name (eql 'reference-to)) &rest arguments)
-    (destructuring-bind (tag base content) arguments
-      (with-gensyms (offset)
-        `(let ((,offset ,(binstruct::expand-reader-type-unit `(reference-offset-value ,tag))))
-           (ecase (= ,offset -1)
-             ((t) (constantly nil))
-             ((nil)
-              ,(binstruct::expand-reader-type-unit
-                `(pointer (map ,content
-                               (the (function (t) (or null ,(binstruct::lisp-type content))) #'identity))
-                          (map null (constantly ,offset))
-                          ;; Already-read anchors use their lexical value;
-                          ;; nested tables may replace the native global alias.
-                          (progn ,base)))))))))
-  (defmethod binstruct::expand-writer-type-expr ((name (eql 'reference-to)) &rest arguments)
-    (destructuring-bind (tag base content) arguments
-      (binstruct::expand-writer-type
-       `(ecase (null ,binstruct::*value*)
-          ((t) (map (reference-offset-value ,tag) (constantly nil) (constantly -1)))
-          ((nil) (pointer ,content (reference-offset-value ,tag) ,base)))))))
 
 (defbinstruct (file-byte-order (:type (member :little :big)) (:constructor progn) (:conc-name nil) (:endian :big)) ()
   (%value #xfffe :type (satisfies (unsigned-byte 16) (lambda (value) (member value '(#xfffe #xfeff)))))

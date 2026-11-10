@@ -175,7 +175,9 @@ file／section body 均通过原生文件位置锚点恢复 `%header`，不再�
 
 也接受 binstruct 风格的可选参数列表；生产 schema 最多三个参数。递归类型用无 body 的 `(defbinstruct/me name)` 提前注册展开函数，随后提供完整声明，见 `xseq-event-union`。打包为 32 位整数的数值子字段统一用 `(:alignment 4)`，由 binstruct 按位偏移和端序处理，不手写反序布局。
 
-寻址使用原生 `pointer`，库的声明和类型展开中不再使用 `peek`。`reference-to` 单次读取 tag／offset，保留空引用与 tag 校验，再展开原生 pointer；不引入运行时 parser 参数。`$...` position 可跨结构并参与原生延迟解析，`%...` position 保持局部。需要在后续字段中使用目标值时，用原生 `(values (pointer ...))` 将目标读取限定在当前字段单元内；不把 pointer 的延迟目标误当成已经可用的普通字段。已读取且会被嵌套表覆盖的基址仍取其词法快照。不添加目录跨度、重叠或 sized-reference 子文件长度校验；文件／区块 size 参与尾部 padding 读取，截断 padding 也会导致读取失败，不承诺完整格式校验或受限输入沙箱。
+寻址直接使用 binstruct 原生 `pointer`，不使用 `peek` 或自定义 `reference-to` 类型展开。可空引用在字段中声明为原生 `or`：`null-reference` 匹配 `-1` 偏移并返回 `NIL`，非空分支的 pointer 以 `reference-offset-value` 读取并校验 tag／非负偏移。目标使用与 cl-nitro 相同的 typed identity `map`，保留具体语义类型，同时允许原生延迟寻址的默认值为 `NIL`；不分配临时 reference 对象，不引入运行时 parser 参数。
+
+`$...` position 可跨结构并参与原生延迟解析，`%...` position 保持局部。pointer 基址直接使用 `$info-start` 等符号，不包 `progn`；嵌套表使用各记录独有的 `$...-start` 锚点，避免子表覆盖外表基址。pointer 不在字段类型最外层时必须包原生 `values`，例如 `or` 分支和数组元素中的 `(values (pointer ...))`，使目标在当前单元内解析完毕，也确保后续字段能读取目标值。不添加目录跨度、重叠或 sized-reference 子文件长度校验；文件／区块 size 参与尾部 padding 读取，截断 padding 也会导致读取失败，不承诺完整格式校验或受限输入沙箱。
 
 **本库只保证 reader。** ME 同时注册 reader／writer 的编译期端序展开，以保持 binstruct 声明一致；不测试、不保证自动生成的 writer 正确性，也不提供文件写入 API。
 

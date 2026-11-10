@@ -43,7 +43,11 @@
 (defbinstruct/me (xwsd-envelope-reference (:type (or null xwsd-envelope))
                                                 (:constructor progn) (:conc-name nil)) ()
   ($xwsd-envelope-start 0 :type position)
-  (values nil :type (reference-to 0 $xwsd-envelope-start xwsd-envelope)))
+  (values nil :type (or null-reference
+                        (values (pointer (map xwsd-envelope
+                                              (the (function (t) (or null xwsd-envelope)) #'identity))
+                                         (reference-offset-value 0)
+                                         $xwsd-envelope-start)))))
 
 (defbinstruct/me xwsd-parameters (note-p)
   ($xwsd-parameters-start 0 :type position)
@@ -101,37 +105,81 @@
 (defbinstruct/me xwsd-event-table ()
   ($events-start 0 :type position)
   (count 0 :type (unsigned-byte 32))
-  (entries #() :type (simple-array (reference-to #x4904 $events-start (xwsd-event)) (count))))
+  (entries #() :type (simple-array
+                      (or null-reference
+                          (values (pointer (map (xwsd-event)
+                                                (the (function (t) (or null xwsd-event)) #'identity))
+                                           (reference-offset-value #x4904)
+                                           $events-start))) (count))))
 
 (defbinstruct/me xwsd-track ()
   ($track-start 0 :type position)
-  (events nil :type (reference-to 0 $track-start xwsd-event-table)))
+  (events nil :type (or null-reference
+                        (values (pointer (map xwsd-event-table
+                                              (the (function (t) (or null xwsd-event-table)) #'identity))
+                                         (reference-offset-value 0)
+                                         $track-start)))))
 
 (defbinstruct/me xwsd-track-table ()
-  ($table-start 0 :type position)
+  ($xwsd-track-table-start 0 :type position)
   (count 0 :type (unsigned-byte 32))
-  (entries #() :type (simple-array (reference-to #x4903 $table-start xwsd-track) (count))))
+  (entries #() :type (simple-array
+                      (or null-reference
+                          (values (pointer (map xwsd-track
+                                                (the (function (t) (or null xwsd-track)) #'identity))
+                                           (reference-offset-value #x4903)
+                                           $xwsd-track-table-start))) (count))))
 
 (defbinstruct/me xwsd-note-table ()
-  ($table-start 0 :type position)
+  ($xwsd-note-table-start 0 :type position)
   (count 0 :type (unsigned-byte 32))
-  (entries #() :type (simple-array (reference-to #x4902 $table-start xwsd-note) (count))))
+  (entries #() :type (simple-array
+                      (or null-reference
+                          (values (pointer (map xwsd-note
+                                                (the (function (t) (or null xwsd-note)) #'identity))
+                                           (reference-offset-value #x4902)
+                                           $xwsd-note-table-start))) (count))))
 
 (defbinstruct/me xwsd-item ()
   ($item-start 0 :type position)
-  (parameters nil :type (reference-to #x4901 $item-start (xwsd-parameters nil)))
-  (tracks nil :type (reference-to #x0101 $item-start xwsd-track-table))
-  (notes nil :type (reference-to #x0101 $item-start xwsd-note-table)))
+  (parameters nil :type (or null-reference
+                            (values (pointer (map (xwsd-parameters nil)
+                                                  (the (function (t) (or null xwsd-parameters)) #'identity))
+                                             (reference-offset-value #x4901)
+                                             $item-start))))
+  (tracks nil :type (or null-reference
+                        (values (pointer (map xwsd-track-table
+                                              (the (function (t) (or null xwsd-track-table)) #'identity))
+                                         (reference-offset-value #x0101)
+                                         $item-start))))
+  (notes nil :type (or null-reference
+                       (values (pointer (map xwsd-note-table
+                                             (the (function (t) (or null xwsd-note-table)) #'identity))
+                                        (reference-offset-value #x0101)
+                                        $item-start)))))
 
 (defbinstruct/me xwsd-item-table ()
-  ($table-start 0 :type position)
+  ($xwsd-item-table-start 0 :type position)
   (count 0 :type (unsigned-byte 32))
-  (entries #() :type (simple-array (reference-to #x4900 $table-start xwsd-item) (count))))
+  (entries #() :type (simple-array
+                      (or null-reference
+                          (values (pointer (map xwsd-item
+                                                (the (function (t) (or null xwsd-item)) #'identity))
+                                           (reference-offset-value #x4900)
+                                           $xwsd-item-table-start))) (count))))
 
 (define-nintendo-ware-section (xwsd-info (:magic "INFO"))
   ($info-start 0 :type position)
-  (waves nil :type (reference-to #x0100 $info-start wave-id-table))
-  (items nil :type (reference-to #x0101 $info-start xwsd-item-table)))
+  (waves nil :type (or null-reference
+                       (values (pointer (map wave-id-table
+                                             (the (function (t) (or null wave-id-table)) #'identity))
+                                        (reference-offset-value #x0100)
+                                        $info-start))))
+  (items nil :type (or null-reference
+                       (values (pointer (map xwsd-item-table
+                                             (the (function (t) (or null xwsd-item-table)) #'identity))
+                                        (reference-offset-value #x0101)
+                                        $info-start)))))
 
 (define-nintendo-ware-file (xwsd (:magic ("CWSD" "FWSD")))
   (%tag #x6800 :type (map null (lambda (ignored) (declare (ignore ignored)) (if (block-reference %header #x6800 nil) #x6800 #x4800))))

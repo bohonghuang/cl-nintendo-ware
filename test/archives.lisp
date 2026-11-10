@@ -256,6 +256,37 @@
                        :version (* major-version #x1000000))))
 
 (defun run-archive-tests ()
+  ;; Nullable table entries preserve indices, ignore absent tags, and resolve
+  ;; each non-null target before the next array element is read.
+  (flet ((group (tag offset)
+           (container-fixture
+            "CGRP"
+            (list
+             (list #x7800 "INFO"
+                   (octets-join
+                    (encode-record 'reference-table
+                      (make-reference-table
+                       :count 3
+                       :entries (vector (make-reference :type 0 :offset -1)
+                                        (make-reference :type tag :offset offset)
+                                        (make-reference :type #xbeef :offset -1))))
+                    (encode-record 'xgrp-file-record
+                      (make-xgrp-file-record
+                       :file-id 1234
+                       :file-reference (make-sized-reference :type #x1f00 :offset -1)))))))))
+    (let* ((parsed (nintendo-ware::read-file 'nintendo-ware::xgrp (group #x7900 28)))
+           (entries (nintendo-ware::xgrp-info-entries (nintendo-ware::xgrp-info parsed))))
+      (assert (= 3 (length entries)))
+      (assert (null (aref entries 0)))
+      (assert (= 1234 (nintendo-ware::xgrp-entry-file-id (aref entries 1))))
+      (assert (null (nintendo-ware::xgrp-entry-data (aref entries 1))))
+      (assert (null (aref entries 2))))
+    (dolist (case '((#x7901 28) (#x7900 -2)))
+      (destructuring-bind (tag offset) case
+        (rejects nintendo-ware::invalid-file
+          (nintendo-ware::read-file 'nintendo-ware::xgrp (group tag offset)))))
+    (rejects error
+      (nintendo-ware::read-file 'nintendo-ware::xgrp (group #x7900 #x10000))))
   ;; Independent u32 words distinguish signed bytes, reserved bytes and bits.
   (let* ((file (nintendo-ware::read-file 'nintendo-ware::xwsd
                  (xwsd-fixture :item-flags (flags 5 #xa55a7f80 #xa5f3b271))))

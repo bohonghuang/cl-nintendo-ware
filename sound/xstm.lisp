@@ -37,7 +37,11 @@
   ($track-start 0 :type position)
   (volume 0 :type (unsigned-byte 8)) (pan 0 :type (unsigned-byte 8))
   (surround-pan 0 :type (unsigned-byte 8)) (surround-mode-p nil :type (boolean (unsigned-byte 8)))
-  (channels nil :type (reference-to #x0100 $track-start byte-table)))
+  (channels nil :type (or null-reference
+                          (values (pointer (map byte-table
+                                                (the (function (t) (or null byte-table)) #'identity))
+                                           (reference-offset-value #x0100)
+                                           $track-start)))))
 
 (defbinstruct/me xstm-channel (encoding)
   (%start 0 :type position)
@@ -48,21 +52,43 @@
                           (ima-adpcm (values (pointer xwav-ima-adpcm-info (map null (constantly (reference-target reference %start #x0301)))))))))
 
 (defbinstruct/me xstm-track-table ()
-  ($table-start 0 :type position)
+  ($xstm-track-table-start 0 :type position)
   (count 0 :type (unsigned-byte 32))
-  (entries #() :type (simple-array (reference-to #x4101 $table-start xstm-track) (count))))
+  (entries #() :type (simple-array
+                      (or null-reference
+                          (values (pointer (map xstm-track
+                                                (the (function (t) (or null xstm-track)) #'identity))
+                                           (reference-offset-value #x4101)
+                                           $xstm-track-table-start))) (count))))
 
 (defbinstruct/me xstm-channel-table (encoding)
-  ($table-start 0 :type position)
+  ($xstm-channel-table-start 0 :type position)
   (count 0 :type (unsigned-byte 32))
-  (entries #() :type (simple-array (reference-to #x4102 $table-start (xstm-channel encoding)) (count))))
+  (entries #() :type (simple-array
+                      (or null-reference
+                          (values (pointer (map (xstm-channel encoding)
+                                                (the (function (t) (or null xstm-channel)) #'identity))
+                                           (reference-offset-value #x4102)
+                                           $xstm-channel-table-start))) (count))))
 
 (define-nintendo-ware-section (xstm-info (:magic "INFO"))
   (%major-version 0 :type (map null (lambda (ignored) (declare (ignore ignored)) (header-version-major %header))))
   ($info-start 0 :type position)
-  (stream nil :type (reference-to #x4100 $info-start (xstm-stream-info %major-version)))
-  (tracks nil :type (reference-to #x0101 $info-start xstm-track-table))
-  (channels nil :type (reference-to #x0101 $info-start (xstm-channel-table (xstm-stream-info-encoding stream)))))
+  (stream nil :type (or null-reference
+                        (values (pointer (map (xstm-stream-info %major-version)
+                                              (the (function (t) (or null xstm-stream-info)) #'identity))
+                                         (reference-offset-value #x4100)
+                                         $info-start))))
+  (tracks nil :type (or null-reference
+                        (values (pointer (map xstm-track-table
+                                              (the (function (t) (or null xstm-track-table)) #'identity))
+                                         (reference-offset-value #x0101)
+                                         $info-start))))
+  (channels nil :type (or null-reference
+                          (values (pointer (map (xstm-channel-table (xstm-stream-info-encoding stream))
+                                                (the (function (t) (or null xstm-channel-table)) #'identity))
+                                           (reference-offset-value #x0101)
+                                           $info-start)))))
 
 (defbinstruct/me xstm-dsp-seek-context ()
   (history-1 0 :type (signed-byte 16)) (history-2 0 :type (signed-byte 16)))
@@ -79,8 +105,16 @@
 
 ;; SEEK and REGN follow the same INFO reference without moving their cursor.
 (defbinstruct/me (xstm-referenced-stream-info (:type (or null xstm-stream-info)) (:constructor progn) (:conc-name nil)) (header)
-  (values nil :type (values (pointer (reference-to #x4100 (+ (block-start header #x4000) 8)
-                                      (xstm-stream-info (header-version-major header))) (map null (constantly (+ (block-start header #x4000) 8)))))))
+  (values nil :type
+          (values
+           (pointer
+            (or null-reference
+                (values
+                 (pointer (map (xstm-stream-info (header-version-major header))
+                               (the (function (t) (or null xstm-stream-info)) #'identity))
+                          (reference-offset-value #x4100)
+                          (+ (block-start header #x4000) 8))))
+            (map null (constantly (+ (block-start header #x4000) 8)))))))
 
 (define-nintendo-ware-section (xstm-seek (:magic "SEEK"))
   ;; SEEK row counts come from INFO; only its trailing padding needs the tail.

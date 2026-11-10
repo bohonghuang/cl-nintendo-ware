@@ -558,7 +558,12 @@
 (define-nintendo-ware-section (xseq-labels (:magic "LABL"))
   ($labels-start 0 :type position)
   (count 0 :type (unsigned-byte 32))
-  (entries #() :type (simple-array (reference-to #x5100 $labels-start xseq-label-entry) (count))))
+  (entries #() :type (simple-array
+                      (or null-reference
+                          (values (pointer (map xseq-label-entry
+                                                (the (function (t) (or null xseq-label-entry)) #'identity))
+                                           (reference-offset-value #x5100)
+                                           $labels-start))) (count))))
 
 (define-nintendo-ware-section (xseq-data (:magic "DATA"))
   ;; Unlike counted records, this event stream ends at the DATA boundary.

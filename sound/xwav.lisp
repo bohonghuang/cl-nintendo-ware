@@ -55,7 +55,11 @@
   ($channels-start 0 :type position)
   (channel-count 0 :type (satisfies (unsigned-byte 32) (lambda (count) (plusp count))))
   (channels #() :type (simple-array
-                       (reference-to #x7100 $channels-start (xwav-channel codec loop-end)) (channel-count))))
+                      (or null-reference
+                          (values (pointer (map (xwav-channel codec loop-end)
+                                                (the (function (t) (or null xwav-channel)) #'identity))
+                                           (reference-offset-value #x7100)
+                                           $channels-start))) (channel-count))))
 
 ;; Samples are read once through the channel references. DATA retains only its
 ;; section header, not a second copy of the complete encoded payload.
