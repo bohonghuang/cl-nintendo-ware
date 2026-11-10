@@ -1,5 +1,19 @@
 (in-package #:cl-nintendo-ware)
 
+(defbinstruct/me xsar-integer-table ()
+  (count 0 :type (unsigned-byte 32))
+  (entries #.(make-array 0 :element-type '(unsigned-byte 32)) :type (simple-array (unsigned-byte 32) (count))))
+
+(defbinstruct/me xsar-resource-id-table ()
+  (count 0 :type (unsigned-byte 32))
+  (entries #() :type (simple-array resource-id (count))))
+
+(defbinstruct/me (xsar-packed-priority (:alignment 4)) ()
+  (channel-priority 0 :type (unsigned-byte 8))
+  (release-priority-p nil :type (boolean bit))
+  (release-reserved 0 :type (unsigned-byte 7))
+  (reserved 0 :type (unsigned-byte 16)))
+
 (defbinstruct (xsar-data-position (:type non-negative-fixnum)
                                        (:constructor progn) (:conc-name nil)) ()
   ($xsar-data-start 0 :type position)
@@ -137,7 +151,7 @@
   (allocate-track-count 0 :type (unsigned-byte 32))
   (flags (make-xsar-wave-sound-flag-set) :type xsar-wave-sound-flag-set)
   (priority nil :type (ecase (xsar-wave-sound-flag-set-priority-p flags)
-                        ((nil) null) ((t) packed-priority)))
+                        ((nil) null) ((t) xsar-packed-priority)))
   (reserved-1-31-values #.(make-array 0 :element-type '(unsigned-byte 32))
     :type (simple-array (unsigned-byte 32) ((logcount (xsar-wave-sound-flag-set-reserved-1-31 flags))))))
 
@@ -245,13 +259,13 @@
 
 (defbinstruct/me xsar-sequence-info ()
   ($sequence-start 0 :type position)
-  (banks nil :type (reference-to #x0100 $sequence-start resource-id-table))
+  (banks nil :type (reference-to #x0100 $sequence-start xsar-resource-id-table))
   (allocate-track-flags 0 :type (unsigned-byte 32))
   (flags (make-xsar-sequence-flag-set) :type xsar-sequence-flag-set)
   (start-offset nil :type (ecase (xsar-sequence-flag-set-start-offset-p flags)
                         ((nil) null) ((t) (unsigned-byte 32))))
   (priority nil :type (ecase (xsar-sequence-flag-set-priority-p flags)
-                        ((nil) null) ((t) packed-priority)))
+                        ((nil) null) ((t) xsar-packed-priority)))
   (reserved-2-31-values #.(make-array 0 :element-type '(unsigned-byte 32))
     :type (simple-array (unsigned-byte 32) ((logcount (xsar-sequence-flag-set-reserved-2-31 flags))))))
 
@@ -295,7 +309,7 @@
 
 (defbinstruct/me xsar-wave-sound-group ()
   ($group-start 0 :type position)
-  (wave-archives nil :type (reference-to #x0100 $group-start resource-id-table))
+  (wave-archives nil :type (reference-to #x0100 $group-start xsar-resource-id-table))
   (flags (make-xsar-wave-sound-group-flag-set) :type xsar-wave-sound-group-flag-set)
   (reserved-0-31-values #.(make-array 0 :element-type '(unsigned-byte 32))
     :type (simple-array (unsigned-byte 32) ((logcount (xsar-wave-sound-group-flag-set-reserved-0-31 flags))))))
@@ -303,7 +317,7 @@
 (defbinstruct/me xsar-sound-group ()
   ($group-start 0 :type position)
   (first-id (make-resource-id) :type resource-id) (last-id (make-resource-id) :type resource-id)
-  (files nil :type (reference-to #x0100 $group-start integer-table))
+  (files nil :type (reference-to #x0100 $group-start xsar-integer-table))
   (wave-group nil :type (reference-to #x2205 $group-start xsar-wave-sound-group))
   (flags (make-xsar-sound-group-flag-set) :type xsar-sound-group-flag-set)
   (string-index nil :type (ecase (xsar-sound-group-flag-set-string-index-p flags)
@@ -314,7 +328,7 @@
 (defbinstruct/me xsar-bank ()
   ($xbnk-start 0 :type position)
   (file-id 0 :type (unsigned-byte 32))
-  (wave-archives nil :type (reference-to #x0100 $xbnk-start resource-id-table))
+  (wave-archives nil :type (reference-to #x0100 $xbnk-start xsar-resource-id-table))
   (flags (make-xsar-bank-flag-set) :type xsar-bank-flag-set)
   (string-index nil :type (ecase (xsar-bank-flag-set-string-index-p flags)
                         ((nil) null) ((t) (unsigned-byte 32))))

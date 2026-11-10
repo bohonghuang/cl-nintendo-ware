@@ -142,7 +142,7 @@
                            (nintendo-ware::xwsd-track-events
                             (aref (nintendo-ware::xwsd-track-table-entries (nintendo-ware::xwsd-item-tracks item)) 0)))))
             (assert (= pitch (nintendo-ware::xwsd-parameters-pitch parameters)))
-            (assert (= 64 (nintendo-ware::packed-pan-pan (nintendo-ware::xwsd-parameters-pan-info parameters))))
+            (assert (= 64 (nintendo-ware::xwsd-packed-pan-pan (nintendo-ware::xwsd-parameters-pan-info parameters))))
             (assert (= 127 (nintendo-ware::xwsd-sends-main-send sends)))
             (assert (equalp #(0 0) (nintendo-ware::xwsd-sends-auxiliary-sends sends)))
             (assert (equal '(127 127 127 127 127)

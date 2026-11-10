@@ -136,12 +136,6 @@
 (defun block-start (header type)
   (+ (header-start header) (sized-reference-offset (block-reference header type))))
 
-
-
-(defbinstruct/me integer-table ()
-  (count 0 :type (unsigned-byte 32))
-  (entries #.(make-array 0 :element-type '(unsigned-byte 32)) :type (simple-array (unsigned-byte 32) (count))))
-
 (defbinstruct/me byte-table ()
   (count 0 :type (unsigned-byte 32))
   (entries #.(make-array 0 :element-type '(unsigned-byte 8)) :type (simple-array (unsigned-byte 8) (count))))
@@ -153,10 +147,6 @@
 (defun resource-id-value (identifier)
   "Return the complete original resource ID, including its type byte."
   (+ (resource-id-index identifier) (* (resource-id-type identifier) #x1000000)))
-
-(defbinstruct/me resource-id-table ()
-  (count 0 :type (unsigned-byte 32))
-  (entries #() :type (simple-array resource-id (count))))
 
 (defbinstruct/me wave-id ()
   (archive-id (make-resource-id) :type resource-id)
@@ -171,19 +161,3 @@
   (size 0 :type (unsigned-byte 32))
   (bytes #.(make-array 0 :element-type '(unsigned-byte 8)) :type (simple-array (unsigned-byte 8) ((- size 8)))))
 
-(defbinstruct/me (packed-pan (:alignment 4)) ()
-  (pan 0 :type (signed-byte 8))
-  (surround-pan 0 :type (signed-byte 8))
-  (reserved 0 :type (unsigned-byte 16)))
-
-(defbinstruct/me (packed-filter (:alignment 4)) ()
-  (low-pass 0 :type (unsigned-byte 8))
-  (biquad-type 0 :type (unsigned-byte 8))
-  (biquad-value 0 :type (unsigned-byte 8))
-  (reserved 0 :type (unsigned-byte 8)))
-
-(defbinstruct/me (packed-priority (:alignment 4)) ()
-  (channel-priority 0 :type (unsigned-byte 8))
-  (release-priority-p nil :type (boolean bit))
-  (release-reserved 0 :type (unsigned-byte 7))
-  (reserved 0 :type (unsigned-byte 16)))

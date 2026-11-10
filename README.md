@@ -48,13 +48,15 @@ sbcl --dynamic-space-size 4096 --non-interactive --eval '(ql:quickload :cl-ninte
 
 模块和所属类型、函数、宏统一使用 `x` 加 magic 后三位的前缀；`x` 同时涵盖 C/F 两种容器。例如事件声明宏为 `define-xseq-event`，音符类型为 `xseq-event-note`。这是直接重命名，旧名称不再提供兼容别名。
 
+`common.lisp` 仅保留跨模块共用布局。SAR 专用的整数表、资源 ID 表、priority 数值字段位于 `sound/xsar.lisp`，使用 `xsar-integer-table`、`xsar-resource-id-table`、`xsar-packed-priority`；WSD 专用 pan/filter 数值字段位于 `sound/xwsd.lisp`，使用 `xwsd-packed-pan`、`xwsd-packed-filter`，访问器同样带模块前缀。
+
 BNK、WSD、SAR 的可选参数各有记录专属位域 set，开关字段使用 binstruct 原生 `(boolean bit)`，名称以 `-p` 结尾。语义字段按位号顺序直接读取，缺席为 `NIL`，不经通用整数数组二次解码。32 位数值位域在定义侧指定 `(:alignment 4)`，由 binstruct 原生处理整数分组和端序；`defbinstruct/me` 直接透传该选项，不重排字段。位号、资料来源及保留位规则见 [ENDIAN.md](ENDIAN.md#optional-parameter-flag-sets)。
 
 `xwar-waves` 仿照 Nitro 的 `swar-waves`，直接返回按 wave index 排列的 WAV 结构向量；保留空引用为 `NIL`，不压缩索引，也不复制或解码编码音频。调用方不需要遍历 INFO section 和 reference entry。
 
 共用解析布局不等于保证所有游戏、版本和编码组合兼容。原始 ID、引用及可选字段保留；空引用为 `NIL`。外部档案路径只读取为字符串，绝不自动打开。
 
-资源 ID 按原生 32 位数值位域解析为内部 `resource-id`：`resource-id-index` 是低 24 位表索引，`resource-id-type` 是高 8 位类型 tag；`resource-id-value` 可无损取得原值，包括未知 tag 和 `#xffffffff`。WAV/BNK/WSD 的 `wave-id-archive-id`、SAR 的资源引用与资源 ID 表、GRP dependency 均使用此布局；ID 表使用 `resource-id-table-entries`，普通 File ID 表仍使用 `integer-table-entries`。消费端不再自行提取位。类型 tag 保留为整数，不擅自拒绝未知资源种类。
+资源 ID 按原生 32 位数值位域解析为内部 `resource-id`：`resource-id-index` 是低 24 位表索引，`resource-id-type` 是高 8 位类型 tag；`resource-id-value` 可无损取得原值，包括未知 tag 和 `#xffffffff`。WAV/BNK/WSD 的 `wave-id-archive-id`、SAR 的资源引用与资源 ID 表、GRP dependency 均使用此布局；ID 表使用 `xsar-resource-id-table-entries`，普通 File ID 表仍使用 `xsar-integer-table-entries`。消费端不再自行提取位。类型 tag 保留为整数，不擅自拒绝未知资源种类。
 
 ### WAV 原生采样数据
 
