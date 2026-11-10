@@ -26,21 +26,27 @@
   (initial-context (make-xwav-ima-adpcm-context) :type xwav-ima-adpcm-context)
   (loop-context (make-xwav-ima-adpcm-context) :type xwav-ima-adpcm-context))
 
+(define-nintendo-ware-reference xwav-codec-reference
+  (#x0300 (xwav-dsp-adpcm-info))
+  (#x0301 (xwav-ima-adpcm-info)))
+
+(define-nintendo-ware-reference (xwav-samples-reference (:parameters (codec sample-count)))
+  (#x1f00 (ecase codec
+            (pcm-8 (simple-array (signed-byte 8) (sample-count)))
+            (pcm-16 (simple-array (signed-byte 16) (sample-count)))
+            (dsp-adpcm (simple-array (unsigned-byte 8) ((* 8 (ceiling sample-count 14)))))
+            (ima-adpcm (simple-array (unsigned-byte 4) (sample-count))))))
+
 (defbinstruct/me xwav-channel (codec sample-count)
   (%start 0 :type position)
-  (samples-reference (make-nintendo-ware-reference) :type nintendo-ware-reference)
-  (codec-reference (make-nintendo-ware-reference) :type nintendo-ware-reference)
-  (reserved 0 :type (unsigned-byte 32))
-  (codec-info nil :type (ecase codec
-                          ((pcm-8 pcm-16) null)
-                          (dsp-adpcm (values (pointer xwav-dsp-adpcm-info (map null (constantly (nintendo-ware-reference-target codec-reference %start #x0300))))))
-                          (ima-adpcm (values (pointer xwav-ima-adpcm-info (map null (constantly (nintendo-ware-reference-target codec-reference %start #x0301))))))))
+  (%data-start 0 :type (values (pointer position (map null (constantly 0)) $xwav-data-start)))
   (data #.(make-array 0 :element-type '(signed-byte 8))
-        :type (values (pointer (ecase codec
-                      (pcm-8 (simple-array (signed-byte 8) (sample-count)))
-                      (pcm-16 (simple-array (signed-byte 16) (sample-count)))
-                      (dsp-adpcm (simple-array (unsigned-byte 8) ((* 8 (ceiling sample-count 14)))))
-                      (ima-adpcm (simple-array (unsigned-byte 4) (sample-count)))) (map null (constantly (nintendo-ware-reference-target samples-reference 0 #x1f00))) $xwav-data-start))))
+        :type (xwav-samples-reference %data-start codec sample-count))
+  (codec-info nil :type (xwav-codec-reference %start))
+  (reserved 0 :type (unsigned-byte 32)))
+
+(define-nintendo-ware-reference (xwav-channel-reference (:parameters (codec sample-count)))
+  (#x7100 (xwav-channel codec sample-count)))
 
 (define-nintendo-ware-section (xwav-info (:magic "INFO"))
   (nil nil :type (values (pointer xwav-data-position
@@ -54,12 +60,7 @@
   (reserved 0 :type (unsigned-byte 32))
   (%channels-start 0 :type position)
   (channel-count 0 :type (satisfies (unsigned-byte 32) #'plusp))
-  (channels #() :type (simple-array
-                      (or nintendo-ware-null-reference
-                          (values (pointer (map (xwav-channel codec loop-end)
-                                                (the (function (t) (or null xwav-channel)) #'identity))
-                                           (nintendo-ware-reference-offset-value #x7100)
-                                           %channels-start))) (channel-count))))
+  (channels #() :type (simple-array (xwav-channel-reference %channels-start codec loop-end) (channel-count))))
 
 ;; Samples are read once through the channel references. DATA retains only its
 ;; section header, not a second copy of the complete encoded payload.

@@ -5,6 +5,12 @@
   (values :little :type (map null (lambda (ignored) (declare (ignore ignored))
                                    (ecase %value (#xfffe :little) (#xfeff :big))))))
 
+(defbinstruct/me nintendo-ware-file-block ()
+  (type 0 :type (unsigned-byte 16))
+  (padding 0 :type (unsigned-byte 16))
+  (offset -1 :type (signed-byte 32))
+  (size 0 :type (unsigned-byte 32)))
+
 (defbinstruct/me nintendo-ware-file-header (start magic endian)
   (start 0 :type (map null (constantly start)))
   (magic #.(coerce "" 'simple-base-string) :type (map null (constantly magic)))
@@ -14,7 +20,7 @@
   (file-size 20 :type (unsigned-byte 32))
   (block-count 0 :type (unsigned-byte 16))
   (padding 0 :type (unsigned-byte 16))
-  (references #() :type (simple-array nintendo-ware-sized-reference (block-count)))
+  (references #() :type (simple-array nintendo-ware-file-block (block-count)))
   (%valid nil :type (map null (lambda (ignored) (declare (ignore ignored))
                                 (validate-header references)))))
 
@@ -35,20 +41,20 @@
 (defun validate-header (references)
   (loop :for index :below (length references) :for current := (aref references index)
         :do (loop :for previous-index :below index :for previous := (aref references previous-index)
-                  :do (when (= (nintendo-ware-sized-reference-type current) (nintendo-ware-sized-reference-type previous))
+                  :do (when (= (nintendo-ware-file-block-type current) (nintendo-ware-file-block-type previous))
                         (error 'binstruct::deserialize-error
                                :input nil :position nil
                                :info "Duplicate block tag"))))
   nil)
 
 (defun block-reference (header type &optional (required t))
-  (or (find type (nintendo-ware-file-header-references header) :key #'nintendo-ware-sized-reference-type)
+  (or (find type (nintendo-ware-file-header-references header) :key #'nintendo-ware-file-block-type)
       (when required (error 'binstruct::deserialize-error
                             :input nil :position nil
                             :info (format nil "Missing block #x~X" type)))))
 
 (defun block-start (header type)
-  (+ (nintendo-ware-file-header-start header) (nintendo-ware-sized-reference-offset (block-reference header type))))
+  (+ (nintendo-ware-file-header-start header) (nintendo-ware-file-block-offset (block-reference header type))))
 
 (defbinstruct (nintendo-ware-file-position (:type non-negative-fixnum)
                                            (:constructor progn) (:conc-name nil)) ()

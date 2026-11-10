@@ -9,67 +9,63 @@
   (:method (type (filename string))
     (read-file type (pathname filename))))
 
-(defun valid-reference-offset-p (offset type expected-type)
-  (or (= offset -1)
-      (and (not (minusp offset)) (or (null expected-type) (= type expected-type)))))
+(defbinalias/me (nintendo-ware-reference-null (:type null)) ()
+  (map (satisfies (signed-byte 32) (curry #'= -1))
+       (constantly nil) (constantly -1)))
 
-(defbinstruct/me nintendo-ware-reference (&optional expected-type)
-  (type 0 :type (unsigned-byte 16))
-  (padding 0 :type (unsigned-byte 16))
-  (offset -1 :type (satisfies (signed-byte 32)
-                              (rcurry #'valid-reference-offset-p type expected-type))))
+(defbinstruct/me (nintendo-ware-reference-target (:type t)
+                  (:constructor progn) (:conc-name nil))
+    (type base &optional (size most-positive-fixnum))
+  ($nintendo-ware-reference-start 0 :type position)
+  ($nintendo-ware-reference-end 0 :type
+    (ecase (and (>= $nintendo-ware-reference-start base)
+                (/= size most-positive-fixnum))
+      ((nil) null)
+      ((t) (values (pointer position (map null (constantly size))
+                            $nintendo-ware-reference-start)))))
+  (values nil :type (ecase (>= $nintendo-ware-reference-start base)
+                     ((t) (inline type))
+                     ((nil) null)))
+  ($nintendo-ware-reference-end 0 :type position))
 
-(defbinstruct/me nintendo-ware-sized-reference ()
-  (type 0 :type (unsigned-byte 16))
-  (padding 0 :type (unsigned-byte 16))
-  (offset -1 :type (signed-byte 32))
-  (size 0 :type (unsigned-byte 32)))
+(defbinstruct (nintendo-ware-reference-size (:type (unsigned-byte 32))
+              (:constructor progn) (:conc-name nil)) ()
+  (%start 0 :type (values (pointer position (map null (constantly 0))
+                                 $nintendo-ware-reference-start)))
+  (%end 0 :type (values (pointer position (map null (constantly 0))
+                               $nintendo-ware-reference-end)))
+  (values 0 :type (map null (constantly (- %end %start)))))
 
-;; Native pointer offsets validate non-null references without allocating a
-;; temporary REFERENCE. NULL-REFERENCE handles the separate -1 sentinel.
-(defbinstruct/me (nintendo-ware-reference-offset-value (:type (signed-byte 32)) (:constructor progn) (:conc-name nil)) (tag)
-  (%tag tag :type (unsigned-byte 16))
+(defbinstruct/me (nintendo-ware-reference (:type t)
+                  (:constructor progn) (:conc-name nil)) (tag type base)
+  (%tag 0 :type (unsigned-byte 16))
   (nil 0 :type (unsigned-byte 16))
-  (values -1 :type (satisfies (signed-byte 32)
-                             (lambda (offset) (and (not (minusp offset)) (= %tag tag))))))
+  (values nil :type (pointer (nintendo-ware-reference-target (inline type) base)
+                            (satisfies (signed-byte 32)
+                              (lambda (offset)
+                                (and (<= -1 offset) (or (= offset -1) (= %tag tag)))))
+                            base)))
 
-(defbinstruct/me (nintendo-ware-null-reference (:type null) (:constructor progn) (:conc-name nil)) ()
+(defbinstruct/me (nintendo-ware-sized-reference (:type t)
+                  (:constructor progn) (:conc-name nil)) (tag type base)
+  (%tag 0 :type (unsigned-byte 16))
   (nil 0 :type (unsigned-byte 16))
-  (nil 0 :type (unsigned-byte 16))
-  (nil -1 :type (satisfies (signed-byte 32) (curry #'= -1)))
-  (values nil :type null))
+  (values nil :type (pointer (nintendo-ware-reference-target (inline type) base %size)
+                            (satisfies (signed-byte 32)
+                              (lambda (offset)
+                                (and (<= -1 offset) (or (= offset -1) (= %tag tag)))))
+                            base))
+  (%size 0 :type (unsigned-byte 32)))
 
-(defbinstruct/me (nintendo-ware-reference-array (:type (simple-array * (*)))
-                  (:constructor progn) (:conc-name nil)) (tag type)
-  (%position 0 :type position)
-  (%count 0 :type (unsigned-byte 32))
-  (values #() :type (simple-array
-                     (or nintendo-ware-null-reference
-                         (values (pointer (inline type)
-                                          (nintendo-ware-reference-offset-value tag)
-                                          %position))) (%count))))
+(defbinstruct/me (nintendo-ware-reference-octets
+                  (:type (simple-array (unsigned-byte 8) (*)))
+                  (:constructor progn) (:conc-name nil)) ()
+  (%size 0 :type nintendo-ware-reference-size)
+  (values #.(make-array 0 :element-type '(unsigned-byte 8))
+          :type (simple-array (unsigned-byte 8) (%size))))
 
-(defun nintendo-ware-reference-target (reference base &optional expected-type)
-  (let ((offset (nintendo-ware-reference-offset reference)))
-    (unless (= offset -1)
-      (when (and expected-type (/= expected-type (nintendo-ware-reference-type reference)))
-        (error 'binstruct::deserialize-error
-               :input nil :position nil
-               :info (format nil "Reference tag #x~X; expected #x~X" (nintendo-ware-reference-type reference) expected-type)))
-      (when (minusp offset) (error 'binstruct::deserialize-error
-                                   :input nil :position nil
-                                   :info (format nil "Invalid relative offset ~D" offset)))
-      (+ base offset))))
-
-(defun nintendo-ware-sized-reference-target (reference base &optional expected-type)
-  (let ((offset (nintendo-ware-sized-reference-offset reference)))
-    (unless (= offset -1)
-      (when (and expected-type (/= expected-type (nintendo-ware-sized-reference-type reference)))
-        (error 'binstruct::deserialize-error
-               :input nil :position nil
-               :info "Sized reference tag mismatch"))
-      (when (minusp offset) (error 'binstruct::deserialize-error
-                                   :input nil :position nil
-                                   :info (format nil "Invalid sized relative offset ~D" offset)))
-      (+ base offset))))
+(defbinstruct/me (nintendo-ware-reference-string (:type simple-base-string)
+                  (:constructor progn) (:conc-name nil)) ()
+  (%size 0 :type nintendo-ware-reference-size)
+  (values #.(coerce "" 'simple-base-string) :type (simple-base-string %size)))
 

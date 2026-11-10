@@ -40,14 +40,13 @@
   (envelope-offset-p nil :type (boolean bit))
   (reserved-10-31 0 :type (unsigned-byte 22)))
 
+(define-nintendo-ware-reference xwsd-envelope-target
+  (0 (xwsd-envelope)))
+
 (defbinstruct/me (xwsd-envelope-reference (:type (or null xwsd-envelope))
-                                                (:constructor progn) (:conc-name nil)) ()
-  (%xwsd-envelope-start 0 :type position)
-  (values nil :type (or nintendo-ware-null-reference
-                        (values (pointer (map xwsd-envelope
-                                              (the (function (t) (or null xwsd-envelope)) #'identity))
-                                         (nintendo-ware-reference-offset-value 0)
-                                         %xwsd-envelope-start)))))
+                  (:constructor progn) (:conc-name nil)) ()
+  (%start 0 :type position)
+  (values nil :type (xwsd-envelope-target %start)))
 
 (defbinstruct/me xwsd-parameters (note-p)
   (%xwsd-parameters-start 0 :type position)
@@ -102,56 +101,48 @@
   (position 0.0f0 :type single-float) (length 0.0f0 :type single-float)
   (note-index 0 :type (unsigned-byte 32)) (reserved 0 :type (unsigned-byte 32)))
 
-(defbinalias/me (xwsd-track-events (:type (simple-array (or null xwsd-event) (*)))) ()
-  (nintendo-ware-reference-array #x4904 (xwsd-event)))
+(define-nintendo-ware-reference xwsd-event-reference
+  (#x4904 (xwsd-event)))
+(define-nintendo-ware-reference-array xwsd-event-reference)
+(define-nintendo-ware-reference xwsd-events-reference
+  (0 (xwsd-event-reference-array)))
 
 (defbinstruct/me xwsd-track ()
   (%track-start 0 :type position)
-  (events nil :type (or nintendo-ware-null-reference
-                        (values (pointer (map xwsd-track-events
-                                              (the (function (t) (or null (simple-array (or null xwsd-event) (*)))) #'identity))
-                                         (nintendo-ware-reference-offset-value 0)
-                                         %track-start)))))
+  (events nil :type (xwsd-events-reference %track-start)))
 
-(defbinalias/me (xwsd-item-tracks (:type (simple-array (or null xwsd-track) (*)))) ()
-  (nintendo-ware-reference-array #x4903 (xwsd-track)))
+(define-nintendo-ware-reference xwsd-track-reference
+  (#x4903 (xwsd-track)))
+(define-nintendo-ware-reference-array xwsd-track-reference)
+(define-nintendo-ware-reference xwsd-tracks-reference
+  (#x0101 (xwsd-track-reference-array)))
 
-(defbinalias/me (xwsd-item-notes (:type (simple-array (or null xwsd-note) (*)))) ()
-  (nintendo-ware-reference-array #x4902 (xwsd-note)))
+(define-nintendo-ware-reference xwsd-note-reference
+  (#x4902 (xwsd-note)))
+(define-nintendo-ware-reference-array xwsd-note-reference)
+(define-nintendo-ware-reference xwsd-notes-reference
+  (#x0101 (xwsd-note-reference-array)))
+(define-nintendo-ware-reference xwsd-item-parameters-reference
+  (#x4901 (xwsd-parameters nil)))
 
 (defbinstruct/me xwsd-item ()
   (%item-start 0 :type position)
-  (parameters nil :type (or nintendo-ware-null-reference
-                            (values (pointer (map (xwsd-parameters nil)
-                                                  (the (function (t) (or null xwsd-parameters)) #'identity))
-                                             (nintendo-ware-reference-offset-value #x4901)
-                                             %item-start))))
-  (tracks nil :type (or nintendo-ware-null-reference
-                        (values (pointer (map xwsd-item-tracks
-                                              (the (function (t) (or null (simple-array (or null xwsd-track) (*)))) #'identity))
-                                         (nintendo-ware-reference-offset-value #x0101)
-                                         %item-start))))
-  (notes nil :type (or nintendo-ware-null-reference
-                       (values (pointer (map xwsd-item-notes
-                                             (the (function (t) (or null (simple-array (or null xwsd-note) (*)))) #'identity))
-                                        (nintendo-ware-reference-offset-value #x0101)
-                                        %item-start)))))
+  (parameters nil :type (xwsd-item-parameters-reference %item-start))
+  (tracks nil :type (xwsd-tracks-reference %item-start))
+  (notes nil :type (xwsd-notes-reference %item-start)))
 
-(defbinalias/me (xwsd-info-items (:type (simple-array (or null xwsd-item) (*)))) ()
-  (nintendo-ware-reference-array #x4900 (xwsd-item)))
+(define-nintendo-ware-reference xwsd-item-reference
+  (#x4900 (xwsd-item)))
+(define-nintendo-ware-reference-array xwsd-item-reference)
+(define-nintendo-ware-reference xwsd-items-reference
+  (#x0101 (xwsd-item-reference-array)))
+(define-nintendo-ware-reference xwsd-waves-reference
+  (#x0100 (nintendo-ware-sound-wave-ids)))
 
 (define-nintendo-ware-section (xwsd-info (:magic "INFO"))
   (%info-start 0 :type position)
-  (waves nil :type (or nintendo-ware-null-reference
-                       (values (pointer (map nintendo-ware-sound-wave-ids
-                                             (the (function (t) (or null (simple-array nintendo-ware-sound-wave-id (*)))) #'identity))
-                                        (nintendo-ware-reference-offset-value #x0100)
-                                        %info-start))))
-  (items nil :type (or nintendo-ware-null-reference
-                       (values (pointer (map xwsd-info-items
-                                             (the (function (t) (or null (simple-array (or null xwsd-item) (*)))) #'identity))
-                                        (nintendo-ware-reference-offset-value #x0101)
-                                        %info-start)))))
+  (waves nil :type (xwsd-waves-reference %info-start))
+  (items nil :type (xwsd-items-reference %info-start)))
 
 (define-nintendo-ware-file (xwsd (:magic ("CWSD" "FWSD")))
   (%tag #x6800 :type (map null (lambda (ignored) (declare (ignore ignored)) (if (block-reference %header #x6800 nil) #x6800 #x4800))))

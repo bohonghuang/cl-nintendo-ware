@@ -555,27 +555,33 @@
 ;; The event stream's endian is independent of the surrounding section.
 (defbinalias xseq-track/le (end labels) (xseq-track end labels))
 
+(defbinstruct/me (xseq-label-event-index (:type (unsigned-byte 32))
+                  (:constructor progn) (:conc-name nil)) ()
+  (%position 0 :type position)
+  (%base 0 :type (values (pointer position (map null (constantly 0)) $xseq-events-start)))
+  (values 0 :type (map null (constantly (- %position %base)))))
+(define-nintendo-ware-reference xseq-label-event-reference
+  (#x1f00 (xseq-label-event-index)))
+
 (defbinstruct/me xseq-label-entry ()
-  (index 0 :type (map (satisfies nintendo-ware-reference
-                                 (rcurry #'nintendo-ware-reference-target 0 #x1f00))
-                      #'nintendo-ware-reference-offset))
+  (%base 0 :type (values (pointer position (map null (constantly 0)) $xseq-events-start)))
+  (index 0 :type (xseq-label-event-reference %base))
   (length 0 :type (unsigned-byte 32))
   (name #.(coerce "" 'simple-base-string) :type (simple-base-string length))
   (nil 0 :type (satisfies (unsigned-byte 8))))
 
+(define-nintendo-ware-reference xseq-label-reference
+  (#x5100 (xseq-label-entry)))
+
 (define-nintendo-ware-section (xseq-labels (:magic "LABL"))
   (%labels-start 0 :type position)
   (count 0 :type (unsigned-byte 32))
-  (entries #() :type (simple-array
-                      (or nintendo-ware-null-reference
-                          (values (pointer (map xseq-label-entry
-                                                (the (function (t) (or null xseq-label-entry)) #'identity))
-                                           (nintendo-ware-reference-offset-value #x5100)
-                                           %labels-start))) (count))))
+  (entries #() :type (simple-array (xseq-label-reference %labels-start) (count))))
 
 (define-nintendo-ware-section (xseq-data (:magic "DATA"))
   ;; Unlike counted records, this event stream ends at the DATA boundary.
   (%position 0 :type position)
+  ($xseq-events-start 0 :type position)
   (%size 0 :type nintendo-ware-section-tail-size)
   (labels nil :type (values (pointer xseq-labels (map null (constantly (block-start %header #x5001))))))
   (%little nil :type (map null (lambda (ignored) (declare (ignore ignored))

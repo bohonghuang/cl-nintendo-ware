@@ -222,8 +222,8 @@
          (archive (nintendo-ware::read-file 'nintendo-ware::xwar (container-fixture "CWAR"
                                         (list (list #x6800 "INFO" table) (list #x6801 "FILE" (octets-join first second))))))
          (entries (nintendo-ware::xwar-info-entries (nintendo-ware::xwar-info archive)))
-         (first-wave (nintendo-ware::xwar-entry-content (aref entries 0)))
-         (second-wave (nintendo-ware::xwar-entry-content (aref entries 1))))
+         (first-wave (aref entries 0))
+         (second-wave (aref entries 1)))
     (assert (= -123 (aref (nintendo-ware::xwav-dsp-adpcm-info-coefficients
                            (nintendo-ware::xwav-channel-codec-info (aref (nintendo-ware::xwav-info-channels (nintendo-ware::xwav-info first-wave)) 0))) 15)))
     (assert (= -200 (nintendo-ware::xwav-ima-adpcm-context-predictor

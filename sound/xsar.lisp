@@ -157,20 +157,31 @@
   (reserved-1-31-values #.(make-array 0 :element-type '(unsigned-byte 32))
     :type (simple-array (unsigned-byte 32) ((logcount (xsar-wave-sound-flags-reserved-1-31 flags))))))
 
+(define-nintendo-ware-reference xsar-channels-reference
+  (#x0100 (nintendo-ware-sound-channel-indices)))
+
 (defbinstruct/me xsar-stream-track ()
   (%track-start 0 :type position)
   (volume 0 :type (unsigned-byte 8))
   (pan 0 :type (unsigned-byte 8))
   (span 0 :type (unsigned-byte 8))
   (flags 0 :type (unsigned-byte 8))
-  (channels nil :type (or nintendo-ware-null-reference
-                          (values (pointer (map nintendo-ware-sound-channel-indices
-                                                (the (function (t) (or null (simple-array (unsigned-byte 8) (*)))) #'identity))
-                                           (nintendo-ware-reference-offset-value #x0100)
-                                           %track-start)))))
+  (channels nil :type (xsar-channels-reference %track-start)))
 
-(defbinalias/me (xsar-stream-sound-info-tracks (:type (simple-array (or null xsar-stream-track) (*)))) ()
-  (nintendo-ware-reference-array #x220e (xsar-stream-track)))
+(define-nintendo-ware-reference xsar-stream-track-reference
+  (#x220e (xsar-stream-track)))
+(define-nintendo-ware-reference-array xsar-stream-track-reference)
+(define-nintendo-ware-reference xsar-stream-tracks-reference
+  (#x0101 (xsar-stream-track-reference-array)))
+
+(defbinstruct/me xsar-stream-extension ()
+  (type 0 :type (unsigned-byte 32))
+  (loop-start-frame 0 :type (unsigned-byte 32))
+  (loop-end-frame 0 :type (unsigned-byte 32)))
+(define-nintendo-ware-reference xsar-stream-extension-reference
+  (#x2210 (xsar-stream-extension)))
+(define-nintendo-ware-reference xsar-stream-sends-reference
+  (#x220f (simple-array (unsigned-byte 8) (4))))
 
 (defbinstruct/me xsar-stream-sound-info (tracks-p)
   (%stream-start 0 :type position)
@@ -180,14 +191,10 @@
           (ecase (plusp tracks-p)
             ((nil) null)
             ((t)
-             (or nintendo-ware-null-reference
-                 (values (pointer (map xsar-stream-sound-info-tracks
-                                       (the (function (t) (or null (simple-array (or null xsar-stream-track) (*)))) #'identity))
-                                  (nintendo-ware-reference-offset-value #x0101)
-                                  %stream-start))))))
+             (xsar-stream-tracks-reference %stream-start))))
   (pitch nil :type (ecase (= tracks-p 2) ((nil) null) ((t) single-float)))
-  (sends-reference nil :type (ecase (= tracks-p 2) ((nil) null) ((t) nintendo-ware-reference)))
-  (extension-reference nil :type (ecase (= tracks-p 2) ((nil) null) ((t) nintendo-ware-reference)))
+  (sends nil :type (ecase (= tracks-p 2) ((nil) null) ((t) (xsar-stream-sends-reference %stream-start))))
+  (extension nil :type (ecase (= tracks-p 2) ((nil) null) ((t) (xsar-stream-extension-reference %stream-start))))
   (prefetch-file-id nil :type (ecase (= tracks-p 2) ((nil) null) ((t) (unsigned-byte 32))))
   (flags (make-xsar-stream-sound-flags)
          :type (ecase (= tracks-p 2)
@@ -250,12 +257,11 @@
   (count 0 :type (unsigned-byte 32))
   (nodes #() :type (simple-array xsar-patricia-node (count))))
 
+(define-nintendo-ware-reference (xsar-string-reference (:sized t))
+  (#x1f01 (nintendo-ware-reference-string)))
 (defbinstruct/me xsar-string ()
-  (reference (make-nintendo-ware-sized-reference) :type nintendo-ware-sized-reference)
-  (text #.(coerce "" 'simple-base-string)
-        :type (values (pointer (simple-base-string (nintendo-ware-sized-reference-size reference))
-                               (map null (constantly (nintendo-ware-sized-reference-target reference 0 #x1f01)))
-                               $strings-start))))
+  (%base 0 :type (values (pointer position (map null (constantly 0)) $strings-start)))
+  (text #.(coerce "" 'simple-base-string) :type (xsar-string-reference %base)))
 
 (defbinstruct/me (xsar-strg-strings (:type (simple-array xsar-string (*)))
                   (:constructor progn) (:conc-name nil)) ()
@@ -263,26 +269,22 @@
   (%count 0 :type (unsigned-byte 32))
   (values #() :type (simple-array xsar-string (%count))))
 
+(define-nintendo-ware-reference xsar-strings-reference
+  (#x2400 (xsar-strg-strings)))
+(define-nintendo-ware-reference xsar-tree-reference
+  (#x2401 (xsar-patricia-tree)))
+
 (define-nintendo-ware-section (xsar-strg (:magic "STRG"))
   (%strg-start 0 :type position)
-  (strings nil :type (or nintendo-ware-null-reference
-                         (values (pointer (map xsar-strg-strings
-                                               (the (function (t) (or null (simple-array xsar-string (*)))) #'identity))
-                                          (nintendo-ware-reference-offset-value #x2400)
-                                          %strg-start))))
-  (tree nil :type (or nintendo-ware-null-reference
-                      (values (pointer (map xsar-patricia-tree
-                                            (the (function (t) (or null xsar-patricia-tree)) #'identity))
-                                       (nintendo-ware-reference-offset-value #x2401)
-                                       %strg-start)))))
+  (strings nil :type (xsar-strings-reference %strg-start))
+  (tree nil :type (xsar-tree-reference %strg-start)))
+
+(define-nintendo-ware-reference xsar-resource-ids-reference
+  (#x0100 (xsar-resource-ids)))
 
 (defbinstruct/me xsar-sequence-info ()
   (%sequence-start 0 :type position)
-  (banks nil :type (or nintendo-ware-null-reference
-                       (values (pointer (map xsar-resource-ids
-                                             (the (function (t) (or null (simple-array nintendo-ware-sound-resource-id (*)))) #'identity))
-                                        (nintendo-ware-reference-offset-value #x0100)
-                                        %sequence-start))))
+  (banks nil :type (xsar-resource-ids-reference %sequence-start))
   (allocate-track-flags 0 :type (unsigned-byte 32))
   (flags (make-xsar-sequence-flags) :type xsar-sequence-flags)
   (start-offset nil :type (ecase (xsar-sequence-flags-start-offset-p flags)
@@ -292,12 +294,17 @@
   (reserved-2-31-values #.(make-array 0 :element-type '(unsigned-byte 32))
     :type (simple-array (unsigned-byte 32) ((logcount (xsar-sequence-flags-reserved-2-31 flags))))))
 
+(define-nintendo-ware-reference (xsar-sound-detail-reference (:parameters (tracks-p)))
+  (#x2203 (xsar-sequence-info))
+  (#x2202 (xsar-wave-sound-info))
+  (#x2201 (xsar-stream-sound-info tracks-p)))
+
 (defbinstruct/me xsar-sound (tracks-p)
   (%start 0 :type position)
   (file-id 0 :type (unsigned-byte 32)) (player-id (make-nintendo-ware-sound-resource-id) :type nintendo-ware-sound-resource-id)
   (volume 0 :type (unsigned-byte 8)) (remote-filter 0 :type (signed-byte 8))
   (padding 0 :type (unsigned-byte 16))
-  (detail-reference (make-nintendo-ware-reference) :type nintendo-ware-reference)
+  (detail nil :type (xsar-sound-detail-reference %start tracks-p))
   (flags (make-xsar-sound-flags) :type xsar-sound-flags)
   (string-index nil :type (ecase (xsar-sound-flags-string-index-p flags)
                         ((nil) null) ((t) (unsigned-byte 32))))
@@ -323,37 +330,26 @@
                         ((nil) null) ((t) (unsigned-byte 32))))
   (user-parameter-0 nil :type (ecase (xsar-sound-flags-user-parameter-0-p flags)
                         ((nil) null) ((t) (unsigned-byte 32))))
-  (detail nil :type (ecase (nintendo-ware-reference-type detail-reference)
-                      (#x2203 (values (pointer xsar-sequence-info (map null (constantly (nintendo-ware-reference-target detail-reference %start #x2203))))))
-                      (#x2202 (values (pointer xsar-wave-sound-info (map null (constantly (nintendo-ware-reference-target detail-reference %start #x2202))))))
-                      (#x2201 (values (pointer (xsar-stream-sound-info tracks-p) (map null (constantly (nintendo-ware-reference-target detail-reference %start #x2201))))))))
   (sound-3d-info nil :type (ecase (and sound-3d-offset (/= sound-3d-offset #xffffffff))
                         ((nil) null) ((t) (values (pointer xsar-sound-3d-info (map null (constantly (+ %start sound-3d-offset)))))))))
 
 (defbinstruct/me xsar-wave-sound-group ()
   (%xsar-wave-sound-group-start 0 :type position)
-  (wave-archives nil :type (or nintendo-ware-null-reference
-                               (values (pointer (map xsar-resource-ids
-                                                     (the (function (t) (or null (simple-array nintendo-ware-sound-resource-id (*)))) #'identity))
-                                                (nintendo-ware-reference-offset-value #x0100)
-                                                %xsar-wave-sound-group-start))))
+  (wave-archives nil :type (xsar-resource-ids-reference %xsar-wave-sound-group-start))
   (flags (make-xsar-wave-sound-group-flags) :type xsar-wave-sound-group-flags)
   (reserved-0-31-values #.(make-array 0 :element-type '(unsigned-byte 32))
     :type (simple-array (unsigned-byte 32) ((logcount (xsar-wave-sound-group-flags-reserved-0-31 flags))))))
 
+(define-nintendo-ware-reference xsar-group-files-reference
+  (#x0100 (xsar-sound-group-files)))
+(define-nintendo-ware-reference xsar-wave-group-reference
+  (#x2205 (xsar-wave-sound-group)))
+
 (defbinstruct/me xsar-sound-group ()
   (%xsar-sound-group-start 0 :type position)
   (first-id (make-nintendo-ware-sound-resource-id) :type nintendo-ware-sound-resource-id) (last-id (make-nintendo-ware-sound-resource-id) :type nintendo-ware-sound-resource-id)
-  (files nil :type (or nintendo-ware-null-reference
-                       (values (pointer (map xsar-sound-group-files
-                                             (the (function (t) (or null (simple-array (unsigned-byte 32) (*)))) #'identity))
-                                        (nintendo-ware-reference-offset-value #x0100)
-                                        %xsar-sound-group-start))))
-  (wave-group nil :type (or nintendo-ware-null-reference
-                            (values (pointer (map xsar-wave-sound-group
-                                                  (the (function (t) (or null xsar-wave-sound-group)) #'identity))
-                                             (nintendo-ware-reference-offset-value #x2205)
-                                             %xsar-sound-group-start))))
+  (files nil :type (xsar-group-files-reference %xsar-sound-group-start))
+  (wave-group nil :type (xsar-wave-group-reference %xsar-sound-group-start))
   (flags (make-xsar-sound-group-flags) :type xsar-sound-group-flags)
   (string-index nil :type (ecase (xsar-sound-group-flags-string-index-p flags)
                         ((nil) null) ((t) (unsigned-byte 32))))
@@ -363,11 +359,7 @@
 (defbinstruct/me xsar-bank ()
   (%xbnk-start 0 :type position)
   (file-id 0 :type (unsigned-byte 32))
-  (wave-archives nil :type (or nintendo-ware-null-reference
-                               (values (pointer (map xsar-resource-ids
-                                                     (the (function (t) (or null (simple-array nintendo-ware-sound-resource-id (*)))) #'identity))
-                                                (nintendo-ware-reference-offset-value #x0100)
-                                                %xbnk-start))))
+  (wave-archives nil :type (xsar-resource-ids-reference %xbnk-start))
   (flags (make-xsar-bank-flags) :type xsar-bank-flags)
   (string-index nil :type (ecase (xsar-bank-flags-string-index-p flags)
                         ((nil) null) ((t) (unsigned-byte 32))))
@@ -377,99 +369,87 @@
 (defbinstruct/me xsar-external-file ()
   (text #.(coerce "" 'simple-base-string) :type simple-base-string))
 
+(define-nintendo-ware-reference (xsar-data-reference (:sized t))
+  (0 (nintendo-ware-reference-octets))
+  (#x1f00 (nintendo-ware-reference-octets)))
+
 (defbinstruct/me xsar-internal-file ()
-  (reference (make-nintendo-ware-sized-reference)
-             :type (satisfies nintendo-ware-sized-reference
-                              (lambda (reference)
-                                (member (nintendo-ware-sized-reference-type reference) '(0 #x1f00)))))
-  (data nil :type (ecase (= (nintendo-ware-sized-reference-offset reference) -1)
-                   ((t) null)
-                   ((nil) (values (pointer (simple-array (unsigned-byte 8) ((nintendo-ware-sized-reference-size reference))) (map null (constantly (nintendo-ware-sized-reference-target reference 0))) $xsar-data-start))))))
+  (%base 0 :type (values (pointer position (map null (constantly 0)) $xsar-data-start)))
+  (data nil :type (xsar-data-reference %base)))
+
+(define-nintendo-ware-reference xsar-file-location-reference
+  (#x220c (xsar-internal-file))
+  (#x220d (xsar-external-file)))
 
 (defbinstruct/me xsar-file ()
   (%start 0 :type position)
-  (location-reference (make-nintendo-ware-reference) :type nintendo-ware-reference)
+  (location nil :type (xsar-file-location-reference %start))
   (flags (make-xsar-file-flags) :type xsar-file-flags)
   (reserved-0-31-values #.(make-array 0 :element-type '(unsigned-byte 32))
-    :type (simple-array (unsigned-byte 32) ((logcount (xsar-file-flags-reserved-0-31 flags)))))
-  (location nil :type (ecase (= (nintendo-ware-reference-offset location-reference) -1)
-                        ((t) null)
-                        ((nil) (ecase (nintendo-ware-reference-type location-reference)
-                                 (#x220c (values (pointer xsar-internal-file (map null (constantly (nintendo-ware-reference-target location-reference %start #x220c))))))
-                                 (#x220d (values (pointer xsar-external-file (map null (constantly (nintendo-ware-reference-target location-reference %start #x220d)))))))))))
+    :type (simple-array (unsigned-byte 32) ((logcount (xsar-file-flags-reserved-0-31 flags))))))
 
-(defbinalias/me (xsar-info-sounds (:type (simple-array (or null xsar-sound) (*)))) (tracks-p)
-  (nintendo-ware-reference-array #x2200 (xsar-sound tracks-p)))
+(define-nintendo-ware-reference (xsar-sound-reference (:parameters (tracks-p)))
+  (#x2200 (xsar-sound tracks-p)))
+(define-nintendo-ware-reference-array xsar-sound-reference tracks-p)
+(define-nintendo-ware-reference (xsar-sounds-reference (:parameters (tracks-p)))
+  (#x2100 (xsar-sound-reference-array tracks-p)))
 
-(defbinalias/me (xsar-info-sound-groups (:type (simple-array (or null xsar-sound-group) (*)))) ()
-  (nintendo-ware-reference-array #x2204 (xsar-sound-group)))
+(define-nintendo-ware-reference xsar-sound-group-reference
+  (#x2204 (xsar-sound-group)))
+(define-nintendo-ware-reference-array xsar-sound-group-reference)
+(define-nintendo-ware-reference xsar-sound-groups-reference
+  (#x2104 (xsar-sound-group-reference-array)))
 
-(defbinalias/me (xsar-info-banks (:type (simple-array (or null xsar-bank) (*)))) ()
-  (nintendo-ware-reference-array #x2206 (xsar-bank)))
+(define-nintendo-ware-reference xsar-bank-reference
+  (#x2206 (xsar-bank)))
+(define-nintendo-ware-reference-array xsar-bank-reference)
+(define-nintendo-ware-reference xsar-banks-reference
+  (#x2101 (xsar-bank-reference-array)))
 
-(defbinalias/me (xsar-info-wave-archives (:type (simple-array (or null xsar-wave-archive) (*)))) ()
-  (nintendo-ware-reference-array #x2207 (xsar-wave-archive)))
+(define-nintendo-ware-reference xsar-wave-archive-reference
+  (#x2207 (xsar-wave-archive)))
+(define-nintendo-ware-reference-array xsar-wave-archive-reference)
+(define-nintendo-ware-reference xsar-wave-archives-reference
+  (#x2103 (xsar-wave-archive-reference-array)))
 
-(defbinalias/me (xsar-info-groups (:type (simple-array (or null xsar-group) (*)))) ()
-  (nintendo-ware-reference-array #x2208 (xsar-group)))
+(define-nintendo-ware-reference xsar-group-reference
+  (#x2208 (xsar-group)))
+(define-nintendo-ware-reference-array xsar-group-reference)
+(define-nintendo-ware-reference xsar-groups-reference
+  (#x2105 (xsar-group-reference-array)))
 
-(defbinalias/me (xsar-info-players (:type (simple-array (or null xsar-player) (*)))) ()
-  (nintendo-ware-reference-array #x2209 (xsar-player)))
+(define-nintendo-ware-reference xsar-player-reference
+  (#x2209 (xsar-player)))
+(define-nintendo-ware-reference-array xsar-player-reference)
+(define-nintendo-ware-reference xsar-players-reference
+  (#x2102 (xsar-player-reference-array)))
 
-(defbinalias/me (xsar-info-files (:type (simple-array (or null xsar-file) (*)))) ()
-  (nintendo-ware-reference-array #x220a (xsar-file)))
+(define-nintendo-ware-reference xsar-file-reference
+  (#x220a (xsar-file)))
+(define-nintendo-ware-reference-array xsar-file-reference)
+(define-nintendo-ware-reference xsar-files-reference
+  (#x2106 (xsar-file-reference-array)))
+(define-nintendo-ware-reference xsar-project-reference
+  (#x220b (xsar-project-info)))
 
 (define-nintendo-ware-section (xsar-info (:magic "INFO"))
   (nil nil :type (values (pointer xsar-data-position (map null (constantly (if (block-reference %header #x2002 nil) (+ 8 (block-start %header #x2002)) 8))))))
   (%info-start 0 :type position)
-  (sounds nil :type
-          (or nintendo-ware-null-reference
-              (values
-               (pointer
-                (map (xsar-info-sounds
-                      (if (string= (nintendo-ware-file-header-magic %header) "CSAR")
-                          (cond ((>= (nintendo-ware-file-header-version %header) #x02030200) 2)
-                                ((>= (nintendo-ware-file-header-version %header) #x02030000) 1)
-                                (t 0))
-                          0))
-                     (the (function (t) (or null (simple-array (or null xsar-sound) (*)))) #'identity))
-                (nintendo-ware-reference-offset-value #x2100)
-                %info-start))))
-  (sound-groups nil :type (or nintendo-ware-null-reference
-                              (values (pointer (map xsar-info-sound-groups
-                                                    (the (function (t) (or null (simple-array (or null xsar-sound-group) (*)))) #'identity))
-                                               (nintendo-ware-reference-offset-value #x2104)
-                                               %info-start))))
-  (banks nil :type (or nintendo-ware-null-reference
-                       (values (pointer (map xsar-info-banks
-                                             (the (function (t) (or null (simple-array (or null xsar-bank) (*)))) #'identity))
-                                        (nintendo-ware-reference-offset-value #x2101)
-                                        %info-start))))
-  (wave-archives nil :type (or nintendo-ware-null-reference
-                               (values (pointer (map xsar-info-wave-archives
-                                                     (the (function (t) (or null (simple-array (or null xsar-wave-archive) (*)))) #'identity))
-                                                (nintendo-ware-reference-offset-value #x2103)
-                                                %info-start))))
-  (groups nil :type (or nintendo-ware-null-reference
-                        (values (pointer (map xsar-info-groups
-                                              (the (function (t) (or null (simple-array (or null xsar-group) (*)))) #'identity))
-                                         (nintendo-ware-reference-offset-value #x2105)
-                                         %info-start))))
-  (players nil :type (or nintendo-ware-null-reference
-                         (values (pointer (map xsar-info-players
-                                               (the (function (t) (or null (simple-array (or null xsar-player) (*)))) #'identity))
-                                          (nintendo-ware-reference-offset-value #x2102)
-                                          %info-start))))
-  (files nil :type (or nintendo-ware-null-reference
-                       (values (pointer (map xsar-info-files
-                                             (the (function (t) (or null (simple-array (or null xsar-file) (*)))) #'identity))
-                                        (nintendo-ware-reference-offset-value #x2106)
-                                        %info-start))))
-  (project-info nil :type (or nintendo-ware-null-reference
-                              (values (pointer (map xsar-project-info
-                                                    (the (function (t) (or null xsar-project-info)) #'identity))
-                                               (nintendo-ware-reference-offset-value #x220b)
-                                               %info-start)))))
+  (%tracks-p 0 :type
+    (map null (constantly
+               (if (string= (nintendo-ware-file-header-magic %header) "CSAR")
+                   (cond ((>= (nintendo-ware-file-header-version %header) #x02030200) 2)
+                         ((>= (nintendo-ware-file-header-version %header) #x02030000) 1)
+                         (t 0))
+                   0))))
+  (sounds nil :type (xsar-sounds-reference %info-start %tracks-p))
+  (sound-groups nil :type (xsar-sound-groups-reference %info-start))
+  (banks nil :type (xsar-banks-reference %info-start))
+  (wave-archives nil :type (xsar-wave-archives-reference %info-start))
+  (groups nil :type (xsar-groups-reference %info-start))
+  (players nil :type (xsar-players-reference %info-start))
+  (files nil :type (xsar-files-reference %info-start))
+  (project-info nil :type (xsar-project-reference %info-start)))
 
 (define-nintendo-ware-file (xsar (:magic ("CSAR" "FSAR")))
   (strg nil :type (ecase (not (null (block-reference %header #x2000 nil))) ((nil) null) ((t) (values (pointer xsar-strg (map null (constantly (block-start %header #x2000))))))))

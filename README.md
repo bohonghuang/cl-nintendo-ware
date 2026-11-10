@@ -167,7 +167,7 @@ CSTM SEEK 上下文固定小端；当前 FSTM SEEK 布局按 Citric 的参考实
                                   (map null (constantly (block-start %header #x1000)))))))
 ```
 
-file／section body 均通过原生文件位置锚点恢复 `%header`，不再把 header 或文件起点作为 body 参数传递。每个文件字段读取前以原生 pointer 恢复 owning-file 锚点，避免 WAR 内嵌文件影响外层后续区块。WAV／WAR／GRP／SAR 的跨结构数据基址、SAR 字符串表及 WSD note 基址使用各自 `$...` position 标记；仅在参数结构内使用的 WSD flags 基址是局部 `%xwsd-parameters-start`。GRP／XSAR 只读取原始子文件数据；显式读取子文件时，由其自身容器读取 BOM。高阶 parser（`inline` 等）仅用于 file／section 容器及共用的 `nintendo-ware-reference-array`；具体记录和事件不直接使用高阶 parser。
+file／section body 均通过原生文件位置锚点恢复 `%header`，不再把 header 或文件起点作为 body 参数传递。每个文件字段读取前以原生 pointer 恢复 owning-file 锚点，避免 WAR 内嵌文件影响外层后续区块。跨结构的数据、字符串、WSD note 和 SEQ event 基址使用 `$...` position 标记；只在当前结构使用的基址使用 `%...`。GRP／XSAR 只读取原始子文件数据；显式读取子文件时，由其自身容器读取 BOM。高阶 `inline` 用于容器和 typed reference 的共用包装，具体记录和事件不直接使用高阶 parser。
 
 只有确实需要剩余长度的布局使用零宽类型 `nintendo-ware-section-tail-size`，保存在 `%size`：它返回“区块大小 −（当前位置 − 区块起点）”，不消费输入，并遵循区块头端序。需要绝对结束位置时，就地用 `%position + %size` 计算。目前仅 SEQ 的无计数事件流需要结束位置，SEEK 需要剩余长度来读取尾部 padding；不向其他布局注入尾部上下文。
 
@@ -191,19 +191,28 @@ file／section body 均通过原生文件位置锚点恢复 `%header`，不再�
 
 `defbinalias` 和 `defbinalias/me` 共用内部宏 `%defbinalias`：首个参数是要调用的宏符号，分别传入 `defbinstruct` 和 `defbinstruct/me`；类型推断、显式 `:type` 和单值布局声明只实现一次。
 
-`defbinalias/me` 与 `defbinalias` 使用相同的类型推断和显式 `:type` 约定，但通过 `defbinstruct/me` 创建 LE／BE 的 `(:constructor progn)`、`(:conc-name nil)` 单值布局。15 个仅由 u32 计数和可空引用组成的数组复用 `nintendo-ware-reference-array`，具体 alias 保留原来的语义元素类型、参数和访问器：
-共用布局的返回类型为 `(simple-array * (*))`：元素类型使用通配符 `*`，不是限定元素类型为 `t` 的 `(simple-array t (*))`；具体 alias 仍声明自己的语义元素类型。
+`defbinalias/me` 与 `defbinalias` 使用相同的类型推断和显式 `:type` 约定，通过 `defbinstruct/me` 创建 LE／BE 的 `(:constructor progn)`、`(:conc-name nil)` 单值布局。
+
+引用通过 `define-nintendo-ware-reference` 声明 tag 与目标布局的对应关系，结果直接是目标值或 `NIL`，不再生成含 tag／offset 的 reference 对象。多个分支使用原生 `or` 分派；同一个 tag 在不同引用声明里可以对应不同目标类型。生成的 alias 使用 ME，以保证 BE 下的目标布局也正确分派：
 
 ```lisp
-(defbinalias/me (xsar-info-players (:type (simple-array (or null xsar-player) (*)))) ()
-  (nintendo-ware-reference-array #x2209 (xsar-player)))
+(define-nintendo-ware-reference my-reference
+  (#x6000 (target-type-1))
+  (#x6001 (target-type-2)))
+
+;; 生成 my-reference-array；count 和每个元素的相对基址均在数组布局内部。
+(define-nintendo-ware-reference-array my-reference)
 ```
 
-共用布局以局部 `%position` 为引用基址、`%count` 为数组长度，直接用原生 `or`／`values`／`pointer`／`inline` 解析目标，不生成中间 reference 或包装对象。ME 编译期先按当前端序展开 inline 元素类型，再交给原生 parser；因此带参数的 BNK instrument、STM channel 和 SAR sound 也可复用同一布局。SEQ 完整／partial union、SEEK row、引用 stream-info 和 section-header tuple 等单值 ME 布局同样使用 `defbinalias/me`。文件头、SEQ track、SEEK row 的强制 LE alias 仍使用普通 `defbinalias`。
+字段使用 `(my-reference %base)`；数组元素类型由 `binstruct::lisp-type` 推导，而不是固定为 `t`。参数化目标通过 `(:parameters (argument ...))` 声明，例如 `(define-nintendo-ware-reference (xbnk-instrument-reference (:parameters (wave-count))) (#x5900 (xbnk-instrument wave-count)))`，对应调用 `(xbnk-instrument-reference %base wave-count)`；数组宏在名称后接相同参数。引用 alias 连同 base 最多三个参数。BNK、WSD、STM、SAR 原有的 15 个纯引用数组布局均已迁移。
 
-寻址直接使用 binstruct 原生 `pointer`，不使用 `peek` 或自定义 `reference-to` 类型展开。可空引用在字段中声明为原生 `or`：`nintendo-ware-null-reference` 匹配 `-1` 偏移并返回 `NIL`，非空分支的 pointer 以 `nintendo-ware-reference-offset-value` 读取并校验 tag／非负偏移。目标使用与 cl-nitro 相同的 typed identity `map`，保留具体语义类型，同时允许原生延迟寻址的默认值为 `NIL`；不分配临时 reference 对象，不引入运行时 parser 参数。
+`(:sized t)` 选择 12 字节引用，否则为 8 字节。二者均由原生 `pointer` 定位、共用 `nintendo-ware-reference-target` 的 `inline` 包装；结果不含指针或供用户解引用的偏移。非空引用校验 tag 和 offset；`-1` 为空引用，保留其 tag 未定义的既有语义。Citrus 的非零基址使 pointer 可定位到 base−1，然后由 target 内的位置比较返回 `NIL`；空引用的 size 不参与 endpoint 初始化。框架不承诺零基址空引用。
 
-`$...` 是供其他结构访问的 global position，并支持原生延迟解析；仅当前结构使用的位置和解析变量统一为局部 `%...`。例如 INFO、track、BNK key／velocity 的引用基址、文件／区块 padding 终点都使用 `%...`；跨结构的数据、字符串和 note 基址仍使用 `$...`。pointer 基址直接传 `%info-start` 或 `$xwav-data-start` 等符号，不包 `progn`；嵌套引用数组各自捕获局部 `%position`，不会覆盖外层基址。pointer 不在字段类型最外层时必须包原生 `values`，例如 `or` 分支和数组元素中的 `(values (pointer ...))`，使目标在当前单元内解析完毕，也确保后续字段能读取目标值。不添加目录跨度、重叠或 sized-reference 子文件长度校验；文件／区块 size 参与尾部 padding 读取，截断 padding 也会导致读取失败，不承诺完整格式校验或受限输入沙箱。
+sized target 如需长度，必须在开头通过 `(%size 0 :type nintendo-ware-reference-size)` 获取并保存，再读取其他字段或子引用。它通过原生位置锚点零宽读取当前 target 的预置 start／end；嵌套 reference 会覆盖这两个全局锚点，不保证返回父布局后再次查询仍得到父 size。实际 target 完成后以同名 end position 记录真正结尾。普通引用没有声明长度，目标按自身布局读取；不为其预置一个需要 seek 到的无限 endpoint。
+
+SAR 字符串和 SAR／GRP 原始数据目标使用 sized 长度；WAR 直接返回 WAV 对象，WAV 仍由自身布局解析，不套 sized-reference 长度限制。`xwar-info-entries` 不再含 `xwar-entry` 包装，`xwar-waves` 直接返回该数组；Citrus 消费端已同步。STM 原先仅保留引用的 sample-data、REGN data、SAR stream sends／extension 也改为已解析的语义值。文件头的区块目录由内部 `nintendo-ware-file-block` 保存 tag／offset／size，供容器定位区块；它不是 typed resource reference，不导出这些目录访问器。
+
+`$...` 是供其他结构访问的 global position，并支持原生延迟解析；仅当前结构使用的位置和解析变量统一为局部 `%...`。pointer 基址直接传符号，不包 `progn`；typed reference 的调用方通过零宽原生 pointer 获取跨结构基址的数值。生成的引用数组各自捕获局部位置，不会覆盖外层数组基址。pointer 不在字段类型最外层时包原生 `values`，需要立即使用引用目标的字段也使用 `values`。不添加目录跨度、重叠或 sized-reference 子文件长度校验；文件／区块 size 参与尾部 padding 读取，截断 padding 也会导致读取失败，不承诺完整格式校验或受限输入沙箱。
 
 **本库只保证 reader。** ME 同时注册 reader／writer 的编译期端序展开，以保持 binstruct 声明一致；不测试、不保证自动生成的 writer 正确性，也不提供文件写入 API。
 

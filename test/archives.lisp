@@ -267,7 +267,63 @@
                                                                  (cl-nintendo-ware.test::make-xwav-dsp-adpcm-context :history-2 456))) 2)))))
                        :version (* major-version #x1000000))))
 
+;; Each target captures its declared size before a child shadows the anchors.
+(nintendo-ware::define-nintendo-ware-reference (reference-probe-child (:sized t))
+  (#x7001 (nintendo-ware::nintendo-ware-reference-octets)))
+(nintendo-ware::defbinstruct/me reference-probe-parent ()
+  (size 0 :type nintendo-ware::nintendo-ware-reference-size)
+  (%base 0 :type position)
+  (value 0 :type (unsigned-byte 32))
+  (child nil :type (reference-probe-child %base))
+  (tail 0 :type (unsigned-byte 32)))
+(nintendo-ware::define-nintendo-ware-reference (reference-probe-root (:sized t))
+  (#x7000 (reference-probe-parent)))
+(nintendo-ware::define-nintendo-ware-section (reference-probe-info (:magic "INFO"))
+  (%base 0 :type position)
+  (parent nil :type (reference-probe-root %base)))
+(nintendo-ware::define-nintendo-ware-file (reference-probe-file (:magic ("CREF" "FREF")))
+  (info nil :type (values (pointer reference-probe-info
+                           (map null (constantly (nintendo-ware::block-start nintendo-ware::%header #x6800)))))))
+(defbinio reference-probe-file stream)
+
+(defbinstruct reference-probe-payload ()
+  (value 0 :type (unsigned-byte 32))
+  (child (make-sized-reference) :type sized-reference)
+  (tail 0 :type (unsigned-byte 32)))
+(defbinstruct (reference-probe-payload/be (:type reference-probe-payload) (:endian :big)) ()
+  (value 0 :type fixture-u32/be)
+  (child (make-sized-reference) :type sized-reference/be)
+  (tail 0 :type fixture-u32/be))
+
+(defun reference-probe-fixture ()
+  (container-fixture "CREF"
+    (list (list #x6800 "INFO"
+            (layout-fixture
+             (list
+              (list 'root 'sized-reference
+                    (lambda (address)
+                      (make-sized-reference :type #x7000
+                        :offset (- (funcall address 'parent) (funcall address 'root)) :size 23)))
+              (list 'parent 'reference-probe-payload
+                    (lambda (address)
+                      (make-reference-probe-payload :value #x11223344 :tail #x55667788
+                        :child (make-sized-reference :type #x7001
+                                 :offset (- (funcall address 'child) (funcall address 'parent)) :size 3))))
+              (list 'child 'byte-payload
+                    (lambda (address) (declare (ignore address))
+                      (make-byte-payload :bytes (make-array 3 :element-type '(unsigned-byte 8)
+                                                            :initial-contents '(3 4 5)))) 3)))))))
+
 (defun run-archive-tests ()
+  (dolist (*fixture-endian* '(:little :big))
+    (dolist (*fixture-family* '(:c :f))
+      (let* ((file (read-reference-probe-file
+                    (flexi-streams:make-in-memory-input-stream (reference-probe-fixture))))
+             (parent (reference-probe-info-parent (reference-probe-file-info file))))
+        (assert (= 23 (reference-probe-parent-size parent)))
+        (assert (= #x11223344 (reference-probe-parent-value parent)))
+        (assert (equalp #(3 4 5) (reference-probe-parent-child parent)))
+        (assert (= #x55667788 (reference-probe-parent-tail parent))))))
   ;; Nullable table entries preserve indices, ignore absent tags, and resolve
   ;; each non-null target before the next array element is read.
   (flet ((group (tag offset)

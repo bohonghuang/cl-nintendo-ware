@@ -1,9 +1,30 @@
 (in-package #:cl-nintendo-ware)
 
-(defbinstruct/me xstm-region-info ()
+(defbinstruct/me xstm-region (channels stride)
+  (start 0 :type (unsigned-byte 32)) (end 0 :type (unsigned-byte 32))
+  (contexts #() :type (simple-array xwav-dsp-adpcm-context (channels)))
+  (padding #.(make-array 0 :element-type '(unsigned-byte 8))
+           :type (simple-array (unsigned-byte 8) ((- stride 8 (* 6 channels))))))
+
+(defbinstruct/me (xstm-region-data (:type (simple-array xstm-region (*)))
+                  (:constructor progn) (:conc-name nil)) (channels count)
+  (%stride 0 :type (values (pointer (unsigned-byte 16) (map null (constantly 0))
+                                   $xstm-region-info-start)))
+  (values #() :type (simple-array (xstm-region channels %stride) (count))))
+(define-nintendo-ware-reference (xstm-region-data-reference (:parameters (channels count)))
+  (#x1f00 (xstm-region-data channels count)))
+
+(defbinstruct/me xstm-region-info (channels count)
+  ($xstm-region-info-start 0 :type position)
   (entry-size 0 :type (unsigned-byte 16))
   (padding 0 :type (unsigned-byte 16))
-  (data-reference (make-nintendo-ware-reference) :type nintendo-ware-reference))
+  (%base 0 :type (values (pointer position (map null (constantly 0)) $xstm-regions-start)))
+  (data nil :type (xstm-region-data-reference %base channels count)))
+
+(defbinalias/me (xstm-samples (:type (simple-array (unsigned-byte 8) (*)))) (count)
+  (simple-array (unsigned-byte 8) (count)))
+(define-nintendo-ware-reference (xstm-samples-reference (:parameters (count)))
+  (#x1f00 (xstm-samples count)))
 
 (defbinstruct/me xstm-original-loop-info ()
   (start 0 :type (unsigned-byte 32))
@@ -28,53 +49,60 @@
   (last-block-padded-size 0 :type (unsigned-byte 32))
   (seek-entry-size 0 :type (unsigned-byte 32))
   (seek-interval-samples 0 :type (unsigned-byte 32))
-  (sample-data-reference (make-nintendo-ware-reference) :type nintendo-ware-reference)
-  (region-info nil :type (ecase (>= major-version 3) ((nil) null) ((t) xstm-region-info)))
+  (%base 0 :type (values (pointer position (map null (constantly 0)) $xstm-data-start)))
+  (sample-data nil :type (xstm-samples-reference %base
+                         (* channel-count (+ (* (max 0 (1- block-count)) block-size)
+                                             last-block-padded-size))))
+  (region-info nil :type (ecase (>= major-version 3)
+                          ((nil) null) ((t) (xstm-region-info channel-count region-count))))
   (original-loop-info nil :type (ecase (>= major-version 4) ((nil) null) ((t) xstm-original-loop-info)))
   (secret-info nil :type (ecase (>= major-version 6) ((nil) null) ((t) xstm-secret-info))))
+
+(define-nintendo-ware-reference xstm-channel-indices-reference
+  (#x0100 (nintendo-ware-sound-channel-indices)))
 
 (defbinstruct/me xstm-track ()
   (%track-start 0 :type position)
   (volume 0 :type (unsigned-byte 8)) (pan 0 :type (unsigned-byte 8))
   (surround-pan 0 :type (unsigned-byte 8)) (surround-mode-p nil :type (boolean (unsigned-byte 8)))
-  (channels nil :type (or nintendo-ware-null-reference
-                          (values (pointer (map nintendo-ware-sound-channel-indices
-                                                (the (function (t) (or null (simple-array (unsigned-byte 8) (*)))) #'identity))
-                                           (nintendo-ware-reference-offset-value #x0100)
-                                           %track-start)))))
+  (channels nil :type (xstm-channel-indices-reference %track-start)))
 
 (defbinstruct/me xstm-channel (encoding)
   (%start 0 :type position)
-  (reference (make-nintendo-ware-reference) :type nintendo-ware-reference)
-  (codec-info nil :type (ecase encoding
-                          ((pcm-8 pcm-16) null)
-                          (dsp-adpcm (values (pointer xwav-dsp-adpcm-info (map null (constantly (nintendo-ware-reference-target reference %start #x0300))))))
-                          (ima-adpcm (values (pointer xwav-ima-adpcm-info (map null (constantly (nintendo-ware-reference-target reference %start #x0301)))))))))
+  (codec-info nil :type (xwav-codec-reference %start)))
 
-(defbinalias/me (xstm-info-tracks (:type (simple-array (or null xstm-track) (*)))) ()
-  (nintendo-ware-reference-array #x4101 (xstm-track)))
+(define-nintendo-ware-reference xstm-track-reference
+  (#x4101 (xstm-track)))
+(define-nintendo-ware-reference-array xstm-track-reference)
+(define-nintendo-ware-reference xstm-tracks-reference
+  (#x0101 (xstm-track-reference-array)))
+(define-nintendo-ware-reference (xstm-channel-reference (:parameters (encoding)))
+  (#x4102 (xstm-channel encoding)))
+(define-nintendo-ware-reference-array xstm-channel-reference encoding)
+(define-nintendo-ware-reference (xstm-channels-reference (:parameters (encoding)))
+  (#x0101 (xstm-channel-reference-array encoding)))
+(define-nintendo-ware-reference (xstm-stream-reference (:parameters (version)))
+  (#x4100 (xstm-stream-info version)))
 
-(defbinalias/me (xstm-info-channels (:type (simple-array (or null xstm-channel) (*)))) (encoding)
-  (nintendo-ware-reference-array #x4102 (xstm-channel encoding)))
+(defbinstruct (xstm-data-position (:type non-negative-fixnum)
+              (:constructor progn) (:conc-name nil)) ()
+  ($xstm-data-start 0 :type position)
+  (values 0 :type (map null (constantly $xstm-data-start))))
+(defbinstruct (xstm-regions-position (:type non-negative-fixnum)
+              (:constructor progn) (:conc-name nil)) ()
+  ($xstm-regions-start 0 :type position)
+  (values 0 :type (map null (constantly $xstm-regions-start))))
 
 (define-nintendo-ware-section (xstm-info (:magic "INFO"))
   (%major-version 0 :type (map null (lambda (ignored) (declare (ignore ignored)) (nintendo-ware-file-header-version-major %header))))
   (%info-start 0 :type position)
-  (stream nil :type (or nintendo-ware-null-reference
-                        (values (pointer (map (xstm-stream-info %major-version)
-                                              (the (function (t) (or null xstm-stream-info)) #'identity))
-                                         (nintendo-ware-reference-offset-value #x4100)
-                                         %info-start))))
-  (tracks nil :type (or nintendo-ware-null-reference
-                        (values (pointer (map xstm-info-tracks
-                                              (the (function (t) (or null (simple-array (or null xstm-track) (*)))) #'identity))
-                                         (nintendo-ware-reference-offset-value #x0101)
-                                         %info-start))))
-  (channels nil :type (or nintendo-ware-null-reference
-                          (values (pointer (map (xstm-info-channels (xstm-stream-info-encoding stream))
-                                                (the (function (t) (or null (simple-array (or null xstm-channel) (*)))) #'identity))
-                                           (nintendo-ware-reference-offset-value #x0101)
-                                           %info-start)))))
+  (nil nil :type (values (pointer xstm-data-position (map null (constantly (+ 8 (block-start %header #x4002)))))))
+  (nil nil :type (values (pointer xstm-regions-position
+                         (map null (constantly (if (block-reference %header #x4003 nil)
+                                                  (+ 8 (block-start %header #x4003)) 8))))))
+  (stream nil :type (values (xstm-stream-reference %info-start %major-version)))
+  (tracks nil :type (xstm-tracks-reference %info-start))
+  (channels nil :type (xstm-channels-reference %info-start (xstm-stream-info-encoding stream))))
 
 (defbinstruct/me xstm-dsp-seek-context ()
   (history-1 0 :type (signed-byte 16)) (history-2 0 :type (signed-byte 16)))
@@ -91,15 +119,9 @@
 
 ;; SEEK and REGN follow the same INFO reference without moving their cursor.
 (defbinalias/me (xstm-referenced-stream-info (:type (or null xstm-stream-info))) (header)
-  (values
-   (pointer
-    (or nintendo-ware-null-reference
-        (values
-         (pointer (map (xstm-stream-info (nintendo-ware-file-header-version-major header))
-                       (the (function (t) (or null xstm-stream-info)) #'identity))
-                  (nintendo-ware-reference-offset-value #x4100)
-                  (+ (block-start header #x4000) 8))))
-    (map null (constantly (+ (block-start header #x4000) 8))))))
+  (values (pointer (xstm-stream-reference (+ 8 (block-start header #x4000))
+                                         (nintendo-ware-file-header-version-major header))
+                   (map null (constantly (+ 8 (block-start header #x4000)))))))
 
 (define-nintendo-ware-section (xstm-seek (:magic "SEEK"))
   ;; SEEK row counts come from INFO; only its trailing padding needs the tail.
@@ -123,10 +145,6 @@
                     ((nil) (simple-array (xstm-seek-row/be %encoding %stride (xstm-stream-info-channel-count %information)) (%rows)))))
   (padding #.(make-array 0 :element-type '(unsigned-byte 8)) :type (simple-array (unsigned-byte 8) ((- %size %bytes)))))
 
-(defbinstruct/me xstm-region (channels stride)
-  (start 0 :type (unsigned-byte 32)) (end 0 :type (unsigned-byte 32))
-  (contexts #() :type (simple-array xwav-dsp-adpcm-context (channels)))
-  (padding #.(make-array 0 :element-type '(unsigned-byte 8)) :type (simple-array (unsigned-byte 8) ((- stride 8 (* 6 channels))))))
 
 (define-nintendo-ware-section (xstm-regions (:magic "REGN"))
   (%regions-start 0 :type position)
@@ -138,7 +156,7 @@
                                   (error 'binstruct::deserialize-error
                                          :input nil :position nil
                                          :info "Invalid REGN entry layout")) stride))))
-  (entries #() :type (values (pointer (simple-array (xstm-region (xstm-stream-info-channel-count %information) %stride) (%count)) (map null (constantly (nintendo-ware-reference-target (xstm-region-info-data-reference (xstm-stream-info-region-info %information)) %regions-start #x1f00)))))))
+  (entries #() :type (map null (constantly (xstm-region-info-data (xstm-stream-info-region-info %information))))))
 
 (define-nintendo-ware-file (xstm (:magic ("CSTM" "FSTM")))
   (info nil :type (values (pointer xstm-info (map null (constantly (block-start %header #x4000))))))
