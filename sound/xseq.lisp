@@ -479,12 +479,9 @@
      (defbinalias/me (xseq-event-partial-union (:type xseq-event)) (status)
        (or ,@(loop for type in *xseq-events*
                    collect `(,(symbolicate type '/partial) status))))))
+
 (define-xseq-event-unions)
 
-
-
-;; These walkers operate on semantic events; binary positions stay local to
-;; the reader and are discarded after resolving references.
 (defun xseq-event-child (event)
   (typecase event
     (xseq-event-random (xseq-event-random-sub-event event))
@@ -493,47 +490,6 @@
     (xseq-event-time (xseq-event-time-sub-event event))
     (xseq-event-time-random (xseq-event-time-random-sub-event event))
     (xseq-event-time-variable (xseq-event-time-variable-sub-event event))))
-
-
-(defun resolve-xseq-event (event indices &optional partial)
-  (flet ((index (offset)
-           (or (gethash offset indices) (error 'binstruct::deserialize-error
-                                               :input nil :position nil
-                                               :info (format nil "SEQ target ~D is not an event boundary" offset)))))
-    (unless partial
-      (typecase event
-        (xseq-event-open-track (setf (xseq-event-open-track-index event) (index (xseq-event-open-track-index event))))
-        (xseq-event-jump (setf (xseq-event-jump-index event) (index (xseq-event-jump-index event))))
-        (xseq-event-call (setf (xseq-event-call-index event) (index (xseq-event-call-index event))))))
-    (let ((child (xseq-event-child event)))
-      (when child (resolve-xseq-event child indices (typep event '(or xseq-event-random xseq-event-variable))))))
-  event)
-
-(defun xseq-events-unpack (events positions labels)
-  (let* ((last (position-if (lambda (event) (typep event '(or xseq-event-finish xseq-event-return xseq-event-jump))) events :from-end t))
-         (indices (make-hash-table)))
-    (unless last (error 'binstruct::deserialize-error
-                        :input nil :position nil
-                        :info "SEQ has no terminating event"))
-    (loop for index from (1+ last) below (length events)
-          for event = (aref events index)
-          unless (and (typep event 'xseq-event-note)
-                      (zerop (xseq-event-note-key event))
-                      (zerop (xseq-event-note-velocity event))
-                      (zerop (xseq-event-note-duration event)))
-            do (error 'binstruct::deserialize-error
-                      :input nil :position nil
-                      :info "Non-padding data after final SEQ event"))
-    (let ((result (if (= (length events) (1+ last)) events (subseq events 0 (1+ last))))
-          (base (aref positions 0)))
-      (loop for index to last do (setf (gethash (- (aref positions index) base) indices) index))
-      (loop for event across result do (resolve-xseq-event event indices))
-      (loop for label across labels when label
-            do (setf (xseq-label-entry-index label)
-                     (or (gethash (xseq-label-entry-index label) indices) (error 'binstruct::deserialize-error
-                                                                                 :input nil :position nil
-                                                                                 :info "Invalid SEQ label"))))
-      result)))
 
 (defbinstruct/me (xseq-track-event (:type xseq-event) (:constructor progn) (:conc-name nil)) (end positions)
   (%start 0 :type (satisfies position (rcurry #'< end)))
@@ -577,6 +533,46 @@
   (%labels-start 0 :type position)
   (count 0 :type (unsigned-byte 32))
   (entries #() :type (simple-array (xseq-label-reference %labels-start) (count))))
+
+(defun resolve-xseq-event (event indices &optional partial)
+  (flet ((index (offset)
+           (or (gethash offset indices) (error 'binstruct::deserialize-error
+                                               :input nil :position nil
+                                               :info (format nil "SEQ target ~D is not an event boundary" offset)))))
+    (unless partial
+      (typecase event
+        (xseq-event-open-track (setf (xseq-event-open-track-index event) (index (xseq-event-open-track-index event))))
+        (xseq-event-jump (setf (xseq-event-jump-index event) (index (xseq-event-jump-index event))))
+        (xseq-event-call (setf (xseq-event-call-index event) (index (xseq-event-call-index event))))))
+    (let ((child (xseq-event-child event)))
+      (when child (resolve-xseq-event child indices (typep event '(or xseq-event-random xseq-event-variable))))))
+  event)
+
+(defun xseq-events-unpack (events positions labels)
+  (let* ((last (position-if (lambda (event) (typep event '(or xseq-event-finish xseq-event-return xseq-event-jump))) events :from-end t))
+         (indices (make-hash-table)))
+    (unless last (error 'binstruct::deserialize-error
+                        :input nil :position nil
+                        :info "SEQ has no terminating event"))
+    (loop for index from (1+ last) below (length events)
+          for event = (aref events index)
+          unless (and (typep event 'xseq-event-note)
+                      (zerop (xseq-event-note-key event))
+                      (zerop (xseq-event-note-velocity event))
+                      (zerop (xseq-event-note-duration event)))
+            do (error 'binstruct::deserialize-error
+                      :input nil :position nil
+                      :info "Non-padding data after final SEQ event"))
+    (let ((result (if (= (length events) (1+ last)) events (subseq events 0 (1+ last))))
+          (base (aref positions 0)))
+      (loop for index to last do (setf (gethash (- (aref positions index) base) indices) index))
+      (loop for event across result do (resolve-xseq-event event indices))
+      (loop for label across labels when label
+            do (setf (xseq-label-entry-index label)
+                     (or (gethash (xseq-label-entry-index label) indices) (error 'binstruct::deserialize-error
+                                                                                 :input nil :position nil
+                                                                                 :info "Invalid SEQ label"))))
+      result)))
 
 (define-nintendo-ware-section (xseq-data (:magic "DATA"))
   ;; Unlike counted records, this event stream ends at the DATA boundary.
