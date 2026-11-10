@@ -78,32 +78,3 @@
                           (:big ',(binstruct::emitter-name-symbol big)))
                        ,binstruct::*output* ,binstruct::*value* ,@arguments)))))))))
 
-(defmacro define-nintendo-ware-reference (name-and-options lambda-list &body variants)
-  (destructuring-bind (name &rest options) (ensure-list name-and-options)
-    (let ((reference (if (cadr (assoc :sized options))
-                         'nintendo-ware-sized-reference
-                         'nintendo-ware-reference)))
-      (with-gensyms (base)
-        `(defbinalias/me (,name (:type (or null ,@(remove-duplicates
-                                                  (mapcar (lambda (variant)
-                                                            (binstruct::lisp-type (second variant)))
-                                                          variants)
-                                                  :test #'equal))))
-             (,base ,@lambda-list)
-           (or ,@(loop for (tag type) in variants
-                       collect `(,reference ,tag ,type ,base))))))))
-
-(defmacro define-nintendo-ware-reference-array
-    (name lambda-list (binding (function reference) &rest arguments))
-  (ecase function
-    ((function)
-     (with-gensyms (%position %count)
-       (let ((type (ecase binding
-                     (curry `(,reference ,@arguments ,%position))
-                     (rcurry `(,reference ,%position ,@arguments)))))
-         `(defbinstruct/me (,name (:type (simple-array ,(binstruct::lisp-type reference) (*)))
-                                 (:constructor progn) (:conc-name nil)) ,lambda-list
-            (,%position 0 :type position)
-            (,%count 0 :type (unsigned-byte 32))
-            (values #() :type (simple-array ,type (,%count)))))))))
-

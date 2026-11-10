@@ -62,7 +62,7 @@ No configured lint command, application executable or playback command. Smoke th
 
 - `cl-nintendo-ware.asd`: dependencies, serial schema order and test operation.
 - `binary.lisp`: native alias and ME declaration macros; `section.lisp` / `file.lisp`: reusable headers and declaration macros.
-- `common.lisp`: input dispatch and prefixed references. `file.lisp`: file headers and containers. `sound/sound.lisp`: shared `nintendo-ware-sound-` layouts.
+- `common.lisp`: input dispatch. `reference.lisp`: ordinary/sized reference layouts, target/size/null/octet/string helpers and reference declaration macros; loads after `binary.lisp` and before `file.lisp`. `file.lisp`: file headers and containers. `sound/sound.lisp`: shared `nintendo-ware-sound-` layouts.
 - `sound/xseq.lisp`: shared opcode syntax and event endian selection. Concrete sound modules generate their parameterless readers; public input dispatch lives in `common.lisp`.
 - `README.md`: API and verification scope. `ENDIAN.md` / `BCSEQ.md`: platform and format evidence.
 

@@ -7,6 +7,7 @@
   :components ((:file "package")
                (:file "binary")
                (:file "common")
+               (:file "reference")
                (:file "file")
                (:file "section")
                (:module "sound"
