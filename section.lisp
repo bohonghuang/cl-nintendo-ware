@@ -6,7 +6,7 @@
 (defbinstruct/me nintendo-ware-section (expected-magic content)
   ($nintendo-ware-section-start 0 :type position)
   (magic #.(coerce "" 'simple-base-string)
-         :type (satisfies (simple-base-string 4) (lambda (magic) (string= magic expected-magic))))
+         :type (satisfies (simple-base-string 4) (rcurry #'string= expected-magic)))
   (size 8 :type (unsigned-byte 32))
   (%start 0 :type (map null (constantly $nintendo-ware-section-start)))
   (body nil :type (inline content))
@@ -62,7 +62,7 @@
 
 
 (defbinstruct/me nintendo-ware-section-raw-block (expected-magic)
-  (magic #.(coerce "" 'simple-base-string) :type (satisfies (simple-base-string 4) (lambda (magic) (string= magic expected-magic))))
+  (magic #.(coerce "" 'simple-base-string) :type (satisfies (simple-base-string 4) (rcurry #'string= expected-magic)))
   (size 0 :type (unsigned-byte 32))
   (bytes #.(make-array 0 :element-type '(unsigned-byte 8)) :type (simple-array (unsigned-byte 8) ((- size 8)))))
 

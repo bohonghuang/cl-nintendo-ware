@@ -69,7 +69,7 @@
          (variable-value-type (getf (cddr last-field) :type))
          (event-bytes (ensure-list event-bytes))
          (tags (if (eq name 'note)
-                   '((key 0 :type (satisfies (unsigned-byte 8) (lambda (key) (<= key #x7f)))))
+                   '((key 0 :type (satisfies (unsigned-byte 8) (rcurry #'<= #x7f))))
                    (loop for byte in event-bytes collect
                      `(nil ,byte :type (satisfies (unsigned-byte 8) (curry #'eql ,byte)))))))
     (with-gensyms (status value event bytes)
@@ -497,7 +497,9 @@
 
 (defun resolve-xseq-event (event indices &optional partial)
   (flet ((index (offset)
-           (or (gethash offset indices) (fail-file "SEQ target ~D is not an event boundary" offset))))
+           (or (gethash offset indices) (error 'binstruct::deserialize-error
+                                               :input nil :position nil
+                                               :info (format nil "SEQ target ~D is not an event boundary" offset)))))
     (unless partial
       (typecase event
         (xseq-event-open-track (setf (xseq-event-open-track-index event) (index (xseq-event-open-track-index event))))
@@ -510,27 +512,33 @@
 (defun xseq-events-unpack (events positions labels)
   (let* ((last (position-if (lambda (event) (typep event '(or xseq-event-finish xseq-event-return xseq-event-jump))) events :from-end t))
          (indices (make-hash-table)))
-    (unless last (fail-file "SEQ has no terminating event"))
+    (unless last (error 'binstruct::deserialize-error
+                        :input nil :position nil
+                        :info "SEQ has no terminating event"))
     (loop for index from (1+ last) below (length events)
           for event = (aref events index)
           unless (and (typep event 'xseq-event-note)
                       (zerop (xseq-event-note-key event))
                       (zerop (xseq-event-note-velocity event))
                       (zerop (xseq-event-note-duration event)))
-            do (fail-file "Non-padding data after final SEQ event"))
+            do (error 'binstruct::deserialize-error
+                      :input nil :position nil
+                      :info "Non-padding data after final SEQ event"))
     (let ((result (if (= (length events) (1+ last)) events (subseq events 0 (1+ last))))
           (base (aref positions 0)))
       (loop for index to last do (setf (gethash (- (aref positions index) base) indices) index))
       (loop for event across result do (resolve-xseq-event event indices))
       (loop for label across labels when label
             do (setf (xseq-label-entry-index label)
-                     (or (gethash (xseq-label-entry-index label) indices) (fail-file "Invalid SEQ label"))))
+                     (or (gethash (xseq-label-entry-index label) indices) (error 'binstruct::deserialize-error
+                                                                                 :input nil :position nil
+                                                                                 :info "Invalid SEQ label"))))
       result)))
 
 (defbinstruct/me (xseq-track-event (:type xseq-event) (:constructor progn) (:conc-name nil)) (end positions)
-  (%start 0 :type (satisfies position (lambda (position) (< position end))))
+  (%start 0 :type (satisfies position (rcurry #'< end)))
   (values nil :type xseq-event-union)
-  (nil 0 :type (map (satisfies position (lambda (position) (<= position end)))
+  (nil 0 :type (map (satisfies position (rcurry #'<= end))
                    (lambda (position) (declare (ignore position)) (vector-push-extend %start positions)))))
 
 (defbinstruct/me (xseq-track (:type (simple-array xseq-event (*))) (:constructor progn) (:conc-name nil)) (end labels)
@@ -549,7 +557,7 @@
 
 (defbinstruct/me xseq-label-entry ()
   (index 0 :type (map (satisfies nintendo-ware-reference
-                                 (lambda (reference) (nintendo-ware-reference-target reference 0 #x1f00)))
+                                 (rcurry #'nintendo-ware-reference-target 0 #x1f00))
                       #'nintendo-ware-reference-offset))
   (length 0 :type (unsigned-byte 32))
   (name #.(coerce "" 'simple-base-string) :type (simple-base-string length))

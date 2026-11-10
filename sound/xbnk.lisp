@@ -48,7 +48,7 @@
 
 (defbinstruct/me xbnk-velocity (wave-count)
   (%start 0 :type position)
-  (wave-index 0 :type (satisfies (unsigned-byte 32) (lambda (index) (< index wave-count))))
+  (wave-index 0 :type (satisfies (unsigned-byte 32) (rcurry #'< wave-count)))
   (flags (make-xbnk-velocity-flags) :type xbnk-velocity-flags)
   (key-info nil :type (ecase (xbnk-velocity-flags-key-info-p flags)
                         ((nil) null) ((t) xbnk-key-flag)))
@@ -96,7 +96,7 @@
 
 (defbinstruct/me xbnk-velocity-index (wave-count)
   ($xbnk-velocity-index-start 0 :type position)
-  (count 0 :type (satisfies (unsigned-byte 32) (lambda (count) (<= count 128))))
+  (count 0 :type (satisfies (unsigned-byte 32) (rcurry #'<= 128)))
   (upper-bounds #.(make-array 0 :element-type '(unsigned-byte 8)) :type (simple-array (unsigned-byte 8) (count)))
   (padding #.(make-array 0 :element-type '(unsigned-byte 8)) :type (simple-array (unsigned-byte 8) ((mod (- count) 4))))
   (entries #() :type (simple-array
@@ -138,7 +138,7 @@
 
 (defbinstruct/me xbnk-key-index (wave-count)
   ($xbnk-key-index-start 0 :type position)
-  (count 0 :type (satisfies (unsigned-byte 32) (lambda (count) (<= count 128))))
+  (count 0 :type (satisfies (unsigned-byte 32) (rcurry #'<= 128)))
   (upper-bounds #.(make-array 0 :element-type '(unsigned-byte 8)) :type (simple-array (unsigned-byte 8) (count)))
   (padding #.(make-array 0 :element-type '(unsigned-byte 8)) :type (simple-array (unsigned-byte 8) ((mod (- count) 4))))
   (entries #() :type (simple-array

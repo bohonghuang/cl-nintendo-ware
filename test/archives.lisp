@@ -283,7 +283,7 @@
       (assert (null (aref entries 2))))
     (dolist (case '((#x7901 28) (#x7900 -2)))
       (destructuring-bind (tag offset) case
-        (rejects nintendo-ware::nintendo-ware-invalid-file
+        (rejects binstruct::deserialize-error
           (nintendo-ware::read-file 'nintendo-ware::xgrp (group tag offset)))))
     (rejects error
       (nintendo-ware::read-file 'nintendo-ware::xgrp (group #x7900 #x10000))))
@@ -455,7 +455,7 @@
          (file (aref (nintendo-ware::xsar-files archive) 0)))
     (assert (string= "song" (nintendo-ware::xsar-file-name file)))
     (assert (equalp bad-child (nintendo-ware::xsar-file-data file)))
-    (rejects nintendo-ware::nintendo-ware-invalid-file
+    (rejects binstruct::deserialize-error
       (nintendo-ware::read-file 'nintendo-ware::xseq (nintendo-ware::xsar-file-data file))))
   ;; Unknown payloads require no magic/BOM, and STRG is optional.
   (let* ((bytes (make-array 3 :element-type '(unsigned-byte 8) :initial-contents '(1 2 3)))

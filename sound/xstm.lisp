@@ -127,7 +127,9 @@
   (%rows 0 :type (map null (lambda (ignored) (declare (ignore ignored))
                            (if (member %encoding '(dsp-adpcm ima-adpcm))
                                (let ((interval (xstm-stream-info-seek-interval-samples %information)))
-                                 (unless (plusp interval) (fail-file "Zero SEEK interval"))
+                                 (unless (plusp interval) (error 'binstruct::deserialize-error
+                                                                 :input nil :position nil
+                                                                 :info "Zero SEEK interval"))
                                  (ceiling (xstm-stream-info-sample-count %information) interval)) 0))))
   (%bytes 0 :type (map null (lambda (ignored) (declare (ignore ignored))
                             (* %rows %stride (xstm-stream-info-channel-count %information)))))
@@ -148,7 +150,9 @@
   (%stride 0 :type (map null (lambda (ignored) (declare (ignore ignored))
                               (let ((stride (xstm-region-info-entry-size (xstm-stream-info-region-info %information))))
                                 (unless (eq (xstm-stream-info-encoding %information) 'dsp-adpcm)
-                                  (fail-file "Invalid REGN entry layout")) stride))))
+                                  (error 'binstruct::deserialize-error
+                                         :input nil :position nil
+                                         :info "Invalid REGN entry layout")) stride))))
   (entries #() :type (values (pointer (simple-array (xstm-region (xstm-stream-info-channel-count %information) %stride) (%count)) (map null (constantly (nintendo-ware-reference-target (xstm-region-info-data-reference (xstm-stream-info-region-info %information)) $regions-start #x1f00)))))))
 
 (define-nintendo-ware-file (xstm (:magic ("CSTM" "FSTM")))

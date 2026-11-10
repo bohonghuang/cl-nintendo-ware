@@ -181,7 +181,7 @@
            (data (nintendo-ware::xwav-channel-data (aref (nintendo-ware::xwav-info-channels (nintendo-ware::xwav-info wave)) 0))))
       (assert (typep data `(simple-array ,(ecase codec (0 '(signed-byte 8)) (1 '(signed-byte 16))
                                                      (2 '(unsigned-byte 8)) (3 '(unsigned-byte 4))) (0))))))
-  (rejects nintendo-ware::nintendo-ware-invalid-file
+  (rejects binstruct::deserialize-error
     (nintendo-ware::read-file 'nintendo-ware::xwav (wave-fixture 0 :data-magic "JUNK")))
   (dolist (instrument-tag '(#x6000 #x6001 #x6002))
     (dolist (key-tag '(#x6000 #x6001 #x6002))
@@ -208,9 +208,9 @@
           (assert (= 0 (nintendo-ware::xbnk-note-flag-key-group note)))
           (assert (eq 'nintendo-ware::linear (nintendo-ware::xbnk-note-flag-interpolation-type note))))
         (assert (= 4 (nintendo-ware::xbnk-adshr-curve-hold (nintendo-ware::xbnk-velocity-envelope velocity)))))))
-  (rejects nintendo-ware::nintendo-ware-invalid-file (nintendo-ware::read-file 'nintendo-ware::xbnk (xbnk-fixture #x6000 #x6000 1)))
+  (rejects binstruct::deserialize-error (nintendo-ware::read-file 'nintendo-ware::xbnk (xbnk-fixture #x6000 #x6000 1)))
   ;; Removing size/overlap validation must not remove section identification.
-  (rejects nintendo-ware::nintendo-ware-invalid-file
+  (rejects binstruct::deserialize-error
     (nintendo-ware::read-file 'nintendo-ware::xwav
       (container-fixture "CWAV" (list (list #x7000 "JUNK" #()) (list #x7001 "DATA" #())))))
   (let* ((first (wave-fixture 2))

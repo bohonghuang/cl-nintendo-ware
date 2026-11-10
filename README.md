@@ -33,7 +33,7 @@ sbcl --dynamic-space-size 4096 --non-interactive --eval '(ql:quickload :cl-ninte
                         (nintendo-ware::xseq-event-note-duration event))))
 ```
 
-每个被解析的完整文件都读取自己的 header，通过 magic 校验格式、通过 BOM 选择容器字节序。生成的完整文件 reader 不需要 `limit` 或端序参数。解析直接使用 binstruct 的流后端，不再将整个流复制到字节向量；输入流需要支持二进制读取和 `file-position` 定位。解析失败通过 `read-file` 报告为内部条件 `nintendo-ware::invalid-file`。
+每个被解析的完整文件都读取自己的 header，通过 magic 校验格式、通过 BOM 选择容器字节序。生成的完整文件 reader 不需要 `limit` 或端序参数。解析直接使用 binstruct 的流后端，不再将整个流复制到字节向量；输入流需要支持二进制读取和 `file-position` 定位。`read-file` 不捕获或包装解析错误，直接暴露 binstruct 原生 condition（例如 `binstruct::deserialize-error`），保留底层提供的 input、position 和 info；流自身的错误也原样透出。语义校验失败同样直接使用 `binstruct::deserialize-error`；无法取得流或位置的校验将这两个字段设为 `NIL`。
 
 | 模块 | 结构 | 文件 magic |
 |---|---|---|
@@ -48,9 +48,11 @@ sbcl --dynamic-space-size 4096 --non-interactive --eval '(ql:quickload :cl-ninte
 
 模块和所属类型、函数、宏统一使用 `x` 加 magic 后三位的前缀；`x` 同时涵盖 C/F 两种容器。例如事件声明宏为 `define-xseq-event`，音符类型为 `xseq-event-note`。这是直接重命名，旧名称不再提供兼容别名。
 
-`common.lisp` 仅保留输入分派、错误条件与通用引用布局。文件头和文件容器位于 `file.lisp`，区块布局位于 `section.lisp`。`sound/sound.lisp` 在所有 `sound/x___.lisp` 之前加载，共用 codec、byte table、resource ID 和 wave ID 布局统一使用 `nintendo-ware-sound-` 前缀。NintendoWare 专有类型使用库或模块前缀，通用 VLQ 原语保持原名；记录位域类型统一命名为 `*-flags`。SAR 专用的整数表、资源 ID 表、priority 数值字段位于 `sound/xsar.lisp`，使用 `xsar-integer-table`、`xsar-resource-id-table`、`xsar-packed-priority`；WSD 专用 pan/filter 数值字段位于 `sound/xwsd.lisp`，使用 `xwsd-packed-pan`、`xwsd-packed-filter`，访问器同样带模块前缀。
+`common.lisp` 仅保留输入分派与通用引用布局。文件头和文件容器位于 `file.lisp`，区块布局位于 `section.lisp`。`sound/sound.lisp` 在所有 `sound/x___.lisp` 之前加载，共用 codec、byte table、resource ID 和 wave ID 布局统一使用 `nintendo-ware-sound-` 前缀。NintendoWare 专有类型使用库或模块前缀，通用 VLQ 原语保持原名；记录位域类型统一命名为 `*-flags`。SAR 专用的整数表、资源 ID 表、priority 数值字段位于 `sound/xsar.lisp`，使用 `xsar-integer-table`、`xsar-resource-id-table`、`xsar-packed-priority`；WSD 专用 pan/filter 数值字段位于 `sound/xwsd.lisp`，使用 `xwsd-packed-pan`、`xwsd-packed-filter`，访问器同样带模块前缀。
 
-BNK、WSD、SAR 的可选参数各有记录专属位域 set，开关字段使用 binstruct 原生 `(boolean bit)`，名称以 `-p` 结尾。语义字段按位号顺序直接读取，缺席为 `NIL`，不经通用整数数组二次解码。32 位数值位域在定义侧指定 `(:alignment 4)`，由 binstruct 原生处理整数分组和端序；`defbinstruct/me` 直接透传该选项，不重排字段。位号、资料来源及保留位规则见 [ENDIAN.md](ENDIAN.md#optional-parameter-flagss)。
+简单 `satisfies` 谓词优先使用 Alexandria 的 `curry`／`rcurry`，无额外参数时直接使用函数引用；参数位于中间、需要字段提取／计算或包含多个条件时保留 lambda。
+
+BNK、WSD、SAR 的可选参数各有记录专属位域 set，开关字段使用 binstruct 原生 `(boolean bit)`，名称以 `-p` 结尾。语义字段按位号顺序直接读取，缺席为 `NIL`，不经通用整数数组二次解码。32 位数值位域在定义侧指定 `(:alignment 4)`，由 binstruct 原生处理整数分组和端序；`defbinstruct/me` 直接透传该选项，不重排字段。位号、资料来源及保留位规则见 [ENDIAN.md](ENDIAN.md#optional-parameter-flag-sets)。
 
 `xwar-waves` 仿照 Nitro 的 `swar-waves`，直接返回按 wave index 排列的 WAV 结构向量；保留空引用为 `NIL`，不压缩索引，也不复制或解码编码音频。调用方不需要遍历 INFO section 和 reference entry。
 

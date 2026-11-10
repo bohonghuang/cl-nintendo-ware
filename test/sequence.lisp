@@ -19,15 +19,15 @@
   (size 0 :type (unsigned-byte 32)))
 
 (defbinstruct reference-table ()
-  (count 0 :type (satisfies (unsigned-byte 32) (lambda (count) (count-fits-p count 8))))
+  (count 0 :type (satisfies (unsigned-byte 32) (rcurry #'count-fits-p 8)))
   (entries #() :type (simple-array reference (count))))
 
 (defbinstruct sized-reference-table ()
-  (count 0 :type (satisfies (unsigned-byte 32) (lambda (count) (count-fits-p count 12))))
+  (count 0 :type (satisfies (unsigned-byte 32) (rcurry #'count-fits-p 12)))
   (entries #() :type (simple-array sized-reference (count))))
 
 (defbinstruct integer-table ()
-  (count 0 :type (satisfies (unsigned-byte 32) (lambda (count) (count-fits-p count 4))))
+  (count 0 :type (satisfies (unsigned-byte 32) (rcurry #'count-fits-p 4)))
   (entries #.(make-array 0 :element-type '(unsigned-byte 32)) :type (simple-array (unsigned-byte 32) (count))))
 
 (defbinstruct wave-id ()
@@ -35,7 +35,7 @@
   (index 0 :type (unsigned-byte 32)))
 
 (defbinstruct wave-id-table ()
-  (count 0 :type (satisfies (unsigned-byte 32) (lambda (count) (count-fits-p count 8))))
+  (count 0 :type (satisfies (unsigned-byte 32) (rcurry #'count-fits-p 8)))
   (entries #() :type (simple-array wave-id (count))))
 
 (defbinstruct fixture-parameter-words ()
@@ -67,11 +67,11 @@
 
 (defbinstruct header-record ()
   (magic #.(coerce "" 'simple-base-string) :type (simple-base-string 4))
-  (bom 0 :type (satisfies (unsigned-byte 16) (lambda (value) (= value #xfeff))))
+  (bom 0 :type (satisfies (unsigned-byte 16) (rcurry #'= #xfeff)))
   (header-size 0 :type (unsigned-byte 16))
   (version 0 :type (unsigned-byte 32))
   (file-size 0 :type (unsigned-byte 32))
-  (block-count 0 :type (satisfies (unsigned-byte 16) (lambda (count) (count-fits-p count 12 20))))
+  (block-count 0 :type (satisfies (unsigned-byte 16) (rcurry #'count-fits-p 12 20)))
   (padding 0 :type (unsigned-byte 16))
   (references #() :type (simple-array sized-reference (block-count))))
 
@@ -101,7 +101,7 @@
 
 (defbinstruct xwav-ima-adpcm-context ()
   (predictor 0 :type (signed-byte 16))
-  (step-index 0 :type (satisfies (unsigned-byte 8) (lambda (value) (<= value 88))))
+  (step-index 0 :type (satisfies (unsigned-byte 8) (rcurry #'<= 88)))
   (padding 0 :type (unsigned-byte 8)))
 
 (defbinstruct xwav-ima-adpcm-info ()
@@ -109,8 +109,8 @@
   (loop-context (make-xwav-ima-adpcm-context) :type xwav-ima-adpcm-context))
 
 (defbinstruct xwav-info ()
-  (codec 0 :type (satisfies (unsigned-byte 8) (lambda (value) (<= value 3))))
-  (loop 0 :type (satisfies (unsigned-byte 8) (lambda (value) (<= value 1))))
+  (codec 0 :type (satisfies (unsigned-byte 8) (rcurry #'<= 3)))
+  (loop 0 :type (satisfies (unsigned-byte 8) (rcurry #'<= 1)))
   (padding 0 :type (unsigned-byte 16))
   (sample-rate 0 :type (satisfies (unsigned-byte 32) #'plusp))
   (loop-start 0 :type (unsigned-byte 32))
@@ -143,7 +143,7 @@
   (references #() :type (simple-array reference (count))))
 
 (defbinstruct xbnk-range-data ()
-  (minimum 0 :type (satisfies (unsigned-byte 8) (lambda (value) (<= value 127))))
+  (minimum 0 :type (satisfies (unsigned-byte 8) (rcurry #'<= 127)))
   (maximum 0 :type (satisfies (unsigned-byte 8)
                             (lambda (value)
                               (and (<= minimum value 127)
@@ -163,7 +163,7 @@
 
 (defbinstruct xwsd-send-values ()
   (main-send 0 :type (unsigned-byte 8))
-  (count 0 :type (satisfies (unsigned-byte 8) (lambda (count) (count-fits-p count 1 2))))
+  (count 0 :type (satisfies (unsigned-byte 8) (rcurry #'count-fits-p 1 2)))
   (auxiliary-sends #.(make-array 0 :element-type '(unsigned-byte 8)) :type (simple-array (unsigned-byte 8) (count))))
 
 (defbinstruct xwsd-note-record ()
@@ -254,7 +254,7 @@
 
 (defbinstruct xsar-patricia-tree ()
   (root-index 0 :type (unsigned-byte 32))
-  (count 0 :type (satisfies (unsigned-byte 32) (lambda (count) (count-fits-p count 20 8))))
+  (count 0 :type (satisfies (unsigned-byte 32) (rcurry #'count-fits-p 20 8)))
   (nodes #() :type (simple-array xsar-patricia-node (count))))
 
 (defbinstruct xsar-sound-record ()
@@ -354,8 +354,8 @@
     (assert (= -2 (nintendo-ware::xseq-event-set-variable-value extended)))
     (assert (typep (aref events 4) 'nintendo-ware::xseq-event-finish))
     (assert (equalp sequence (nintendo-ware::read-file 'nintendo-ware::xseq (flexi-streams:make-in-memory-input-stream bytes))))
-    (rejects nintendo-ware::nintendo-ware-invalid-file (nintendo-ware::read-file 'nintendo-ware::xwav bytes))
-    (rejects nintendo-ware::nintendo-ware-invalid-file (nintendo-ware::read-file 'nintendo-ware::xseq (sequence-fixture #(#xff) :label-offset 24))))
+    (rejects binstruct::deserialize-error (nintendo-ware::read-file 'nintendo-ware::xwav bytes))
+    (rejects binstruct::deserialize-error (nintendo-ware::read-file 'nintendo-ware::xseq (sequence-fixture #(#xff) :label-offset 24))))
   ;; Enum operands remain semantic under ordinary and nested event readers.
   (let ((events (nintendo-ware::xseq-events
                  (nintendo-ware::read-file 'nintendo-ware::xseq
@@ -403,6 +403,6 @@
                   (nintendo-ware::read-file 'nintendo-ware::xseq (sequence-fixture #(137 0 0 0))))))
     (assert (= 0 (nintendo-ware::xseq-event-jump-index (aref events 0)))))
   (dolist (body '(#(137 0 0 1) #(60 100 129) #(128 128 128 128 128) #(130)))
-    (rejects nintendo-ware::nintendo-ware-invalid-file
+    (rejects binstruct::deserialize-error
       (nintendo-ware::read-file 'nintendo-ware::xseq (sequence-fixture body :padded nil))))
   (format t "Typed SEQ events, embedded partials and indexed control flow passed.~%"))

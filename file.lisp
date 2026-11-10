@@ -1,7 +1,7 @@
 (in-package #:nintendo-ware)
 
 (defbinstruct (nintendo-ware-file-byte-order (:type (member :little :big)) (:constructor progn) (:conc-name nil) (:endian :big)) ()
-  (%value #xfffe :type (satisfies (unsigned-byte 16) (lambda (value) (member value '(#xfffe #xfeff)))))
+  (%value #xfffe :type (satisfies (unsigned-byte 16) (rcurry #'member '(#xfffe #xfeff))))
   (values :little :type (map null (lambda (ignored) (declare (ignore ignored))
                                    (ecase %value (#xfffe :little) (#xfeff :big))))))
 
@@ -36,12 +36,16 @@
   (loop :for index :below (length references) :for current := (aref references index)
         :do (loop :for previous-index :below index :for previous := (aref references previous-index)
                   :do (when (= (nintendo-ware-sized-reference-type current) (nintendo-ware-sized-reference-type previous))
-                        (fail-file "Duplicate block tag"))))
+                        (error 'binstruct::deserialize-error
+                               :input nil :position nil
+                               :info "Duplicate block tag"))))
   nil)
 
 (defun block-reference (header type &optional (required t))
   (or (find type (nintendo-ware-file-header-references header) :key #'nintendo-ware-sized-reference-type)
-      (when required (fail-file "Missing block #x~X" type))))
+      (when required (error 'binstruct::deserialize-error
+                            :input nil :position nil
+                            :info (format nil "Missing block #x~X" type)))))
 
 (defun block-start (header type)
   (+ (nintendo-ware-file-header-start header) (nintendo-ware-sized-reference-offset (block-reference header type))))

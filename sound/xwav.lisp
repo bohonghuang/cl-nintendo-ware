@@ -19,7 +19,7 @@
 
 (defbinstruct/me xwav-ima-adpcm-context ()
   (predictor 0 :type (signed-byte 16))
-  (step-index 0 :type (satisfies (unsigned-byte 8) (lambda (value) (<= value 88))))
+  (step-index 0 :type (satisfies (unsigned-byte 8) (rcurry #'<= 88)))
   (padding 0 :type (unsigned-byte 8)))
 
 (defbinstruct/me xwav-ima-adpcm-info ()
@@ -53,7 +53,7 @@
   (loop-end 0 :type (unsigned-byte 32))
   (reserved 0 :type (unsigned-byte 32))
   ($channels-start 0 :type position)
-  (channel-count 0 :type (satisfies (unsigned-byte 32) (lambda (count) (plusp count))))
+  (channel-count 0 :type (satisfies (unsigned-byte 32) #'plusp))
   (channels #() :type (simple-array
                       (or nintendo-ware-null-reference
                           (values (pointer (map (xwav-channel codec loop-end)

@@ -5,18 +5,20 @@
 
 ;; These fixed layouts are independent of the library's ME reader expansion.
 ;; Writers here only build input bytes; library writers are not exercised.
-(defbinstruct (fixture-u16/be (:type (unsigned-byte 16)) (:constructor progn) (:conc-name nil) (:endian :big)) ()
-  (values 0 :type (unsigned-byte 16)))
-(defbinstruct (fixture-u24/be (:type (unsigned-byte 24)) (:constructor progn) (:conc-name nil) (:endian :big)) ()
-  (values 0 :type (unsigned-byte 24)))
-(defbinstruct (fixture-u32/be (:type (unsigned-byte 32)) (:constructor progn) (:conc-name nil) (:endian :big)) ()
-  (values 0 :type (unsigned-byte 32)))
-(defbinstruct (fixture-s16/be (:type (signed-byte 16)) (:constructor progn) (:conc-name nil) (:endian :big)) ()
-  (values 0 :type (signed-byte 16)))
-(defbinstruct (fixture-s32/be (:type (signed-byte 32)) (:constructor progn) (:conc-name nil) (:endian :big)) ()
-  (values 0 :type (signed-byte 32)))
-(defbinstruct (fixture-f32/be (:type single-float) (:constructor progn) (:conc-name nil) (:endian :big)) ()
-  (values 0.0f0 :type single-float))
+;; Constant satisfies predicates may encode their tag during macroexpansion.
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (defbinstruct (fixture-u16/be (:type (unsigned-byte 16)) (:constructor progn) (:conc-name nil) (:endian :big)) ()
+    (values 0 :type (unsigned-byte 16)))
+  (defbinstruct (fixture-u24/be (:type (unsigned-byte 24)) (:constructor progn) (:conc-name nil) (:endian :big)) ()
+    (values 0 :type (unsigned-byte 24)))
+  (defbinstruct (fixture-u32/be (:type (unsigned-byte 32)) (:constructor progn) (:conc-name nil) (:endian :big)) ()
+    (values 0 :type (unsigned-byte 32)))
+  (defbinstruct (fixture-s16/be (:type (signed-byte 16)) (:constructor progn) (:conc-name nil) (:endian :big)) ()
+    (values 0 :type (signed-byte 16)))
+  (defbinstruct (fixture-s32/be (:type (signed-byte 32)) (:constructor progn) (:conc-name nil) (:endian :big)) ()
+    (values 0 :type (signed-byte 32)))
+  (defbinstruct (fixture-f32/be (:type single-float) (:constructor progn) (:conc-name nil) (:endian :big)) ()
+    (values 0.0f0 :type single-float)))
 
 (defmacro define-big-endian-fixtures (&body declarations)
   (let ((names (mapcar #'car declarations))
