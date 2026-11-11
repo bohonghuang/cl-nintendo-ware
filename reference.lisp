@@ -34,9 +34,9 @@
                                 (and (<= -1 offset) (or (= offset -1) (= %tag tag)))))
                             base))
   ($nintendo-ware-reference-size 0 :type position)
-  (%size nil :type (ecase sized
-                    ((nil) (null))
-                    ((t) (unsigned-byte 32)))))
+  (%size (when sized 0) :type (ecase sized
+                                ((t) (unsigned-byte 32))
+                                ((nil) (null)))))
 
 (defbinstruct/me (nintendo-ware-reference-octets
                   (:type (simple-array (unsigned-byte 8) (*)))

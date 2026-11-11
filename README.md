@@ -209,13 +209,13 @@ file／section body 均通过原生文件位置锚点恢复 `%header`，不再�
 
 `(:sized t)` 选择 12 字节引用，否则为 8 字节。二者使用同一个 `nintendo-ware-reference` 布局，由原生 `pointer` 定位、共用 `nintendo-ware-reference-target` 的 `inline` 包装；结果不含指针或供用户解引用的偏移。非空引用校验 tag 和 offset；`-1` 为空引用，保留其 tag 未定义的既有语义。Citrus 的非零基址使 pointer 可定位到 base−1，然后由 target 内的位置比较返回 `NIL`，不进入目标布局。框架不承诺零基址空引用。
 
-sized target 如需长度，必须在开头通过 `(%size 0 :type nintendo-ware-reference-size)` 获取并保存，再读取其他字段或子引用。这个 ME alias 通过原生零宽 `pointer`，按引用的端序直接读取 `$nintendo-ware-reference-size` 指向的 u32 size 字段；嵌套 reference 会覆盖该全局锚点，不保证返回父布局后再次查询仍得到父 size。普通引用没有声明长度，目标按自身布局读取，不使用 size 查询。target 以局部 `%start`／`%end` 记录实际读取范围；sized target 末尾保留原生 `peek`／`map` 声明，读取时不改动 size，理论上写入时可将实际长度回写到捕获的 size 字段位置。此回写不实现额外手工逻辑，也未测试、不保证 writer 可用；不再预置 target endpoint 或通过 endpoint 相减取得声明长度。
+sized target 如需长度，必须在开头通过 `(%size 0 :type nintendo-ware-reference-size)` 获取并保存，再读取其他字段或子引用。这个 ME alias 通过原生零宽 `pointer`，按引用的端序直接读取 `$nintendo-ware-reference-size` 指向的 u32 size 字段；嵌套 reference 会覆盖该全局锚点，不保证返回父布局后再次查询仍得到父 size。普通引用没有声明长度，目标按自身布局读取，不使用 size 查询。target 以局部 `%start`／`%end` 记录实际读取范围；sized target 末尾保留原生 `peek`／`map` 声明，读取时不改动 size，写入时可将实际长度回写到捕获的 size 字段位置。sized 分支以 `0` 初始化 size 占位值。临时 LE／BE smoke 已验证 tag 为 0、非零基址下的 3 字节目标 size 回填、零长度目标及普通引用不含 size 字段；这不是完整 writer 验证。回写不实现额外手工逻辑；不再预置 target endpoint 或通过 endpoint 相减取得声明长度。
 
 SAR 字符串和 SAR／GRP 原始数据目标使用 sized 长度；WAR 直接返回 WAV 对象，WAV 仍由自身布局解析，不套 sized-reference 长度限制。`xwar-info-entries` 不再含 `xwar-entry` 包装，`xwar-waves` 直接返回该数组；Citrus 消费端已同步。STM 原先仅保留引用的 sample-data、REGN data、SAR stream sends／extension 也改为已解析的语义值。文件头的区块目录由内部 `nintendo-ware-file-block` 保存 tag／offset／size，供容器定位区块；它不是 typed resource reference，不导出这些目录访问器。
 
 `$...` 是供其他结构访问的 global position，并支持原生延迟解析；仅当前结构使用的位置和解析变量统一为局部 `%...`。pointer 基址直接传符号，不包 `progn`；typed reference 的调用方通过零宽原生 pointer 获取跨结构基址的数值。生成的引用数组各自捕获局部位置，不会覆盖外层数组基址。pointer 不在字段类型最外层时包原生 `values`，需要立即使用引用目标的字段也使用 `values`。不添加目录跨度、重叠或 sized-reference 子文件长度校验；文件／区块 size 参与尾部 padding 读取，截断 padding 也会导致读取失败，不承诺完整格式校验或受限输入沙箱。
 
-**本库只保证 reader。** ME 同时注册 reader／writer 的编译期端序展开，以保持 binstruct 声明一致；不测试、不保证自动生成的 writer 正确性，也不提供文件写入 API。
+**本库只保证 reader。** ME 同时注册 reader／writer 的编译期端序展开，以保持 binstruct 声明一致；除上述有限的临时 size 回写 smoke 外，不测试、不保证自动生成的 writer 正确性，也不提供文件写入 API。
 
 此前提交 `2e3bda2` 的 ME 优化强制编译测量（不代表本次容器改动的计时）：SBCL 2.6.9／Linux ARM64，`--dynamic-space-size 8192`，新进程先加载依赖，再计时 `(asdf:compile-system :cl-nintendo-ware :force t)`；不含依赖加载、测试和真实文件 smoke。优化前 wall／CPU 为 241.434／241.414 秒，优化后为 65.285／65.287 秒，wall 减少 73.0%（约 3.70 倍）。这是当前机器的单次对照，不是跨环境性能保证；编译仍有未使用变量等 style-warning。
 
