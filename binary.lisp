@@ -78,3 +78,19 @@
                           (:big ',(binstruct::emitter-name-symbol big)))
                        ,binstruct::*output* ,binstruct::*value* ,@arguments)))))))))
 
+(defmacro nintendo-ware-parse (type input)
+  (with-gensyms (source result failure position)
+    `(let ((,source ,input)
+           (binstruct::*positions* nil))
+       (multiple-value-bind (,result ,failure)
+           (parser-run (parser ,(binstruct::expand-reader-type-unit
+                                 type :endian binstruct::+endian-default+
+                                 :alignment binstruct::+alignment-default+))
+                       (the (simple-array (unsigned-byte 8) (*)) ,source))
+         (if ,failure
+             (error 'binstruct::deserialize-error
+                    :position ,failure :input ,source :info ,result)
+             (if-let ((,position (find-if-not #'integerp binstruct::*positions* :key #'cdr)))
+               (error 'binstruct::unresolved-position-error :name (car ,position))
+               ,result))))))
+

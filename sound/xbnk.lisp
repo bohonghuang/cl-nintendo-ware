@@ -159,7 +159,7 @@
   (instruments nil :type (xbnk-instruments-reference %info-start (length waves))))
 
 (define-nintendo-ware-file (xbnk (:magic ("CBNK" "FBNK")))
-  (info nil :type (values (pointer xbnk-info (map null (constantly (block-start %header #x5800)))))))
+  (info (make-xbnk-info) :type xbnk-info :tag #x5800))
 
 (defbinio xbnk stream)
 

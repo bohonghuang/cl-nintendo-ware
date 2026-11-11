@@ -1,26 +1,26 @@
 (in-package #:cl-nintendo-ware)
 
-(defbinstruct (xwar-data-position (:type non-negative-fixnum)
-                                       (:constructor progn) (:conc-name nil)) ()
-  ($xwar-data-start 0 :type position)
-  (values 0 :type (map null (constantly $xwar-data-start))))
-
-(define-nintendo-ware-reference (xwar-wave-reference (:sized t)) ()
-  (#x1f00 (xwav-embedded)))
-
 (define-nintendo-ware-section (xwar-info (:magic "INFO"))
-  (nil nil :type (values (pointer xwar-data-position (map null (constantly (+ 8 (block-start %header #x6801)))))))
-  (%data-start 0 :type (values (pointer position (map null (constantly 0)) $xwar-data-start)))
   (count 0 :type (unsigned-byte 32))
-  (entries #() :type (simple-array (xwar-wave-reference %data-start) (count))))
+  (entries #() :type (simple-array (simple-array (unsigned-byte 8) (12)) (count))))
 
 (define-nintendo-ware-file (xwar (:magic ("CWAR" "FWAR")))
-  (info nil :type (values (pointer xwar-info (map null (constantly (block-start %header #x6800))))))
-  (file nil :type (values (pointer (nintendo-ware-section-raw-block "FILE") (map null (constantly (block-start %header #x6801)))))))
+  (info (make-xwar-info) :type xwar-info :tag #x6800)
+  (file (make-nintendo-ware-section-raw-block) :type (nintendo-ware-section-raw-block "FILE") :tag #x6801))
 
-(defun xwar-waves (xwar)
-  "Return WAV structures in wave-index order, preserving absent entries as NIL."
-  (xwar-info-entries (xwar-info xwar)))
+(defun xwar-waves (archive)
+  "Parse WAVs on demand in wave-ID order, preserving null references as NIL."
+  (let* ((info (xwar-info-body (xwar-info archive)))
+         (section (xwar-file archive))
+         (data (when section
+                 (nintendo-ware-section-octets-bytes (nintendo-ware-section-raw-block-body section)))))
+    (map 'simple-vector
+         (lambda (reference)
+           (let ((bytes (ecase (nintendo-ware-file-endian archive)
+                          (:little (nintendo-ware-parse (nintendo-ware-data-reference '(#x1f00) data) reference))
+                          (:big (nintendo-ware-parse (nintendo-ware-data-reference/be '(#x1f00) data) reference)))))
+             (when bytes (read-file 'xwav bytes))))
+         (xwar-info-body-entries info))))
 
 (defmethod read-file ((type (eql 'xwar)) (stream stream))
   (read-xwar stream))

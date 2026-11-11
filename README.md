@@ -22,7 +22,7 @@ sbcl --dynamic-space-size 4096 --non-interactive --eval '(ql:quickload :cl-ninte
 
 ## 读取文件
 
-`read-file` 仿照 cl-nitro，是按文件类型符号和输入类型分派的 generic function。公开 API 只有 `read-file`、下表八个文件符号，以及文件级提取工具 `xseq-events`／`xwar-waves`／`xsar-files` 和文件条目访问器 `xsar-file-name`／`xsar-file-data`；全部在 `package.lisp` 的 `defpackage` 中声明。section、字段访问器、事件类型、构造器和声明宏保持内部，测试一律使用 `::`，模块和宏不得动态导出它们。类型参数例如 `'nintendo-ware:xseq`，不接受 `:auto`、关键字或 C/F 格式名称。输入支持 pathname、文件名字符串、二进制流和 octet vector；pathname 打开为流，向量包装为内存输入流，各格式的流方法调用对应的内部 `read-x...` reader。
+`read-file` 仿照 cl-nitro，是按文件类型符号和输入类型分派的 generic function。公开 API 包括 `read-file`、下表八个文件符号，以及文件级提取工具 `xseq-events`、`xwar-waves`、`xwav-samples`、`xsar-files`、`xgrp-file-data`、`xstm-sample-data`、`xstm-seek-rows`、`xstm-regions-entries` 和文件条目访问器 `xsar-file-name`／`xsar-file-data`；全部在 `package.lisp` 的 `defpackage` 中声明。section、字段访问器、事件类型、构造器和声明宏保持内部，测试一律使用 `::`，模块和宏不得动态导出它们。类型参数例如 `'nintendo-ware:xseq`，不接受 `:auto`、关键字或 C/F 格式名称。输入支持 pathname、文件名字符串、二进制流和 octet vector；pathname 打开为流，向量包装为内存输入流，各格式的流方法调用对应的内部 `read-x...` reader。
 
 ```lisp
 (let* ((file (nintendo-ware:read-file 'nintendo-ware:xseq #P"/path/to/music.bcseq"))
@@ -33,7 +33,7 @@ sbcl --dynamic-space-size 4096 --non-interactive --eval '(ql:quickload :cl-ninte
                         (nintendo-ware::xseq-event-note-duration event))))
 ```
 
-每个被解析的完整文件都读取自己的 header，通过 magic 校验格式、通过 BOM 选择容器字节序。生成的完整文件 reader 不需要 `limit` 或端序参数。解析直接使用 binstruct 的流后端，不再将整个流复制到字节向量；输入流需要支持二进制读取和 `file-position` 定位。`read-file` 不捕获或包装解析错误，直接暴露 binstruct 原生 condition（例如 `binstruct::deserialize-error`），保留底层提供的 input、position 和 info；流自身的错误也原样透出。语义校验失败同样直接使用 `binstruct::deserialize-error`；无法取得流或位置的校验将这两个字段设为 `NIL`。
+每个完整文件直接读取 magic、BOM 和版本，通过 BOM 选择文件头数值及 section 布局；没有独立 header 对象。完整文件 reader 不需要 `limit` 或端序参数，输入流需要支持二进制读取和 `file-position` 定位。`read-file` 读取各 section 自己的内容，不跨 section 解引用；需要关联其他 section 的提取函数按需执行声明式解析，不缓存结果。错误目录 tag、section magic、BOM 和截断在读取容器时失败；跨节目标、事件和标签错误在相应提取 API 调用时失败。解析错误直接暴露 binstruct 原生 condition，不包装；语义校验使用 `binstruct::deserialize-error`，无法取得 input／position 时这两项为 `NIL`。
 
 | 模块 | 结构 | 文件 magic |
 |---|---|---|
@@ -50,10 +50,11 @@ sbcl --dynamic-space-size 4096 --non-interactive --eval '(ql:quickload :cl-ninte
 
 `common.lisp` 仅保留输入分派。`reference.lisp` 集中通用引用布局、辅助类型及引用声明宏，在 `binary.lisp` 之后、`file.lisp` 之前加载。文件头和文件容器位于 `file.lisp`，区块布局位于 `section.lisp`。`sound/sound.lisp` 在所有 `sound/x___.lisp` 之前加载，共用 codec、channel-index 数组、resource ID 和 wave ID 布局统一使用 `nintendo-ware-sound-` 前缀。NintendoWare 专有类型使用库或模块前缀，通用 VLQ 原语保持原名；记录位域类型统一命名为 `*-flags`。SAR 专用的 File ID 数组、资源 ID 数组、priority 数值字段位于 `sound/xsar.lisp`，使用 `xsar-sound-group-files`、`xsar-resource-ids`、`xsar-packed-priority`；WSD 专用 pan/filter 数值字段位于 `sound/xwsd.lisp`，使用 `xwsd-packed-pan`、`xwsd-packed-filter`，访问器同样带模块前缀。
 
-仅含计数、定位锚点和元素数组的布局使用 `(:constructor progn)`、`(:conc-name nil)` 和显式的 `(:type (simple-array ... (*)))`，直接返回数组，不再生成 `*-table` 结构或要求调用 `*-table-entries`／`*-table-count`。计数只用于解析，调用方使用 `length`。单一所属字段的布局与访问器同名，例如 `xwsd-track-events`、`xwsd-item-tracks`、`xwsd-item-notes`、`xwsd-info-items`、`xbnk-info-instruments`、`xstm-info-tracks`／`xstm-info-channels`、`xsar-strg-strings` 和 `xsar-info-sounds` 等 SAR 资源数组；共用布局为 `nintendo-ware-sound-channel-indices`、`nintendo-ware-sound-wave-ids` 和 `xsar-resource-ids`。`xstm-seek-row` 同样直接返回 SEEK entry 数组。空引用保持 `NIL`，非空引用的零计数返回空数组，数组内空引用不压缩索引；不提供旧包装的兼容别名。具有 upper bounds、range 或 Patricia root 等独立语义字段的记录以及原生 section 容器保持结构。
+仅含计数、局部位置和元素数组的布局使用 `(:constructor progn)`、`(:conc-name nil)` 和显式的 `(:type (simple-array ... (*)))`，直接返回数组；计数只用于解析，调用方使用 `length`。section 内容通过原生 body 访问器取得，例如 `xwsd-info-body-items`、`xbnk-info-body-instruments` 和 `xsar-strg-body-strings`。版本相关的 SAR／STM INFO 则由内部 `xsar-information`／`xstm-information` 返回 `xsar-info-record`／`xstm-info-record`。空引用保持 `NIL`，非空引用的零计数返回专用空数组，数组内空引用不压缩索引。具有 upper bounds、range 或 Patricia root 等独立语义字段的记录以及 section 容器保持结构。
 
 ```lisp
-(let* ((items (nintendo-ware::xwsd-info-items (nintendo-ware::xwsd-info wsd)))
+(let* ((items (nintendo-ware::xwsd-info-body-items
+               (nintendo-ware::xwsd-info-body (nintendo-ware::xwsd-info wsd))))
        (item (aref items 0))
        (track (aref (nintendo-ware::xwsd-item-tracks item) 0)))
   (loop for event across (nintendo-ware::xwsd-track-events track)
@@ -66,7 +67,7 @@ sbcl --dynamic-space-size 4096 --non-interactive --eval '(ql:quickload :cl-ninte
 
 BNK、WSD、SAR 的可选参数各有记录专属位域 set，开关字段使用 binstruct 原生 `(boolean bit)`，名称以 `-p` 结尾。语义字段按位号顺序直接读取，缺席为 `NIL`，不经通用整数数组二次解码。32 位数值位域在定义侧指定 `(:alignment 4)`，由 binstruct 原生处理整数分组和端序；`defbinstruct/me` 直接透传该选项，不重排字段。位号、资料来源及保留位规则见 [ENDIAN.md](ENDIAN.md#optional-parameter-flag-sets)。
 
-`xwar-waves` 仿照 Nitro 的 `swar-waves`，直接返回按 wave index 排列的 WAV 结构向量；保留空引用为 `NIL`，不压缩索引，也不复制或解码编码音频。调用方不需要遍历 INFO section 和 reference entry。
+`xwar-waves` 按 wave ID 顺序关联 INFO 中的原始 12 字节引用与 FILE bytes，再显式读取每个 WAV；返回 WAV 结构向量，空引用为 `NIL`，不压缩索引。`read-file 'xwar` 不解析子 WAV，损坏的内嵌 WAV 只在提取时失败。重复调用重新解析，不缓存 WAV，也不解码音频。
 
 共用解析布局不等于保证所有游戏、版本和编码组合兼容。原始 ID、引用及可选字段保留；空引用为 `NIL`。外部档案路径只读取为字符串，绝不自动打开。
 
@@ -74,9 +75,9 @@ BNK、WSD、SAR 的可选参数各有记录专属位域 set，开关字段使用
 
 ### WAV 原生采样数据
 
-`xwav-channel-data` 由声明中的 `ecase` 按 codec 直接读取最终专用数组，不先读取 octet vector 再做符号转换、拼接 PCM16 或拆 nibble。移除旧 `xwav-channel-encoded-data`，不提供兼容副本。`count` 为 `xwav-info-loop-end`，也是非循环波形的样本数。
+`(xwav-samples wave &optional (channel-index 0))` 关联 INFO 与独立的 DATA，先按 codec/count 声明式提取精确长度的原始 bytes，再由 `xwav-sample-array` 返回最终专用数组；不手写符号转换、PCM16 拼接或 nibble 拆分。`count` 为 `xwav-info-body-loop-end`，也是非循环波形的样本数。越界 channel-index 使用正常数组索引错误；非空样本引用缺失 DATA 时产生 `binstruct::deserialize-error`。
 
-| `xwav-info-codec` | `xwav-channel-data` 元素类型 | 长度与顺序 |
+| `xwav-info-body-codec` | `xwav-samples` 元素类型 | 长度与顺序 |
 |---|---|---|
 | `pcm-8` | `(signed-byte 8)` | `count`；可直接传入 `s8-pcm-source` |
 | `pcm-16` | `(signed-byte 16)` | `count`；reader 按 WAV 自身 BOM 读出数值，可直接传入 `s16-pcm-source` |
@@ -85,9 +86,9 @@ BNK、WSD、SAR 的可选参数各有记录专属位域 set，开关字段使用
 
 DSP 帧为一个 header 字节加七个采样字节：header 高 nibble 是 predictor／系数对索引，低 nibble 是 scale，随后 14 个残差按每字节高 nibble 在前排列。这里不把 DSP 解码成 PCM，也不分配另一份 nibble 数组；future source 在渲染时直接消费帧。系数及初始／循环 history 保留在 `xwav-channel-codec-info` 的 `xwav-dsp-adpcm-info` 中。IMA 的初始／循环 predictor 和 step-index 则在 `xwav-ima-adpcm-info` 中，data 不重复嵌入状态头。
 
-每个通道只读取自己的最终数组；`xwav-data` 仅保留并校验 DATA 区块头，不再复制整块原始音频或对齐填充。调用方不要再 `map` 有符号 PCM、按字节拼 PCM16、拆 IMA nibble，或预先渲染整段 ADPCM。构造 source 时直接共享 data，音频解码由消费端在渲染时完成。本库不添加音频解码器或播放器。
+`xwav-data-body` 保留完整 DATA 原始字节及对齐填充；通道只保留原始 8 字节 data-reference 和同节 codec-info。PCM8、PCM16、DSP、IMA 的提取字节数分别为 `count`、`2 * count`、`8 * ceiling(count / 14)`、`ceiling(count / 2)`。提取结果可由消费端使用；本库不添加音频解码器或播放器。
 
-合成回归覆盖 C/F × LE/BE、有符号极值、PCM16 非对称字节、奇数／零样本数、DSP 跨帧及不同 BOM 的内嵌 WAV。额外 smoke 使用现有 Closynth 的 `s8-pcm-source`、`s16-pcm-source`、`ima-adpcm-source`：共享同一 data 对象，只渲染短窗口，并通过跟踪输入流确认每个通道 payload 字节只读一次。没有修改 Closynth，也没有宣称当前存在 DSP source。
+合成回归覆盖 C/F × LE/BE、双 channel、有符号极值、PCM16 非对称字节、奇数／零样本数、DSP 跨帧及不同 BOM 的内嵌 WAV。实际 mset smoke 显式提取第 12 个 WAR，再读取其 WAV：`files=19`、`waves=1`、`samples=9944 codec=DSP-ADPCM`，长度按该 WAV 的 count 和 codec 规则校验；不是播放验证。
 
 ### 语义枚举与开关
 
@@ -95,7 +96,7 @@ DSP 帧为一个 header 字节加七个采样字节：header 高 nibble 是 pred
 
 | 字段 | 符号（按磁盘值递增） |
 |---|---|
-| `xwav-info-codec`、`xstm-stream-info-encoding` | `pcm-8`、`pcm-16`、`dsp-adpcm`、`ima-adpcm` |
+| `xwav-info-body-codec`、`xstm-stream-info-encoding` | `pcm-8`、`pcm-16`、`dsp-adpcm`、`ima-adpcm` |
 | `xbnk-note-flag-interpolation-type` | `polyphase`、`linear` |
 | SEQ `mod-type`、`mod2-type`、`mod3-type`、`mod4-type` 的 `value` | `pitch`、`volume`、`pan` |
 | SEQ `mod-curve`、`mod2-curve`、`mod3-curve`、`mod4-curve` 的 `value` | `sine`、`triangle`、`sawtooth`、`rectangular`、`random`、`none` |
@@ -105,13 +106,13 @@ DSP 帧为一个 header 字节加七个采样字节：header 高 nibble 是 pred
 | `xsar-sound-3d-info-attenuation-curve` | `logarithmic`、`linear` |
 | `xsar-stream-sound-info-file-type` | `invalid`、`binary`、`adts`、`opus`；缺席仍为 `NIL` |
 
-WAV 的 `loop` 改为 `xwav-info-loop-p`，STM 的 `loop-flag` 改为 `xstm-stream-info-loop-p`，track 的 `surround-mode` 改为 `xstm-track-surround-mode-p`，SAR 的 `leaf-flag`／`load-individually` 改为 `xsar-patricia-node-leaf-p`／`xsar-wave-archive-load-individually-p`，均返回 `T/NIL`。SEQ `monophonic`、`front-bypass`、`note-wait`、`tie`、`portamento-switch`、`damper` 的 `value` 也直接返回布尔值；调用方不要再用 `plusp`。
+WAV 的 loop 字段为 `xwav-info-body-loop-p`，STM 为 `xstm-stream-info-loop-p`，track 的 surround-mode 为 `xstm-track-surround-mode-p`，SAR 的 leaf／load-individually 为 `xsar-patricia-node-leaf-p`／`xsar-wave-archive-load-individually-p`，均返回 `T/NIL`。SEQ `monophonic`、`front-bypass`、`note-wait`、`tie`、`portamento-switch`、`damper` 的 `value` 也直接返回布尔值；调用方不要再用 `plusp`。
 
 资源 ID 的类型 tag、引用 tag、计数、连续参数和位掩码不是封闭枚举，仍保留数值；完整资源 ID 使用上面的原生位域结构。`biquad-type` 是可注册滤波 callback 的索引，不擅自把游戏自定义索引命名为固定滤波模式；见 [NW4R callback registry](https://github.com/NSMBW-Community/NSMBW-Decomp/blob/master/include/lib/nw4r/snd/snd_AxManager.h)。C/F 枚举依据 [Citric Composer](https://github.com/Gota7/Citric-Composer/tree/master/Citric%20Composer) 的 `SequenceDataLib` 和 `High Level` 声明；静音模式另参见 [SeqMute](https://github.com/NSMBW-Community/NSMBW-Decomp/blob/master/include/lib/nw4r/snd/snd_SeqTrack.h)。
 
 ### XSAR 文件提取
 
-XSAR 仿照 cl-nitro 的 SDAT：读取元数据和各内嵌文件的原始字节，不解析子文件的 magic、BOM 或事件。`xsar-files` 返回按 File ID 排列的 simple-vector，每项为 `(name . data)` cons；`xsar-file-name` 和 `xsar-file-data` 分别访问 car／cdr。这三个入口在 `package.lisp` 的 `defpackage` 中导出。调用方决定哪些数据交给 `read-file`，未选择的未知或损坏子文件不会阻止 XSAR 提取。
+XSAR 读取独立 STRG、原始 INFO 和 FILE section；`xsar-files` 按文件 magic/version 解析 INFO 元数据，再按 File ID 关联原始 bytes，不解析子文件的 magic、BOM 或事件。返回 simple-vector，每项为 `(name . data)` cons；`xsar-file-name` 和 `xsar-file-data` 分别访问 car／cdr。调用方决定哪些数据交给 `read-file`，未选择的未知或损坏子文件不会阻止 XSAR 提取。
 
 名称是资源别名，不是附带扩展名的文件路径。按 sounds、banks、wave archives、groups 顺序填入，后出现的有名别名覆盖前面的名称，与 Nitro 一样；没有 STRG 或没有名字时为 `NIL`。内部文件的 data 为 octet vector，空文件保留零长度向量；空引用和外部文件为 `NIL`，不丢弃其 File ID。外部路径可通过内部访问器 `nintendo-ware::xsar-external-file-text` 检查，不自动打开。
 
@@ -125,22 +126,25 @@ XSAR 仿照 cl-nitro 的 SDAT：读取元数据和各内嵌文件的原始字节
                                   (nintendo-ware:xsar-file-data file))))
 ```
 
-XSAR 和 GRP 均不自动解析子文件，不检查其 magic、BOM 或事件；WAR 的 WAV reader 不变。旧的 `xsar-internal-file-content`、`xgrp-entry-content` 对象接口不保留兼容层。
+XSAR 和 GRP 均不自动解析子文件。WAR 只在调用 `xwar-waves` 时解析 WAV；每个显式读取的子文件独立处理自身 BOM。
 
-GRP 条目通过 `nintendo-ware::xgrp-entry-file-id` 保留归档中的原始文件索引，不能把条目在组表中的位置当作文件 ID。`nintendo-ware::xgrp-entry-data` 返回原始 octet vector；空引用返回 `NIL`，零长度数据仍为专用空 octet vector。按文件 ID 选择条目后，调用方显式指定类型解析：
+GRP 条目通过内部 `xgrp-entry-file-id` 保留归档中的真实文件 ID，而不是组表位置。`(xgrp-file-data group file-id)` 返回原始 octet vector；找不到 ID、空引用或缺少 FILE 时为 `NIL`，零长度数据仍为专用空 octet vector。调用方显式指定子文件类型：
 
 ```lisp
 (let* ((group (nintendo-ware:read-file 'nintendo-ware:xgrp #P"/path/to/group.bcgrp"))
-       (entry (find 7 (nintendo-ware::xgrp-info-entries (nintendo-ware::xgrp-info group))
-                    :key #'nintendo-ware::xgrp-entry-file-id)))
-  (when (and entry (nintendo-ware::xgrp-entry-data entry))
-    (nintendo-ware:read-file 'nintendo-ware:xseq (nintendo-ware::xgrp-entry-data entry))))
+       (data (nintendo-ware:xgrp-file-data group 7)))
+  (when data
+    (nintendo-ware:read-file 'nintendo-ware:xseq data)))
 ```
+
+### STM 跨 section 提取
+
+`xstm-sample-data` 关联 INFO 与 DATA，返回原始编码样本 bytes。`xstm-seek-rows` 返回 SEEK context 行数组；`xstm-regions-entries` 返回含原样本起止值与 DSP contexts 的 REGN entries。缺少可选 SEEK／REGN 时返回 `NIL`，存在但零条目时返回空数组；SEEK interval 必须为正，REGN 保持 DSP-only 校验。INFO／SEEK／REGN 各自保留原始 body，内部 `xstm-information` 根据 C/F 版本规则解析 INFO，不回读目录或 header。
 
 
 ## 事件与端序
 
-`xseq-events` 返回具体事件对象的向量，可直接以 `xseq-event-note`、`xseq-event-tempo` 等类型进行 CLOS 分派。字段直接表达音高、力度、时值、数值及内嵌 `sub-event`；不暴露 opcode、事件原始字节或二进制位置。开轨、跳转、调用的 `index` 和标签的 `xseq-label-entry-index` 均为该向量的零基索引。
+`xseq-events` 按需解析 DATA，并在建立事件边界索引后解析 LABL，返回具体事件对象向量，可直接以 `xseq-event-note`、`xseq-event-tempo` 等类型进行 CLOS 分派。字段直接表达音高、力度、时值、数值及内嵌 `sub-event`；不暴露 opcode 或解析坐标。开轨、跳转、调用和标签均使用同一向量的零基索引。内部 `xseq-label-entries` 提取标签；`xseq-labels` 只查找 LABL section。坏 opcode、截断或落在指令中间的目标在调用提取函数时报告，不阻止单独读取原始容器。
 
 `define-xseq-event` 仿照 Nitro 的 `define-sseq-event`，从同一份字段声明生成完整和 `/partial` 布局；random/variable 内嵌的子事件使用 `/partial`，省略最后一个参数，而不是最后一个字节。多字节事件标记不产生额外的消费对象，reader 直接返回具体事件类型。
 
@@ -156,20 +160,19 @@ CSTM SEEK 上下文固定小端；当前 FSTM SEEK 布局按 Citric 的参考实
 
 ## 声明模式
 
-`define-nintendo-ware-file`、`define-nintendo-ware-section` 按 `cl-nitro` 的声明方式，名称／选项后直接写字段，不带参数表；具体 file、section 及其 body reader 均无参数。公共 file／section 均以 `inline` 读取具体 body，随后记录局部 `%nintendo-ware-file-end`／`%nintendo-ware-section-end`，再声明式读取剩余 padding。终点标记位于 padding 之前，为将来的 size 回写保留结构；目前不实现回写，也不保证 writer 可用。每个完整文件仍只有一个 reader，由 BOM 选择 BE 或默认 LE body。section 的 inline 参数显式选择对应 body parser；ME 高阶布局会先将其 inline 类型参数展开为对应端序的 parser。区块仍通过 sized reference 独立定位，不假设连续排列。
+`define-nintendo-ware-file`、`define-nintendo-ware-section` 按 `cl-nitro` 的声明方式，名称／选项后直接写声明，不带参数表。file 直接保存 magic、endian、version 和 sections；目录每项通过 sized typed-reference union 返回具体 section，不生成 header、目录描述符或 file body。section 包含自己的 `name-body`，随后是 `$nintendo-ware-section-end` 和剩余 padding；file 同样保留 `$nintendo-ware-file-end` 与 padding。终点标记在 padding 之前，目前不实现 size 回写，也不保证 writer 可用。BOM 固定按 BE 识别，随后逐项选择头部整数和 section union 的 LE／BE 布局；没有完整文件端序 variants、运行时 `*endian*` 或 header 预读。物理 section 顺序与目录顺序可以不同。
 
 ```lisp
 (define-nintendo-ware-section (sample-info (:magic "INFO"))
   (value 0 :type (unsigned-byte 32)))
 
 (define-nintendo-ware-file (sample-file (:magic "CSMP"))
-  (info nil :type (values (pointer sample-info
-                                  (map null (constantly (block-start %header #x1000)))))))
+  (info (make-sample-info) :type sample-info :tag #x1000))
 ```
 
-file／section body 均通过原生文件位置锚点恢复 `%header`，不再把 header 或文件起点作为 body 参数传递。每个文件字段读取前以原生 pointer 恢复 owning-file 锚点，避免 WAR 内嵌文件影响外层后续区块。跨结构的数据、字符串、WSD note 和 SEQ event 基址使用 `$...` position 标记；只在当前结构使用的基址使用 `%...`。GRP／XSAR 只读取原始子文件数据；显式读取子文件时，由其自身容器读取 BOM。高阶 `inline` 用于容器和 typed reference 的共用包装，具体记录和事件不直接使用高阶 parser。
+file 声明要求显式 initform、`:type` 和 `:tag`；`:tag` 可为整数或明确的整数列表（当前用于 WSD INFO）。生成的单参数 file-section accessor 使用 `find-if`／`typep` 返回第一个匹配 section，缺席为 `NIL`；构造器的默认 sections 是空 simple-vector，不由 initform 伪造 section。字段调用显式经过 `name-body` 和 `name-body-field`，不生成 getter/setter 转发。目录 helper 复用普通 sized reference，并恢复捕获的文件 origin；未知 tag、null 目录项和错误 section magic 均失败，没有跳过或 fallback。辅助 size、count、origin 为非持久化局部变量，容器全局位置只有 file／section 的 start／end；同节普通记录的字符串和 WSD note 位置机制不变。
 
-只有确实需要剩余长度的布局使用零宽类型 `nintendo-ware-section-tail-size`，保存在 `%size`：它返回“区块大小 −（当前位置 − 区块起点）”，不消费输入，并遵循区块头端序。需要绝对结束位置时，就地用 `%position + %size` 计算。目前仅 SEQ 的无计数事件流需要结束位置，SEEK 需要剩余长度来读取尾部 padding；不向其他布局注入尾部上下文。
+原始 section body 只声明局部 `%size` 和专用 octet bytes。零参数 `nintendo-ware-tail-size` 从当前 section 的 `+4` 处以 native pointer 读取 size，减去当前位置与 section start 的差，不消费输入；仅确需剩余长度的 raw body 使用它。通用 raw-block 也包含 `nintendo-ware-section-octets` body，通过 `nintendo-ware-section-raw-block-body` 再取 `nintendo-ware-section-octets-bytes`，不另建 magic／size／bytes 容器。
 
 ```lisp
 (defbinstruct/me sample-point
@@ -185,7 +188,7 @@ file／section body 均通过原生文件位置锚点恢复 `%header`，不再�
 
 1. 默认定义为小端；`defbinstruct/be` 在本库独立的 `*endian*` 绑定为 `:big` 时提前展开 `/be`，用 `(:type 原类型)` 共享 Lisp 数据布局。
 2. 每个 ME 类型在 symbol property 上注册 reader／writer 类型展开函数，由 binstruct 的 `define-symbol-expr-expander` 调用，不生成逐类型端序 `defmethod`，也不使用 `call-next-method`。未绑定或为 `NIL` 的编译期端序默认小端。
-3. 普通类型只生成默认／BE 两份声明；仅 header、SEQ track、SEEK row 保留强制 LE 别名。嵌套结构和数组自动选择布局，不传递运行时端序参数。
+3. 普通类型只生成默认／BE 两份声明；仅文件头数值 alias `nintendo-ware-u16`／`nintendo-ware-u32`、SEQ track 和 SEEK row 保留强制 LE 别名。嵌套结构和数组自动选择布局，不传递运行时端序参数。
 
 也接受 binstruct 风格的可选参数列表；生产 schema 最多三个参数。递归类型用无 body 的 `(defbinstruct/me name)` 提前注册展开函数，随后提供完整声明，见 `xseq-event-union`。打包为 32 位整数的数值子字段统一用 `(:alignment 4)`，由 binstruct 按位偏移和端序处理，不手写反序布局。
 
@@ -207,15 +210,15 @@ file／section body 均通过原生文件位置锚点恢复 `%header`，不再�
 
 字段使用 `(my-reference %base)`。两个声明宏均接受显式 lambda-list；无参数时写 `()`。例如 `(define-nintendo-ware-reference xbnk-instrument-reference (wave-count) (#x5900 (xbnk-instrument wave-count)))` 生成 `(xbnk-instrument-reference %base wave-count)`。数组名称显式指定：`(define-nintendo-ware-reference-array instruments (wave-count) (rcurry #'xbnk-instrument-reference wave-count))`。`curry`／`rcurry` 只是宏展开标记，不创建闭包：`(curry #'reader a b)` 生成 `(reader a b base)`，`(rcurry #'reader a b)` 生成 `(reader base a b)`；标记必须为这两个符号之一，reader 必须使用 `#'`，即 `(function reader)`。数组元素类型仍由 `binstruct::lisp-type` 推导。引用 alias 连同隐式 base 最多三个参数，数组 lambda-list 不含该隐式 base。
 
-`(:sized t)` 选择 12 字节引用，否则为 8 字节。二者使用同一个 `nintendo-ware-reference` 布局，由原生 `pointer` 定位、共用 `nintendo-ware-reference-target` 的 `inline` 包装；结果不含指针或供用户解引用的偏移。非空引用校验 tag 和 offset；`-1` 为空引用，保留其 tag 未定义的既有语义。Citrus 的非零基址使 pointer 可定位到 base−1，然后由 target 内的位置比较返回 `NIL`，不进入目标布局。框架不承诺零基址空引用。
+`(:sized t)` 选择 12 字节引用，否则为 8 字节。同节引用直接返回语义目标或 `NIL`，不保存解码后的 offset。非空引用由原生 `pointer` 定位并校验 tag 和非负 offset；`-1` 由声明式 null 分支处理，保留其 tag 未定义的既有语义，在零基址的独立 INFO 中也不尝试定位到负位置。null 不进入目标布局或初始化目标 endpoint。
 
-sized target 如需长度，必须在开头通过 `(%size 0 :type nintendo-ware-reference-size)` 获取并保存，再读取其他字段或子引用。这个 ME alias 通过原生零宽 `pointer`，按引用的端序直接读取 `$nintendo-ware-reference-size` 指向的 u32 size 字段；嵌套 reference 会覆盖该全局锚点，不保证返回父布局后再次查询仍得到父 size。普通引用没有声明长度，目标按自身布局读取，不使用 size 查询。target 以局部 `%start`／`%end` 记录实际读取范围；sized target 末尾保留原生 `peek`／`map` 声明，读取时不改动 size，写入时可将实际长度回写到捕获的 size 字段位置。sized 分支以 `0` 初始化 size 占位值。临时 LE／BE smoke 已验证 tag 为 0、非零基址下的 3 字节目标 size 回填、零长度目标及普通引用不含 size 字段；这不是完整 writer 验证。回写不实现额外手工逻辑；不再预置 target endpoint 或通过 endpoint 相减取得声明长度。
+sized target 如需长度，必须在开头通过 `(%size 0 :type nintendo-ware-reference-size)` 获取并保存，再读取子引用。此 ME alias 用零宽 native pointer 读取 `$nintendo-ware-reference-size` 指向的 u32；嵌套 reference 可以覆盖该锚点，返回父布局后不保证仍能查询父 size。普通引用不查询 size。target 的局部 start/end 和原生 peek/map size 声明保留，以兼容未来 writer 工作；当前仅验证 reader，不保证回写正确性。
 
-SAR 字符串和 SAR／GRP 原始数据目标使用 sized 长度；WAR 直接返回 WAV 对象，WAV 仍由自身布局解析，不套 sized-reference 长度限制。`xwar-info-entries` 不再含 `xwar-entry` 包装，`xwar-waves` 直接返回该数组；Citrus 消费端已同步。STM 原先仅保留引用的 sample-data、REGN data、SAR stream sends／extension 也改为已解析的语义值。文件头的区块目录由内部 `nintendo-ware-file-block` 保存 tag／offset／size，供容器定位区块；它不是 typed resource reference，不导出这些目录访问器。
+跨 section 的字段保存原格式的专用 octet vector：普通引用 8 字节、sized 引用 12 字节，不保存 offset 或 owner 回链。内部 `nintendo-ware-data-reference(tags, data, &optional size)` 在引用输入上读取 tag／offset／size，目标定位仍由 schema 中的 native pointer 完成；提供 size 时读取普通引用，否则读取 sized 引用。返回目标 octets 或 `NIL`，非空错误 tag、小于 -1 的 offset 和截断均失败。`nintendo-ware-parse` 直接运行声明式布局，并保留 binstruct 的 deserialize-error 与未解析 position 检查，不生成叶级命名 reader。文件级便捷函数据此关联各独立 section，不缓存或创建资源对象图；同节引用和普通 record 不改为惰性模型。
 
 `$...` 是供其他结构访问的 global position，并支持原生延迟解析；仅当前结构使用的位置和解析变量统一为局部 `%...`。pointer 基址直接传符号，不包 `progn`；typed reference 的调用方通过零宽原生 pointer 获取跨结构基址的数值。生成的引用数组各自捕获局部位置，不会覆盖外层数组基址。pointer 不在字段类型最外层时包原生 `values`，需要立即使用引用目标的字段也使用 `values`。不添加目录跨度、重叠或 sized-reference 子文件长度校验；文件／区块 size 参与尾部 padding 读取，截断 padding 也会导致读取失败，不承诺完整格式校验或受限输入沙箱。
 
-**本库只保证 reader。** ME 同时注册 reader／writer 的编译期端序展开，以保持 binstruct 声明一致；除上述有限的临时 size 回写 smoke 外，不测试、不保证自动生成的 writer 正确性，也不提供文件写入 API。
+**本库只保证 reader。** ME 同时注册 reader／writer 的编译期端序展开，以保持 binstruct 声明一致；不测试、不保证自动生成的 writer 正确性，也不提供文件写入 API。
 
 此前提交 `2e3bda2` 的 ME 优化强制编译测量（不代表本次容器改动的计时）：SBCL 2.6.9／Linux ARM64，`--dynamic-space-size 8192`，新进程先加载依赖，再计时 `(asdf:compile-system :cl-nintendo-ware :force t)`；不含依赖加载、测试和真实文件 smoke。优化前 wall／CPU 为 241.434／241.414 秒，优化后为 65.285／65.287 秒，wall 减少 73.0%（约 3.70 倍）。这是当前机器的单次对照，不是跨环境性能保证；编译仍有未使用变量等 style-warning。
 

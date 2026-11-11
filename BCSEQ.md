@@ -165,6 +165,8 @@ BCSEQ / CSEQ
 
 **实现提醒：**源码中的某些简化读取方法可能会移除 DATA 末尾的零字节。编写自己的解析器时，必须区分实际填充和合法的 `0x00` 数据，不要无条件删除尾部零字节。
 
+本仓库的容器 reader 将 DATA／LABL 保留为独立 raw body，不在读取 DATA 时定位 LABL。`nintendo-ware:xseq-events` 按文件 magic/BOM 选择事件布局，建立事件边界索引后才解析标签；开轨、跳转、调用和标签均返回同一事件向量的索引。内部 `nintendo-ware::xseq-label-entries` 取得标签，`xseq-labels` 只查找 LABL section。坏 opcode、截断和非指令边界目标在提取时报告，单独读取容器不执行音序解析或播放。
+
 ---
 
 ## 3. Opcode 映射索引

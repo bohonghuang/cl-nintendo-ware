@@ -511,28 +511,34 @@
 ;; The event stream's endian is independent of the surrounding section.
 (defbinalias xseq-track/le (end labels) (xseq-track end labels))
 
-(defbinstruct/me (xseq-label-event-index (:type (unsigned-byte 32))
-                  (:constructor progn) (:conc-name nil)) ()
-  (%position 0 :type position)
-  (%base 0 :type (values (pointer position (map null (constantly 0)) $xseq-events-start)))
-  (values 0 :type (map null (constantly (- %position %base)))))
-(define-nintendo-ware-reference xseq-label-event-reference ()
-  (#x1f00 (xseq-label-event-index)))
+(defbinstruct/me (xseq-label-event-reference (:type (or null (unsigned-byte 32)))
+                  (:constructor progn) (:conc-name nil)) (indices)
+  (%tag 0 :type (unsigned-byte 16))
+  (nil 0 :type (unsigned-byte 16))
+  (%offset -1 :type (satisfies (signed-byte 32)
+                     (lambda (offset)
+                       (and (<= -1 offset) (or (= offset -1) (= %tag #x1f00))))))
+  (values nil :type (map null
+                     (lambda (ignored)
+                       (declare (ignore ignored))
+                       (unless (= %offset -1)
+                         (or (gethash %offset indices)
+                             (error 'binstruct::deserialize-error
+                                    :input nil :position nil :info "Invalid SEQ label")))))))
 
-(defbinstruct/me xseq-label-entry ()
-  (%base 0 :type (values (pointer position (map null (constantly 0)) $xseq-events-start)))
-  (index 0 :type (xseq-label-event-reference %base))
+(defbinstruct/me xseq-label-entry (indices)
+  (index 0 :type (xseq-label-event-reference indices))
   (length 0 :type (unsigned-byte 32))
   (name #.(coerce "" 'simple-base-string) :type (simple-base-string length))
   (nil 0 :type (satisfies (unsigned-byte 8))))
 
-(define-nintendo-ware-reference xseq-label-reference ()
-  (#x5100 (xseq-label-entry)))
+(define-nintendo-ware-reference xseq-label-reference (indices)
+  (#x5100 (xseq-label-entry indices)))
 
-(define-nintendo-ware-section (xseq-labels (:magic "LABL"))
+(defbinstruct/me xseq-labels-record (indices)
   (%labels-start 0 :type position)
   (count 0 :type (unsigned-byte 32))
-  (entries #() :type (simple-array (xseq-label-reference %labels-start) (count))))
+  (entries #() :type (simple-array (xseq-label-reference %labels-start indices) (count))))
 
 (defun resolve-xseq-event (event indices &optional partial)
   (flet ((index (offset)
@@ -567,34 +573,45 @@
           (base (aref positions 0)))
       (loop for index to last do (setf (gethash (- (aref positions index) base) indices) index))
       (loop for event across result do (resolve-xseq-event event indices))
-      (loop for label across labels when label
-            do (setf (xseq-label-entry-index label)
-                     (or (gethash (xseq-label-entry-index label) indices) (error 'binstruct::deserialize-error
-                                                                                 :input nil :position nil
-                                                                                 :info "Invalid SEQ label"))))
-      result)))
+      (values result (funcall labels indices)))))
 
 (define-nintendo-ware-section (xseq-data (:magic "DATA"))
-  ;; Unlike counted records, this event stream ends at the DATA boundary.
-  (%position 0 :type position)
-  ($xseq-events-start 0 :type position)
-  (%size 0 :type nintendo-ware-section-tail-size)
-  (labels nil :type (values (pointer xseq-labels (map null (constantly (block-start %header #x5001))))))
-  (%little nil :type (map null (lambda (ignored) (declare (ignore ignored))
-                                  (and (string= (nintendo-ware-file-header-magic %header) "FSEQ") (eq (nintendo-ware-file-header-endian %header) :little)))))
-  (%label-entries #() :type (map null (lambda (ignored) (declare (ignore ignored)) (xseq-labels-entries labels))))
-  (events #.(make-array 0 :element-type 'xseq-event)
-          :type (ecase %little
-                  ((t) (xseq-track/le (+ %position %size) %label-entries))
-                  ((nil) (xseq-track/be (+ %position %size) %label-entries)))))
+  (%size 0 :type nintendo-ware-tail-size)
+  (bytes #.(make-array 0 :element-type '(unsigned-byte 8))
+         :type (simple-array (unsigned-byte 8) (%size))))
+
+(define-nintendo-ware-section (xseq-labels (:magic "LABL"))
+  (%size 0 :type nintendo-ware-tail-size)
+  (bytes #.(make-array 0 :element-type '(unsigned-byte 8))
+         :type (simple-array (unsigned-byte 8) (%size))))
 
 (define-nintendo-ware-file (xseq (:magic ("CSEQ" "FSEQ")))
-  (data nil :type (values (pointer xseq-data (map null (constantly (block-start %header #x5000))))))
-  (labels nil :type (map null (lambda (ignored) (declare (ignore ignored))
-                               (xseq-data-labels data)))))
+  (data (make-xseq-data) :type xseq-data :tag #x5000)
+  (labels (make-xseq-labels) :type xseq-labels :tag #x5001))
+
+(defun xseq-contents (sequence)
+  (let* ((data (xseq-data-body-bytes (xseq-data-body (xseq-data sequence))))
+         (end (length data))
+         (section (xseq-labels sequence))
+         (label-data (when section (xseq-labels-body-bytes (xseq-labels-body section))))
+         (entries nil))
+    (flet ((decode-labels (indices)
+             (when label-data
+               (let ((record (ecase (nintendo-ware-file-endian sequence)
+                               (:little (nintendo-ware-parse (xseq-labels-record indices) label-data))
+                               (:big (nintendo-ware-parse (xseq-labels-record/be indices) label-data)))))
+                 (setf entries (xseq-labels-record-entries record))))))
+      (let ((events (if (and (string= (nintendo-ware-file-magic sequence) "FSEQ")
+                             (eq (nintendo-ware-file-endian sequence) :little))
+                        (nintendo-ware-parse (xseq-track/le end #'decode-labels) data)
+                        (nintendo-ware-parse (xseq-track/be end #'decode-labels) data))))
+        (values events entries)))))
 
 (defun xseq-events (sequence)
-  (xseq-data-events (xseq-data sequence)))
+  (nth-value 0 (xseq-contents sequence)))
+
+(defun xseq-label-entries (sequence)
+  (nth-value 1 (xseq-contents sequence)))
 
 (defbinio xseq stream)
 

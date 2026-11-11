@@ -1,9 +1,5 @@
 (in-package #:cl-nintendo-ware)
 
-(defbinstruct (xwav-data-position (:type non-negative-fixnum)
-                                       (:constructor progn) (:conc-name nil)) ()
-  ($xwav-data-start 0 :type position)
-  (values 0 :type (map null (constantly $xwav-data-start))))
 
 (defbinstruct/me xwav-dsp-adpcm-context ()
   (predictor-scale 0 :type (unsigned-byte 16))
@@ -30,27 +26,24 @@
   (#x0300 (xwav-dsp-adpcm-info))
   (#x0301 (xwav-ima-adpcm-info)))
 
-(define-nintendo-ware-reference xwav-samples-reference (codec sample-count)
-  (#x1f00 (ecase codec
-            (pcm-8 (simple-array (signed-byte 8) (sample-count)))
-            (pcm-16 (simple-array (signed-byte 16) (sample-count)))
-            (dsp-adpcm (simple-array (unsigned-byte 8) ((* 8 (ceiling sample-count 14)))))
-            (ima-adpcm (simple-array (unsigned-byte 4) (sample-count))))))
+(defbinalias/me (xwav-sample-array (:type array)) (codec count)
+  (ecase codec
+    (pcm-8 (simple-array (signed-byte 8) (count)))
+    (pcm-16 (simple-array (signed-byte 16) (count)))
+    (dsp-adpcm (simple-array (unsigned-byte 8) ((* 8 (ceiling count 14)))))
+    (ima-adpcm (simple-array (unsigned-byte 4) (count)))))
 
-(defbinstruct/me xwav-channel (codec sample-count)
+(defbinstruct/me xwav-channel ()
   (%start 0 :type position)
-  (%data-start 0 :type (values (pointer position (map null (constantly 0)) $xwav-data-start)))
-  (data #.(make-array 0 :element-type '(signed-byte 8))
-        :type (xwav-samples-reference %data-start codec sample-count))
+  (data-reference #.(make-array 0 :element-type '(unsigned-byte 8))
+                  :type (simple-array (unsigned-byte 8) (8)))
   (codec-info nil :type (xwav-codec-reference %start))
   (reserved 0 :type (unsigned-byte 32)))
 
-(define-nintendo-ware-reference xwav-channel-reference (codec sample-count)
-  (#x7100 (xwav-channel codec sample-count)))
+(define-nintendo-ware-reference xwav-channel-reference ()
+  (#x7100 (xwav-channel)))
 
 (define-nintendo-ware-section (xwav-info (:magic "INFO"))
-  (nil nil :type (values (pointer xwav-data-position
-                         (map null (constantly (+ 8 (block-start %header #x7001)))))))
   (codec 'pcm-8 :type nintendo-ware-sound-sample-codec)
   (loop-p nil :type (boolean (unsigned-byte 8)))
   (padding 0 :type (unsigned-byte 16))
@@ -60,17 +53,36 @@
   (reserved 0 :type (unsigned-byte 32))
   (%channels-start 0 :type position)
   (channel-count 0 :type (satisfies (unsigned-byte 32) #'plusp))
-  (channels #() :type (simple-array (xwav-channel-reference %channels-start codec loop-end) (channel-count))))
+  (channels #() :type (simple-array (xwav-channel-reference %channels-start) (channel-count))))
 
-;; Samples are read once through the channel references. DATA retains only its
-;; section header, not a second copy of the complete encoded payload.
-(define-nintendo-ware-section (xwav-data (:magic "DATA")))
+(define-nintendo-ware-section (xwav-data (:magic "DATA"))
+  (%size 0 :type nintendo-ware-tail-size)
+  (bytes #.(make-array 0 :element-type '(unsigned-byte 8))
+         :type (simple-array (unsigned-byte 8) (%size))))
 
 (define-nintendo-ware-file (xwav (:magic ("CWAV" "FWAV")))
-  (info nil :type (values (pointer xwav-info (map null (constantly (block-start %header #x7000))))))
-  (data nil :type (values (pointer xwav-data (map null (constantly (block-start %header #x7001)))))))
+  (info (make-xwav-info) :type xwav-info :tag #x7000)
+  (data (make-xwav-data) :type xwav-data :tag #x7001))
 
-(defbinalias (xwav-embedded (:type xwav)) () xwav)
+(defun xwav-samples (wave &optional (channel-index 0))
+  "Return the selected channel's native typed samples, using the WAV's BOM."
+  (let* ((info (xwav-info-body (xwav-info wave)))
+         (codec (xwav-info-body-codec info))
+         (count (xwav-info-body-loop-end info))
+         (reference (xwav-channel-data-reference (aref (xwav-info-body-channels info) channel-index)))
+         (section (xwav-data wave))
+         (data (when section (xwav-data-body-bytes (xwav-data-body section))))
+         (size (ecase codec
+                 (pcm-8 count) (pcm-16 (* 2 count))
+                 (dsp-adpcm (* 8 (ceiling count 14)))
+                 (ima-adpcm (ceiling count 2))))
+         (bytes (ecase (nintendo-ware-file-endian wave)
+                  (:little (nintendo-ware-parse (nintendo-ware-data-reference '(#x1f00) data size) reference))
+                  (:big (nintendo-ware-parse (nintendo-ware-data-reference/be '(#x1f00) data size) reference)))))
+    (when bytes
+      (ecase (nintendo-ware-file-endian wave)
+        (:little (nintendo-ware-parse (xwav-sample-array codec count) bytes))
+        (:big (nintendo-ware-parse (xwav-sample-array/be codec count) bytes))))))
 
 (defbinio xwav stream)
 

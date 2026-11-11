@@ -23,20 +23,31 @@
   (pointer (unsigned-byte 32) (map (null) (constantly 0) (constantly nil))
            $nintendo-ware-reference-size))
 
-(defbinstruct/me (nintendo-ware-reference (:type t)
+(defbinstruct/me (nintendo-ware-reference-value (:type t)
                   (:constructor progn) (:conc-name nil)) (tag type base &optional sized)
   (%tag 0 :type (unsigned-byte 16))
   (nil 0 :type (unsigned-byte 16))
   (values nil :type (pointer (nintendo-ware-reference-target
                              (inline type) base (when %size $nintendo-ware-reference-size))
                             (satisfies (signed-byte 32)
-                              (lambda (offset)
-                                (and (<= -1 offset) (or (= offset -1) (= %tag tag)))))
+                              (lambda (offset) (and (<= 0 offset) (= %tag tag))))
                             base))
   ($nintendo-ware-reference-size 0 :type position)
   (%size (when sized 0) :type (ecase sized
                                 ((t) (unsigned-byte 32))
                                 ((nil) (null)))))
+
+;; A null at a zero-based detached body must not seek to position -1.
+(defbinstruct/me (nintendo-ware-null-reference (:type null)
+                  (:constructor progn) (:conc-name nil)) (sized)
+  (nil 0 :type (unsigned-byte 16))
+  (nil 0 :type (unsigned-byte 16))
+  (values nil :type nintendo-ware-reference-null)
+  (nil 0 :type (ecase sized ((t) (unsigned-byte 32)) ((nil) null))))
+
+(defbinalias/me (nintendo-ware-reference (:type t)) (tag type base &optional sized)
+  (or (nintendo-ware-null-reference sized)
+      (nintendo-ware-reference-value tag (inline type) base sized)))
 
 (defbinstruct/me (nintendo-ware-reference-octets
                   (:type (simple-array (unsigned-byte 8) (*)))
@@ -76,3 +87,27 @@
             (,%position 0 :type position)
             (,%count 0 :type (unsigned-byte 32))
             (values #() :type (simple-array ,type (,%count)))))))))
+
+(defbinstruct/me (nintendo-ware-data-reference
+                  (:type (or null (simple-array (unsigned-byte 8) (*))))
+                  (:constructor progn) (:conc-name nil)) (tags data &optional size)
+  (%tag 0 :type (unsigned-byte 16))
+  (nil 0 :type (unsigned-byte 16))
+  (%offset -1 :type (satisfies (signed-byte 32)
+                     (lambda (offset)
+                       (and (<= -1 offset)
+                            (or (= -1 offset) (member %tag tags))))))
+  (%size 0 :type (ecase (null size)
+                  ((nil) (map null (constantly size)))
+                  ((t) (unsigned-byte 32))))
+  (values nil :type (map null
+                     (lambda (ignored)
+                       (declare (ignore ignored))
+                       (unless (= %offset -1)
+                         (unless data
+                           (error 'binstruct::deserialize-error
+                                  :input nil :position nil :info "Missing data section"))
+                         (nintendo-ware-parse
+                          (values (pointer (simple-array (unsigned-byte 8) (%size))
+                                           (map null (constantly %offset))))
+                          data))))))
