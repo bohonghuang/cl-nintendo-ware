@@ -149,7 +149,8 @@
   (items nil :type (xwsd-items-reference %info-start)))
 
 (define-nintendo-ware-file (xwsd (:magic ("CWSD" "FWSD")))
-  (info (make-xwsd-info) :type xwsd-info :tag (#x6800 #x4800)))
+  (%tag #x6800 :type (map null (lambda (ignored) (declare (ignore ignored)) (if (block-reference %header #x6800 nil) #x6800 #x4800))))
+  (info nil :type (values (pointer xwsd-info (map null (constantly (block-start %header %tag)))))))
 
 (defbinio xwsd stream)
 

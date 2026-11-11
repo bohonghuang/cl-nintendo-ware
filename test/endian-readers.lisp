@@ -4,12 +4,13 @@
 ;; rather than only at the beginning of a production section body.
 (nintendo-ware::define-nintendo-ware-section (tail-probe-info (:magic "INFO"))
   (value 0 :type (unsigned-byte 32))
-  (%size 0 :type nintendo-ware::nintendo-ware-tail-size)
+  (%size 0 :type nintendo-ware::nintendo-ware-section-tail-size)
   (tail #.(make-array 0 :element-type '(unsigned-byte 8))
         :type (simple-array (unsigned-byte 8) (%size))))
 
 (nintendo-ware::define-nintendo-ware-file (tail-probe (:magic ("CTST" "FTST")))
-  (info (make-tail-probe-info) :type tail-probe-info :tag #x1000))
+  (info nil :type (values (pointer tail-probe-info
+                                  (map null (constantly (nintendo-ware::block-start nintendo-ware::%header #x1000)))))))
 
 (defbinio tail-probe (simple-array (unsigned-byte 8) (*)))
 
@@ -29,14 +30,18 @@
                (progn
                  (let ((wave (nintendo-ware::read-file 'nintendo-ware::xwav stream)))
                    (assert (equalp #(1 2 3)
-                                   (nintendo-ware::xwav-samples wave))))
+                                   (nintendo-ware::xwav-channel-data
+                                    (aref (nintendo-ware::xwav-info-channels
+                                           (nintendo-ware::xwav-info wave)) 0)))))
                  (assert (= (length first) (file-position stream)))
                  (let ((wave (nintendo-ware::read-file 'nintendo-ware::xwav stream)))
                    (assert (equalp #(-128 -1 127)
-                                   (nintendo-ware::xwav-samples wave))))
+                                   (nintendo-ware::xwav-channel-data
+                                    (aref (nintendo-ware::xwav-info-channels
+                                           (nintendo-ware::xwav-info wave)) 0)))))
                  (assert (= (+ (length first) (length second)) (file-position stream))))
             (close stream))
-          (rejects binstruct::deserialize-error
+          (rejects error
             (nintendo-ware::read-file 'nintendo-ware::xwav
                                      (subseq first 0 (1- (length first))))))
         (let* ((tail #(20 19 18 17 16 15 14 13 12 11 10 9 8 7 6 5 4 3 2 1))
@@ -44,19 +49,20 @@
                (file (read-tail-probe
                        (coerce (container-fixture "CTST" (list (list #x1000 "INFO" payload)))
                                '(simple-array (unsigned-byte 8) (*)))))
-               (info (tail-probe-info-body (tail-probe-info file))))
-          (assert (= #x01020304 (tail-probe-info-body-value info)))
-          (assert (equalp tail (tail-probe-info-body-tail info))))
+               (info (tail-probe-info file)))
+          (assert (= #x01020304 (tail-probe-info-value info)))
+          (assert (equalp tail (tail-probe-info-tail info))))
         (let* ((little (and (eq family :f) (eq endian :little)))
                (payload (if little
                             #(162 225 44 1 160 60 100 244 255 12 0 240 128 3 254 255 240 172 5 255)
                             #(162 225 1 44 160 60 100 255 244 0 12 240 128 3 255 254 240 172 5 255)))
                (sequence (nintendo-ware::read-file 'nintendo-ware::xseq (sequence-fixture payload)))
+               (header (nintendo-ware::xseq-header sequence))
                (events (nintendo-ware::xseq-events sequence))
                (tempo (nintendo-ware::xseq-event-if-sub-event (aref events 0)))
                (random (aref events 1))
                (note (nintendo-ware::xseq-event-random-sub-event random)))
-          (assert (eq endian (nintendo-ware::nintendo-ware-file-endian sequence)))
+          (assert (eq endian (nintendo-ware::nintendo-ware-file-header-endian header)))
           (assert (= 300 (nintendo-ware::xseq-event-tempo-value tempo)))
           (assert (= -12 (nintendo-ware::xseq-event-random-min random)))
           (assert (= 12 (nintendo-ware::xseq-event-random-max random)))
@@ -72,7 +78,8 @@
                            (nintendo-ware::xseq-event-if-sub-event (aref events 1)))))
             (assert (= 2 (nintendo-ware::xseq-event-jump-index (aref events 3))))
             (assert (= 3 (nintendo-ware::xseq-label-entry-index
-                           (aref (nintendo-ware::xseq-label-entries flow) 0)))))
+                           (aref (nintendo-ware::xseq-labels-entries
+                                   (nintendo-ware::xseq-labels flow)) 0)))))
           (assert (= -2 (nintendo-ware::xseq-event-set-variable-value (aref events 2))))))))
   ;; Embedded headers never inherit their parent's endian or C/F identity.
   (dolist (endian '(:little :big))
@@ -94,11 +101,11 @@
                                 (list #x6801 "FILE" wave)))))
              (parsed (nintendo-ware::read-file 'nintendo-ware::xwar archive))
              (embedded (aref (nintendo-ware::xwar-waves parsed) 0))
-             (channel (aref (nintendo-ware::xwav-info-body-channels (nintendo-ware::xwav-info-body (nintendo-ware::xwav-info embedded))) 0)))
-        (assert (eq endian (nintendo-ware::nintendo-ware-file-endian parsed)))
-        (assert (eq child-endian (nintendo-ware::nintendo-ware-file-endian embedded)))
+             (channel (aref (nintendo-ware::xwav-info-channels (nintendo-ware::xwav-info embedded)) 0)))
+        (assert (eq endian (nintendo-ware::nintendo-ware-file-header-endian (nintendo-ware::xwar-header parsed))))
+        (assert (eq child-endian (nintendo-ware::nintendo-ware-file-header-endian (nintendo-ware::xwav-header embedded))))
         (ecase codec
-          (1 (assert (equalp #(-32768 -1 32767) (nintendo-ware::xwav-samples embedded))))
+          (1 (assert (equalp #(-32768 -1 32767) (nintendo-ware::xwav-channel-data channel))))
           (2 (assert (= -123 (aref (nintendo-ware::xwav-dsp-adpcm-info-coefficients
                                     (nintendo-ware::xwav-channel-codec-info channel)) 0))))))))
   ;; File IDs select raw entries. Each explicitly selected child reads its BOM.
@@ -111,17 +118,21 @@
            (bytes (let ((*fixture-family* :f) (*fixture-endian* endian))
                     (xgrp-fixture child)))
            (group (nintendo-ware::read-file 'nintendo-ware::xgrp bytes))
-           (nested (nintendo-ware::read-file 'nintendo-ware::xgrp (nintendo-ware::xgrp-file-data group 7)))
+           (entry (find 7 (nintendo-ware::xgrp-info-entries (nintendo-ware::xgrp-info group))
+                        :key #'nintendo-ware::xgrp-entry-file-id))
+           (nested (nintendo-ware::read-file 'nintendo-ware::xgrp (nintendo-ware::xgrp-entry-data entry)))
+           (nested-entry (find 7 (nintendo-ware::xgrp-info-entries (nintendo-ware::xgrp-info nested))
+                               :key #'nintendo-ware::xgrp-entry-file-id))
            (parsed-sequence (nintendo-ware::read-file 'nintendo-ware::xseq
-                                                    (nintendo-ware::xgrp-file-data nested 7))))
-      (assert (eq endian (nintendo-ware::nintendo-ware-file-endian group)))
-      (assert (eq child-endian (nintendo-ware::nintendo-ware-file-endian nested)))
+                                                    (nintendo-ware::xgrp-entry-data nested-entry))))
+      (assert (eq endian (nintendo-ware::nintendo-ware-file-header-endian (nintendo-ware::xgrp-header group))))
+      (assert (eq child-endian (nintendo-ware::nintendo-ware-file-header-endian (nintendo-ware::xgrp-header nested))))
       (assert (= 12 (nintendo-ware::xseq-event-note-duration
                       (aref (nintendo-ware::xseq-events parsed-sequence) 0))))
       (dolist (container (list group nested))
         (assert (= #x03000000
                    (nintendo-ware::nintendo-ware-sound-resource-id-value
                     (nintendo-ware::xgrp-dependency-resource-id
-                     (aref (nintendo-ware::xgrp-infx-body-entries (nintendo-ware::xgrp-infx-body (nintendo-ware::xgrp-infx container))) 0))))))))
+                     (aref (nintendo-ware::xgrp-infx-entries (nintendo-ware::xgrp-infx container)) 0))))))))
   (assert (not (boundp 'nintendo-ware::*endian*)))
   (format t "Shared-type ME, C/F containers, event endian and mixed embedded files passed.~%"))

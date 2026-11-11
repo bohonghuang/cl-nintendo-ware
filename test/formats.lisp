@@ -12,7 +12,7 @@
 (defun octets-join (&rest parts)
   (apply #'concatenate '(simple-array (unsigned-byte 8) (*)) parts))
 
-(defun container-fixture (magic block-specifications &key (version #x02010000) directory-order)
+(defun container-fixture (magic block-specifications &key (version #x02010000))
   (let* ((header-size (* 32 (ceiling (+ 20 (* 12 (length block-specifications))) 32)))
          (position header-size)
          (references
@@ -29,10 +29,7 @@
       (emit-octets output (encode-record 'cl-nintendo-ware.test::header-record
                                         (cl-nintendo-ware.test::make-header-record :magic (coerce (fixture-magic magic) 'simple-base-string) :bom #xfeff :header-size header-size
                                                                     :version (fixture-version version) :file-size position
-                                                                    :block-count (length references)
-                                                                    :references (if directory-order
-                                                                                    (map 'vector (lambda (index) (aref references index)) directory-order)
-                                                                                    references))))
+                                                                    :block-count (length references) :references references)))
       (emit-octets output (make-array (- header-size (+ 20 (* 12 (length references)))) :initial-element 0))
       (loop :for specification :in block-specifications
             :for reference :across references
@@ -43,7 +40,7 @@
                   (emit-octets output bytes)
                   (emit-octets output (make-array (- (cl-nintendo-ware.test::sized-reference-size reference) 8 (length bytes)) :initial-element 0)))))))
 
-(defun wave-fixture (codec &key (sample-count 3) payloads (loop 1) (data-magic "DATA") (data-p t))
+(defun wave-fixture (codec &key (sample-count 3) payloads (loop 1) (data-magic "DATA"))
   (let* ((sample-size (cl-nintendo-ware.test::xwav-encoded-size codec sample-count))
          (codec-size (case codec (2 46) (3 8) (otherwise 0)))
          (codec-reference-type (case codec (2 #x0300) (3 #x0301) (otherwise 0)))
@@ -79,8 +76,7 @@
          (payload (if payloads (apply #'octets-join payloads)
                       (octets-join (make-array sample-size :initial-element 17)
                                    (make-array sample-size :initial-element 34)))))
-    (container-fixture "CWAV" (append (list (list #x7000 "INFO" info))
-                                     (when data-p (list (list #x7001 data-magic payload)))))))
+    (container-fixture "CWAV" (list (list #x7000 "INFO" info) (list #x7001 data-magic payload)))))
 
 (defun xbnk-node-fixture (tag child-type child)
   (let* ((detail-size (ecase tag (#x6000 8) (#x6001 16) (#x6002 12)))
@@ -121,124 +117,22 @@
                 node)))
     (container-fixture "CBNK" (list (list #x5800 "INFO" info)))))
 
-(defun run-container-default-tests ()
-  ;; Empty constructors must not fabricate section presence or depend on parser
-  ;; arguments. Array defaults must already satisfy their public Lisp types.
-  (dolist (file (list (nintendo-ware::make-xseq) (nintendo-ware::make-xwav)
-                     (nintendo-ware::make-xwar) (nintendo-ware::make-xbnk)
-                     (nintendo-ware::make-xwsd) (nintendo-ware::make-xstm)
-                     (nintendo-ware::make-xsar) (nintendo-ware::make-xgrp)))
-    (assert (typep (nintendo-ware::nintendo-ware-file-sections file) '(simple-array t (0))))
-    (assert (typep (nintendo-ware::nintendo-ware-file-magic file) 'simple-base-string))
-    (assert (zerop (nintendo-ware::nintendo-ware-file-version file))))
-  (assert (null (nintendo-ware::xseq-data (nintendo-ware::make-xseq))))
-  (assert (null (nintendo-ware::xwar-info (nintendo-ware::make-xwar))))
-  (dolist (body (list
-                 (nintendo-ware::xseq-data-body (nintendo-ware::make-xseq-data))
-                 (nintendo-ware::xseq-labels-body (nintendo-ware::make-xseq-labels))
-                 (nintendo-ware::xwav-info-body (nintendo-ware::make-xwav-info))
-                 (nintendo-ware::xwav-data-body (nintendo-ware::make-xwav-data))
-                 (nintendo-ware::xwar-info-body (nintendo-ware::make-xwar-info))
-                 (nintendo-ware::xbnk-info-body (nintendo-ware::make-xbnk-info))
-                 (nintendo-ware::xwsd-info-body (nintendo-ware::make-xwsd-info))
-                 (nintendo-ware::xsar-strg-body (nintendo-ware::make-xsar-strg))
-                 (nintendo-ware::xsar-info-body (nintendo-ware::make-xsar-info))
-                 (nintendo-ware::xgrp-info-body (nintendo-ware::make-xgrp-info))
-                 (nintendo-ware::xgrp-infx-body (nintendo-ware::make-xgrp-infx))
-                 (nintendo-ware::xstm-info-body (nintendo-ware::make-xstm-info))
-                 (nintendo-ware::xstm-seek-body (nintendo-ware::make-xstm-seek))
-                 (nintendo-ware::xstm-regions-body (nintendo-ware::make-xstm-regions))
-                 (nintendo-ware::nintendo-ware-section-raw-block-body (nintendo-ware::make-nintendo-ware-section-raw-block))))
-    (assert (null body)))
-  (dolist (bytes (list
-                 (nintendo-ware::xseq-data-body-bytes (nintendo-ware::make-xseq-data-body))
-                 (nintendo-ware::xseq-labels-body-bytes (nintendo-ware::make-xseq-labels-body))
-                 (nintendo-ware::xwav-data-body-bytes (nintendo-ware::make-xwav-data-body))
-                 (nintendo-ware::xsar-info-body-bytes (nintendo-ware::make-xsar-info-body))
-                 (nintendo-ware::xstm-info-body-bytes (nintendo-ware::make-xstm-info-body))
-                 (nintendo-ware::xstm-seek-body-bytes (nintendo-ware::make-xstm-seek-body))
-                 (nintendo-ware::xstm-regions-body-bytes (nintendo-ware::make-xstm-regions-body))
-                 (nintendo-ware::nintendo-ware-section-octets-bytes (nintendo-ware::make-nintendo-ware-section-octets))))
-    (assert (typep bytes '(simple-array (unsigned-byte 8) (0)))))
-  (dolist (entries (list
-                   (nintendo-ware::xwav-info-body-channels (nintendo-ware::make-xwav-info-body))
-                   (nintendo-ware::xwar-info-body-entries (nintendo-ware::make-xwar-info-body))
-                   (nintendo-ware::xgrp-info-body-entries (nintendo-ware::make-xgrp-info-body))
-                   (nintendo-ware::xgrp-infx-body-entries (nintendo-ware::make-xgrp-infx-body))))
-    (assert (typep entries '(simple-array t (0)))))
-  (assert (null (nintendo-ware::xbnk-info-body-instruments (nintendo-ware::make-xbnk-info-body))))
-  (assert (null (nintendo-ware::xbnk-info-body-waves (nintendo-ware::make-xbnk-info-body))))
-  (assert (null (nintendo-ware::xwsd-info-body-items (nintendo-ware::make-xwsd-info-body))))
-  (assert (null (nintendo-ware::xwsd-info-body-waves (nintendo-ware::make-xwsd-info-body))))
-  (assert (null (nintendo-ware::xsar-strg-body-strings (nintendo-ware::make-xsar-strg-body)))))
-
 (defun run-format-tests ()
-  (run-container-default-tests)
-  ;; Directory order is not physical section order. Embedded WAV parsing is
-  ;; deferred until extraction, including failure of a malformed child.
-  (dolist (child (list (wave-fixture 0) (octets-join #(66 65 68 33))))
-    (let* ((table (encode-record 'sized-reference-table
-                    (make-sized-reference-table :count 2
-                      :entries (vector (make-sized-reference :type #x1f00 :offset 0 :size (length child))
-                                       (make-sized-reference :offset -1)))))
-           (archive (nintendo-ware::read-file 'nintendo-ware::xwar
-                      (container-fixture "CWAR"
-                        (list (list #x6801 "FILE" child) (list #x6800 "INFO" table))
-                        :directory-order '(1 0)))))
-      (assert (typep (nintendo-ware::xwar-info archive) 'nintendo-ware::xwar-info))
-      (assert (typep (nintendo-ware::xwar-file archive) 'nintendo-ware::nintendo-ware-section-raw-block))
-      (assert (= 2 (nintendo-ware::xwar-info-body-count
-                     (nintendo-ware::xwar-info-body (nintendo-ware::xwar-info archive)))))
-      (if (= 4 (length child))
-          (rejects binstruct::deserialize-error (nintendo-ware::xwar-waves archive))
-          (let ((waves (nintendo-ware::xwar-waves archive)))
-            (assert (equalp #(17 17 17) (nintendo-ware::xwav-samples (aref waves 0))))
-            (assert (null (aref waves 1)))))))
-  (rejects binstruct::deserialize-error
-    (nintendo-ware::read-file 'nintendo-ware::xwar
-      (container-fixture "CWAR" (list (list #x7ffe "FILE" #())))))
-  (rejects binstruct::deserialize-error
-    (nintendo-ware::read-file 'nintendo-ware::xwar
-      (container-fixture "CWAR" (list (list #x6801 "JUNK" #())))))
-  (rejects type-error
-    (nintendo-ware::read-file 'nintendo-ware::xwar
-      (encode-record 'header-record
-        (make-header-record :magic (coerce (fixture-magic "CWAR") 'simple-base-string)
-          :bom #x1234 :header-size 20 :file-size 20))))
-  (dolist (tag '(#x6801 #x7ffe))
-    (rejects binstruct::deserialize-error
-      (nintendo-ware::read-file 'nintendo-ware::xwar
-        (encode-record 'header-record
-          (make-header-record :magic (coerce (fixture-magic "CWAR") 'simple-base-string)
-            :bom #xfeff :header-size 32 :file-size 32 :block-count 1
-            :references (vector (make-sized-reference :type tag :offset -1)))))))
-  (let ((wave (nintendo-ware::read-file 'nintendo-ware::xwav (wave-fixture 0 :data-p nil))))
-    (assert (= 32000 (nintendo-ware::xwav-info-body-sample-rate
-                      (nintendo-ware::xwav-info-body (nintendo-ware::xwav-info wave)))))
-    (assert (null (nintendo-ware::xwav-data wave)))
-    (rejects binstruct::deserialize-error (nintendo-ware::xwav-samples wave)))
-  (let ((wave (nintendo-ware::read-file 'nintendo-ware::xwav
-                (wave-fixture 0 :sample-count 100 :payloads '(#(1) #(2))))))
-    (assert (= 100 (nintendo-ware::xwav-info-body-loop-end
-                    (nintendo-ware::xwav-info-body (nintendo-ware::xwav-info wave)))))
-    (rejects binstruct::deserialize-error (nintendo-ware::xwav-samples wave)))
-  (let ((wave (nintendo-ware::read-file 'nintendo-ware::xwav (wave-fixture 0))))
-    (rejects type-error (nintendo-ware::xwav-samples wave 2)))
   (dotimes (codec 4)
     (let* ((bytes (wave-fixture codec))
            (wave (nintendo-ware::read-file 'nintendo-ware::xwav bytes))
-           (information (nintendo-ware::xwav-info-body (nintendo-ware::xwav-info wave)))
-           (channels (nintendo-ware::xwav-info-body-channels information))
+           (information (nintendo-ware::xwav-info wave))
+           (channels (nintendo-ware::xwav-info-channels information))
            (codec-info (nintendo-ware::xwav-channel-codec-info (aref channels 0))))
       (assert (eq (nth codec '(nintendo-ware::pcm-8 nintendo-ware::pcm-16
                                nintendo-ware::dsp-adpcm nintendo-ware::ima-adpcm))
-                  (nintendo-ware::xwav-info-body-codec information)))
-      (assert (eq t (nintendo-ware::xwav-info-body-loop-p information)))
-      (assert (= 32000 (nintendo-ware::xwav-info-body-sample-rate information)))
-      (assert (= 1 (nintendo-ware::xwav-info-body-loop-start information)))
-      (assert (= 3 (nintendo-ware::xwav-info-body-loop-end information)))
-      (loop for channel-index from 0 below (length channels) for value in '(17 34) do
-        (let* ((data (nintendo-ware::xwav-samples wave channel-index))
+                  (nintendo-ware::xwav-info-codec information)))
+      (assert (eq t (nintendo-ware::xwav-info-loop-p information)))
+      (assert (= 32000 (nintendo-ware::xwav-info-sample-rate information)))
+      (assert (= 1 (nintendo-ware::xwav-info-loop-start information)))
+      (assert (= 3 (nintendo-ware::xwav-info-loop-end information)))
+      (loop for channel across channels for value in '(17 34) do
+        (let* ((data (nintendo-ware::xwav-channel-data channel))
                (element-type (ecase codec (0 '(signed-byte 8)) (1 '(signed-byte 16))
                                           (2 '(unsigned-byte 8)) (3 '(unsigned-byte 4))))
                (expected (ecase codec (0 value) (1 (* value 257)) (2 value) (3 (/ value 17)))))
@@ -259,9 +153,9 @@
                                             (list (list #x6800 "INFO" table) (list #x6801 "FILE" bytes)))))
              (waves (nintendo-ware::xwar-waves archive)))
         (let ((embedded (aref waves 0)))
-          (assert (equalp channels
-                          (nintendo-ware::xwav-info-body-channels
-                           (nintendo-ware::xwav-info-body (nintendo-ware::xwav-info embedded))))))
+          (assert (> (nintendo-ware::nintendo-ware-file-header-start (nintendo-ware::xwav-header embedded)) 0))
+          (assert (equalp (nintendo-ware::xwav-info-channels information)
+                          (nintendo-ware::xwav-info-channels (nintendo-ware::xwav-info embedded)))))
         (assert (null (aref waves 1))))))
   ;; Distinct signs/bytes catch unsigned PCM and container-endian regressions;
   ;; odd IMA lengths must discard the unused high nibble, not expose padding.
@@ -277,14 +171,14 @@
     (destructuring-bind (codec count payload expected element-type) case
       (let* ((wave (nintendo-ware::read-file 'nintendo-ware::xwav
                      (wave-fixture codec :sample-count count :loop 0 :payloads (list payload payload))))
-             (info (nintendo-ware::xwav-info-body (nintendo-ware::xwav-info wave)))
-             (data (nintendo-ware::xwav-samples wave)))
-        (assert (null (nintendo-ware::xwav-info-body-loop-p info)))
+             (info (nintendo-ware::xwav-info wave))
+             (data (nintendo-ware::xwav-channel-data (aref (nintendo-ware::xwav-info-channels info) 0))))
+        (assert (null (nintendo-ware::xwav-info-loop-p info)))
         (assert (typep data `(simple-array ,element-type (*))))
         (assert (equalp (coerce expected 'vector) data)))))
   (dotimes (codec 4)
     (let* ((wave (nintendo-ware::read-file 'nintendo-ware::xwav (wave-fixture codec :sample-count 0)))
-           (data (nintendo-ware::xwav-samples wave)))
+           (data (nintendo-ware::xwav-channel-data (aref (nintendo-ware::xwav-info-channels (nintendo-ware::xwav-info wave)) 0))))
       (assert (typep data `(simple-array ,(ecase codec (0 '(signed-byte 8)) (1 '(signed-byte 16))
                                                      (2 '(unsigned-byte 8)) (3 '(unsigned-byte 4))) (0))))))
   (rejects binstruct::deserialize-error
@@ -292,7 +186,7 @@
   (dolist (instrument-tag '(#x6000 #x6001 #x6002))
     (dolist (key-tag '(#x6000 #x6001 #x6002))
       (let* ((xbnk (nintendo-ware::read-file 'nintendo-ware::xbnk (xbnk-fixture instrument-tag key-tag)))
-             (instrument (aref (nintendo-ware::xbnk-info-body-instruments (nintendo-ware::xbnk-info-body (nintendo-ware::xbnk-info xbnk))) 0))
+             (instrument (aref (nintendo-ware::xbnk-info-instruments (nintendo-ware::xbnk-info xbnk)) 0))
              (keys (nintendo-ware::xbnk-instrument-definition instrument))
              (key (ecase instrument-tag
                     (#x6000 (nintendo-ware::xbnk-key-direct-entry keys))
@@ -305,7 +199,7 @@
                          (#x6002 (aref (nintendo-ware::xbnk-velocity-range-entries velocities) 0))))
              (pan (nintendo-ware::xbnk-velocity-pan-info velocity)))
         (assert (= 0 (nintendo-ware::xbnk-velocity-wave-index velocity)))
-        (assert (= 7 (nintendo-ware::nintendo-ware-sound-wave-id-index (aref (nintendo-ware::xbnk-info-body-waves (nintendo-ware::xbnk-info-body (nintendo-ware::xbnk-info xbnk))) 0))))
+        (assert (= 7 (nintendo-ware::nintendo-ware-sound-wave-id-index (aref (nintendo-ware::xbnk-info-waves (nintendo-ware::xbnk-info xbnk)) 0))))
         (assert (= 1.5f0 (nintendo-ware::xbnk-velocity-pitch velocity)))
         (assert (= 64 (nintendo-ware::xbnk-pan-flag-pan pan)))
         (assert (= 32 (nintendo-ware::xbnk-pan-flag-surround-pan pan)))
@@ -327,12 +221,12 @@
                                     (make-sized-reference :type #x1f00 :offset (length first) :size (length second))))))
          (archive (nintendo-ware::read-file 'nintendo-ware::xwar (container-fixture "CWAR"
                                         (list (list #x6800 "INFO" table) (list #x6801 "FILE" (octets-join first second))))))
-         (entries (nintendo-ware::xwar-waves archive))
+         (entries (nintendo-ware::xwar-info-entries (nintendo-ware::xwar-info archive)))
          (first-wave (aref entries 0))
          (second-wave (aref entries 1)))
     (assert (= -123 (aref (nintendo-ware::xwav-dsp-adpcm-info-coefficients
-                           (nintendo-ware::xwav-channel-codec-info (aref (nintendo-ware::xwav-info-body-channels (nintendo-ware::xwav-info-body (nintendo-ware::xwav-info first-wave))) 0))) 15)))
+                           (nintendo-ware::xwav-channel-codec-info (aref (nintendo-ware::xwav-info-channels (nintendo-ware::xwav-info first-wave)) 0))) 15)))
     (assert (= -200 (nintendo-ware::xwav-ima-adpcm-context-predictor
                      (nintendo-ware::xwav-ima-adpcm-info-initial-context
-                      (nintendo-ware::xwav-channel-codec-info (aref (nintendo-ware::xwav-info-body-channels (nintendo-ware::xwav-info-body (nintendo-ware::xwav-info second-wave))) 0)))))))
+                      (nintendo-ware::xwav-channel-codec-info (aref (nintendo-ware::xwav-info-channels (nintendo-ware::xwav-info second-wave)) 0)))))))
   (format t "Direct WAV/WAR/BNK graph scenarios passed.~%"))

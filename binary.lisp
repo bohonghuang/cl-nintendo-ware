@@ -32,7 +32,7 @@
         (macroexpand `(defbinstruct (,name ,@options) ,lambda-list ,@slots))))))
 
 (defmacro defbinstruct/me (name-and-options &body body)
-  "Define LE, explicit /le alias and shared-type BE layouts with type expansion."
+  "Define LE and shared-type BE layouts and property-based type expansion."
   (destructuring-bind (name &rest options) (ensure-list name-and-options)
     (let* ((defined-p body)
            (lambda-list (when (and body (not (member :type (first body)))) (pop body)))
@@ -48,8 +48,6 @@
       `(progn
          ,@(when defined-p
              `((defbinstruct (,name ,@options) ,lambda-list ,@body)
-               (defbinalias (,(symbolicate name '#:/le) (:type ,type)) ,lambda-list
-                 (,name ,@(parsonic::lambda-list-arguments lambda-list)))
                (defbinstruct/be (,big (:type ,type) (:endian :big)
                                      ,@(remove-if (lambda (option) (member (car option) '(:type :endian))) options))
                    ,lambda-list
@@ -79,20 +77,4 @@
                           (:little ',(binstruct::emitter-name-symbol name))
                           (:big ',(binstruct::emitter-name-symbol big)))
                        ,binstruct::*output* ,binstruct::*value* ,@arguments)))))))))
-
-(defmacro nintendo-ware-parse (type input)
-  (with-gensyms (source result failure position)
-    `(let ((,source ,input)
-           (binstruct::*positions* nil))
-       (multiple-value-bind (,result ,failure)
-           (parser-run (parser ,(binstruct::expand-reader-type-unit
-                                 type :endian binstruct::+endian-default+
-                                 :alignment binstruct::+alignment-default+))
-                       (the (simple-array (unsigned-byte 8) (*)) ,source))
-         (if ,failure
-             (error 'binstruct::deserialize-error
-                    :position ,failure :input ,source :info ,result)
-             (if-let ((,position (find-if-not #'integerp binstruct::*positions* :key #'cdr)))
-               (error 'binstruct::unresolved-position-error :name (car ,position))
-               ,result))))))
 

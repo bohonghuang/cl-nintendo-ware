@@ -93,7 +93,7 @@
                     (cl-nintendo-ware.test::make-xwsd-envelope :attack 11 :decay 22 :sustain 33 :hold 44 :release 55)))))))
     (container-fixture "CWSD" (list (list #x6800 "INFO" body)))))
 
-(defun xgrp-fixture (embedded &key (file-id 7) (available-p t) (file-p t) (resource-id #x03000000))
+(defun xgrp-fixture (embedded &key (file-id 7) (available-p t) (resource-id #x03000000))
   (let ((info
           (layout-fixture
            (list
@@ -112,11 +112,9 @@
                   (lambda (address) (declare (ignore address))
                     (cl-nintendo-ware.test::make-xgrp-dependency :resource-id resource-id :load-flags 3)))))))
     (container-fixture "CGRP"
-                       (append (list (list #x7800 "INFO" info))
-                               (when file-p (list (list #x7801 "FILE" embedded)))
-                               (list (list #x7802 "INFX" extra))))))
+                       (list (list #x7800 "INFO" info) (list #x7801 "FILE" embedded) (list #x7802 "INFX" extra)))))
 
-(defun xsar-fixture (embedded &key (named-p t) (available-p t) (file-p t) sound-flags sequence-flags)
+(defun xsar-fixture (embedded &key (named-p t) (available-p t) sound-flags sequence-flags)
   (let ((strings
           (layout-fixture
            (list
@@ -201,12 +199,9 @@
                     (cl-nintendo-ware.test::make-terminated-text :text #.(coerce "audio/example.bcstm" 'simple-base-string))))))))
     (container-fixture "CSAR"
                        (append (when named-p (list (list #x2000 "STRG" strings)))
-                               (list (list #x2001 "INFO" info))
-                               (when file-p (list (list #x2002 "FILE" embedded)))))))
+                               (list (list #x2001 "INFO" info) (list #x2002 "FILE" embedded))))))
 
-(defun xstm-fixture (major-version &key (seek-p t) (regions-p t) (encoding 2)
-                                      (sample-count 28) (interval 14)
-                                      (region-count (if (>= major-version 3) 1 0)))
+(defun xstm-fixture (&optional (major-version 2))
   (let* ((codec-info (cl-nintendo-ware.test::make-xwav-dsp-adpcm-info
                       :coefficients (make-array 16 :element-type '(signed-byte 16) :initial-element 123)
                       :initial-context (cl-nintendo-ware.test::make-xwav-dsp-adpcm-context :history-1 -111)
@@ -232,11 +227,11 @@
                       :third (fixture-reference address #x0101 'channels 'info))))
              (list 'stream 'cl-nintendo-ware.test::xstm-stream-info
                    (lambda (address) (declare (ignore address))
-                     (cl-nintendo-ware.test::make-xstm-stream-info :encoding encoding :loop-flag 1 :channel-count 2 :sample-rate 32000
-                      :region-count region-count
-                      :loop-start 0 :sample-count sample-count :block-count 2 :block-size 8 :block-sample-count 14
+                     (cl-nintendo-ware.test::make-xstm-stream-info :encoding 2 :loop-flag 1 :channel-count 2 :sample-rate 32000
+                      :region-count (if (>= major-version 3) 1 0)
+                      :loop-start 0 :sample-count 28 :block-count 2 :block-size 8 :block-sample-count 14
                       :last-block-size 8 :last-block-sample-count 14 :last-block-padded-size 8
-                      :seek-entry-size 4 :seek-interval-samples interval :sample-data-reference (cl-nintendo-ware.test::make-reference :type #x1f00 :offset 0))))
+                      :seek-entry-size 4 :seek-interval-samples 14 :sample-data-reference (cl-nintendo-ware.test::make-reference :type #x1f00 :offset 0))))
              (list 'extensions 'cl-nintendo-ware.test::byte-payload
                    (lambda (address) (declare (ignore address))
                      (cl-nintendo-ware.test::make-byte-payload :bytes extensions)) (length extensions))
@@ -259,16 +254,12 @@
          (seek (let ((*fixture-endian* (if (eq *fixture-family* :c) :little :big)))
                  (apply #'octets-join
                       (loop :for value :from 1 :to 4
-                            :collect (if (= encoding 3)
-                                         (encode-record 'xwav-ima-adpcm-context
-                                           (make-xwav-ima-adpcm-context :predictor (- value) :step-index value))
-                                         (encode-record 'cl-nintendo-ware.test::xstm-dsp-seek-context
-                                           (cl-nintendo-ware.test::make-xstm-dsp-seek-context :history-1 (- value) :history-2 (* value 100))))))))
+                            :collect (encode-record 'cl-nintendo-ware.test::xstm-dsp-seek-context
+                                      (cl-nintendo-ware.test::make-xstm-dsp-seek-context :history-1 (- value) :history-2 (* value 100)))))))
          (payload (apply #'octets-join (loop :for value :from 1 :to 4 :collect (make-array 8 :initial-element value)))))
     (container-fixture "CSTM"
-                       (append (list (list #x4000 "INFO" info) (list #x4002 "DATA" payload))
-                               (when seek-p (list (list #x4001 "SEEK" seek)))
-                               (when (and regions-p (>= major-version 3))
+                       (append (list (list #x4000 "INFO" info) (list #x4001 "SEEK" seek) (list #x4002 "DATA" payload))
+                               (when (>= major-version 3)
                                  (list (list #x4003 "REGN"
                                              (encode-record 'cl-nintendo-ware.test::xstm-region-record
                                               (cl-nintendo-ware.test::make-xstm-region-record :start 1 :end 20
@@ -291,7 +282,8 @@
   (%base 0 :type position)
   (parent nil :type (reference-probe-root %base)))
 (nintendo-ware::define-nintendo-ware-file (reference-probe-file (:magic ("CREF" "FREF")))
-  (info (make-reference-probe-info) :type reference-probe-info :tag #x6800))
+  (info nil :type (values (pointer reference-probe-info
+                           (map null (constantly (nintendo-ware::block-start nintendo-ware::%header #x6800)))))))
 (defbinio reference-probe-file stream)
 
 (defbinstruct reference-probe-payload ()
@@ -323,61 +315,11 @@
                                                             :initial-contents '(3 4 5)))) 3)))))))
 
 (defun run-archive-tests ()
-  (flet ((extract (reference data)
-           (let ((bytes (octets-join (encode-record 'sized-reference reference))))
-             (ecase *fixture-endian*
-               (:little (nintendo-ware::nintendo-ware-parse
-                         (nintendo-ware::nintendo-ware-data-reference '(#x1f00) data) bytes))
-               (:big (nintendo-ware::nintendo-ware-parse
-                      (nintendo-ware::nintendo-ware-data-reference/be '(#x1f00) data) bytes))))))
-    (let ((data (octets-join #(9 8 7))))
-      (assert (equalp #(8 7) (extract (make-sized-reference :type #x1f00 :offset 1 :size 2) data)))
-      (assert (null (extract (make-sized-reference :type #xbeef :offset -1 :size 99) data)))
-      (assert (typep (extract (make-sized-reference :type #x1f00 :offset 0 :size 0) data)
-                     '(simple-array (unsigned-byte 8) (0))))
-      (rejects binstruct::deserialize-error
-        (extract (make-sized-reference :type #x1f00 :offset -2 :size 1) data))
-      (rejects binstruct::deserialize-error
-        (extract (make-sized-reference :type #xbeef :offset 0 :size 1) data))
-      (rejects binstruct::deserialize-error
-        (extract (make-sized-reference :type #x1f00 :offset 2 :size 2) data))))
-  (let* ((archive (nintendo-ware::read-file 'nintendo-ware::xsar
-                    (xsar-fixture #(1 2 3) :file-p nil :named-p nil)))
-         (files (nintendo-ware::xsar-files archive)))
-    (assert (= 2 (length files)))
-    (assert (null (nintendo-ware::xsar-strg archive)))
-    (assert (equalp #((nil) (nil)) files)))
-  (let ((group (nintendo-ware::read-file 'nintendo-ware::xgrp
-                 (xgrp-fixture #(1 2 3) :file-p nil))))
-    (assert (= 7 (nintendo-ware::xgrp-entry-file-id
-                  (aref (nintendo-ware::xgrp-info-body-entries
-                          (nintendo-ware::xgrp-info-body (nintendo-ware::xgrp-info group))) 0))))
-    (assert (null (nintendo-ware::xgrp-file-data group 7))))
-  (let ((stream (nintendo-ware::read-file 'nintendo-ware::xstm
-                  (xstm-fixture 3 :seek-p nil :regions-p nil))))
-    (assert (null (nintendo-ware::xstm-seek-rows stream)))
-    (assert (null (nintendo-ware::xstm-regions-entries stream)))
-    (assert (= 32 (length (nintendo-ware::xstm-sample-data stream)))))
-  (let ((stream (nintendo-ware::read-file 'nintendo-ware::xstm
-                  (xstm-fixture 3 :sample-count 0 :region-count 0))))
-    (assert (typep (nintendo-ware::xstm-seek-rows stream) '(simple-array t (0))))
-    (assert (typep (nintendo-ware::xstm-regions-entries stream) '(simple-array t (0)))))
-  (let* ((stream (nintendo-ware::read-file 'nintendo-ware::xstm
-                   (xstm-fixture 3 :encoding 3)))
-         (rows (nintendo-ware::xstm-seek-rows stream))
-         (context (nintendo-ware::xstm-seek-entry-context (aref (aref rows 1) 1))))
-    (assert (= -4 (nintendo-ware::xwav-ima-adpcm-context-predictor context)))
-    (assert (= 4 (nintendo-ware::xwav-ima-adpcm-context-step-index context)))
-    (rejects binstruct::deserialize-error (nintendo-ware::xstm-regions-entries stream)))
-  (let ((stream (nintendo-ware::read-file 'nintendo-ware::xstm (xstm-fixture 3 :interval 0))))
-    (assert (= 28 (nintendo-ware::xstm-stream-info-sample-count
-                   (nintendo-ware::xstm-info-record-stream (nintendo-ware::xstm-information stream)))))
-    (rejects binstruct::deserialize-error (nintendo-ware::xstm-seek-rows stream)))
   (dolist (*fixture-endian* '(:little :big))
     (dolist (*fixture-family* '(:c :f))
       (let* ((file (read-reference-probe-file
                     (flexi-streams:make-in-memory-input-stream (reference-probe-fixture))))
-             (parent (reference-probe-info-body-parent (reference-probe-info-body (reference-probe-file-info file)))))
+             (parent (reference-probe-info-parent (reference-probe-file-info file))))
         (assert (= 23 (reference-probe-parent-size parent)))
         (assert (= #x11223344 (reference-probe-parent-value parent)))
         (assert (equalp #(3 4 5) (reference-probe-parent-child parent)))
@@ -401,11 +343,11 @@
                        :file-id 1234
                        :file-reference (make-sized-reference :type #x1f00 :offset -1)))))))))
     (let* ((parsed (nintendo-ware::read-file 'nintendo-ware::xgrp (group #x7900 28)))
-           (entries (nintendo-ware::xgrp-info-body-entries (nintendo-ware::xgrp-info-body (nintendo-ware::xgrp-info parsed)))))
+           (entries (nintendo-ware::xgrp-info-entries (nintendo-ware::xgrp-info parsed))))
       (assert (= 3 (length entries)))
       (assert (null (aref entries 0)))
       (assert (= 1234 (nintendo-ware::xgrp-entry-file-id (aref entries 1))))
-      (assert (null (nintendo-ware::xgrp-file-data parsed 1234)))
+      (assert (null (nintendo-ware::xgrp-entry-data (aref entries 1))))
       (assert (null (aref entries 2))))
     (dolist (case '((#x7901 28) (#x7900 -2)))
       (destructuring-bind (tag offset) case
@@ -417,7 +359,7 @@
   (let* ((file (nintendo-ware::read-file 'nintendo-ware::xwsd
                  (xwsd-fixture :item-flags (flags 5 #xa55a7f80 #xa5f3b271))))
          (parameters (nintendo-ware::xwsd-item-parameters
-                       (aref (nintendo-ware::xwsd-info-body-items (nintendo-ware::xwsd-info-body (nintendo-ware::xwsd-info file))) 0)))
+                       (aref (nintendo-ware::xwsd-info-items (nintendo-ware::xwsd-info file)) 0)))
          (pan (nintendo-ware::xwsd-parameters-pan-info parameters))
          (filter (nintendo-ware::xwsd-parameters-filter-info parameters)))
     (assert (= -128 (nintendo-ware::xwsd-packed-pan-pan pan)))
@@ -429,7 +371,7 @@
   (let* ((archive (nintendo-ware::read-file 'nintendo-ware::xsar
                     (xsar-fixture #() :sound-flags (flags 6 #xa55a0801 #x5aa57f80)
                                       :sequence-flags (flags 2 #xa55aff47))))
-         (sound (aref (nintendo-ware::xsar-info-record-sounds (nintendo-ware::xsar-information archive)) 0))
+         (sound (aref (nintendo-ware::xsar-info-sounds (nintendo-ware::xsar-info archive)) 0))
          (player (nintendo-ware::xsar-sound-player-info sound))
          (priority (nintendo-ware::xsar-sequence-info-priority (nintendo-ware::xsar-sound-detail sound))))
     (assert (= -128 (nintendo-ware::xsar-player-info-priority player)))
@@ -441,19 +383,19 @@
     (assert (= 127 (nintendo-ware::xsar-packed-priority-release-reserved priority))))
   (let* ((archive (nintendo-ware::read-file 'nintendo-ware::xsar
                     (xsar-fixture #() :sound-flags (flags 2 #x0801))))
-         (sound (aref (nintendo-ware::xsar-info-record-sounds (nintendo-ware::xsar-information archive)) 0))
+         (sound (aref (nintendo-ware::xsar-info-sounds (nintendo-ware::xsar-info archive)) 0))
          (pan (nintendo-ware::xsar-sound-pan-mode-info sound)))
     (assert (eq 'nintendo-ware::balance (nintendo-ware::xsar-pan-mode-info-mode pan)))
     (assert (eq 'nintendo-ware::linear-0-clamp (nintendo-ware::xsar-pan-mode-info-curve pan)))
     (assert (eq t (nintendo-ware::xsar-patricia-node-leaf-p
                    (aref (nintendo-ware::xsar-patricia-tree-nodes
-                           (nintendo-ware::xsar-strg-body-tree (nintendo-ware::xsar-strg-body (nintendo-ware::xsar-strg archive)))) 0)))))
+                           (nintendo-ware::xsar-strg-tree (nintendo-ware::xsar-strg archive))) 0)))))
   ;; Sparse sets must not shift later values; unknown bits retain their words.
   (let* ((archive (nintendo-ware::read-file 'nintendo-ware::xsar
                     (xsar-fixture (sequence-fixture #(#xff))
                       :sound-flags (flags #x90020009 0 #x10203040 1 #x55667788 #xaabbccdd)
                       :sequence-flags (flags 2 #x0147))))
-         (sound (aref (nintendo-ware::xsar-info-record-sounds (nintendo-ware::xsar-information archive)) 0))
+         (sound (aref (nintendo-ware::xsar-info-sounds (nintendo-ware::xsar-info archive)) 0))
          (sequence (nintendo-ware::xsar-sound-detail sound)))
     (assert (nintendo-ware::xsar-sound-flags-user-parameter-0-p
               (nintendo-ware::xsar-sound-flags sound)))
@@ -470,7 +412,7 @@
   (let* ((file (nintendo-ware::read-file 'nintendo-ware::xwsd
                  (xwsd-fixture :item-flags (flags #x302 #x40000000 #xffffffff #xffffffff)
                                :note-flags (flags 0))))
-         (item (aref (nintendo-ware::xwsd-info-body-items (nintendo-ware::xwsd-info-body (nintendo-ware::xwsd-info file))) 0))
+         (item (aref (nintendo-ware::xwsd-info-items (nintendo-ware::xwsd-info file)) 0))
          (parameters (nintendo-ware::xwsd-item-parameters item))
          (note (aref (nintendo-ware::xwsd-item-notes item) 0)))
     (assert (= 2.0f0 (nintendo-ware::xwsd-parameters-pitch parameters)))
@@ -484,7 +426,7 @@
     (dolist (*fixture-family* '(:c :f))
       (dolist (layout '(:absent :empty :sparse))
         (let* ((file (nintendo-ware::read-file 'nintendo-ware::xwsd (xwsd-fixture :events layout)))
-               (items (nintendo-ware::xwsd-info-body-items (nintendo-ware::xwsd-info-body (nintendo-ware::xwsd-info file))))
+               (items (nintendo-ware::xwsd-info-items (nintendo-ware::xwsd-info file)))
                (tracks (nintendo-ware::xwsd-item-tracks (aref items 0)))
                (events (nintendo-ware::xwsd-track-events (aref tracks 0))))
           (ecase layout
@@ -498,15 +440,15 @@
              (assert (zerop (nintendo-ware::xwsd-event-note-index (aref events 1))))
              (assert (null (aref events 2)))))))))
   (let* ((sound (nintendo-ware::read-file 'nintendo-ware::xwsd (xwsd-fixture)))
-         (information (nintendo-ware::xwsd-info-body (nintendo-ware::xwsd-info sound)))
-         (item (aref (nintendo-ware::xwsd-info-body-items information) 0))
+         (information (nintendo-ware::xwsd-info sound))
+         (item (aref (nintendo-ware::xwsd-info-items information) 0))
          (parameters (nintendo-ware::xwsd-item-parameters item))
          (pan (nintendo-ware::xwsd-parameters-pan-info parameters))
          (filter (nintendo-ware::xwsd-parameters-filter-info parameters))
          (track (aref (nintendo-ware::xwsd-item-tracks item) 0))
          (event (aref (nintendo-ware::xwsd-track-events track) 0))
          (note (aref (nintendo-ware::xwsd-item-notes item) (nintendo-ware::xwsd-event-note-index event))))
-    (assert (= 9 (nintendo-ware::nintendo-ware-sound-wave-id-index (aref (nintendo-ware::xwsd-info-body-waves information) 0))))
+    (assert (= 9 (nintendo-ware::nintendo-ware-sound-wave-id-index (aref (nintendo-ware::xwsd-info-waves information) 0))))
     (assert (= 0.5f0 (nintendo-ware::xwsd-event-position event)))
     (assert (= 2.0f0 (nintendo-ware::xwsd-event-length event)))
     (assert (= 64 (nintendo-ware::xwsd-packed-pan-pan pan)))
@@ -525,31 +467,33 @@
   (let* ((embedded (sequence-fixture #(#xff)))
          (group (nintendo-ware::read-file 'nintendo-ware::xgrp (xgrp-fixture embedded)))
          (archive (nintendo-ware::read-file 'nintendo-ware::xsar (xsar-fixture embedded)))
-         (information (nintendo-ware::xsar-information archive))
-         (strings (nintendo-ware::xsar-strg-body-strings (nintendo-ware::xsar-strg-body (nintendo-ware::xsar-strg archive))))
-         (sound (aref (nintendo-ware::xsar-info-record-sounds information) 0))
+         (information (nintendo-ware::xsar-info archive))
+         (strings (nintendo-ware::xsar-strg-strings (nintendo-ware::xsar-strg archive)))
+         (sound (aref (nintendo-ware::xsar-info-sounds information) 0))
          (sequence (nintendo-ware::xsar-sound-detail sound))
          (priority (nintendo-ware::xsar-sequence-info-priority sequence))
          (files (nintendo-ware::xsar-files archive))
-         (external (aref (nintendo-ware::xsar-info-record-files information) 1)))
-    (assert (= 7 (nintendo-ware::xgrp-entry-file-id (aref (nintendo-ware::xgrp-info-body-entries (nintendo-ware::xgrp-info-body (nintendo-ware::xgrp-info group))) 0))))
-    (assert (equalp embedded (nintendo-ware::xgrp-file-data group 7)))
-    (assert (= #x03000000 (nintendo-ware::nintendo-ware-sound-resource-id-value (nintendo-ware::xgrp-dependency-resource-id (aref (nintendo-ware::xgrp-infx-body-entries (nintendo-ware::xgrp-infx-body (nintendo-ware::xgrp-infx group))) 0)))))
+         (external (aref (nintendo-ware::xsar-info-files information) 1)))
+    (assert (= 7 (nintendo-ware::xgrp-entry-file-id (aref (nintendo-ware::xgrp-info-entries (nintendo-ware::xgrp-info group)) 0))))
+    (assert (equalp embedded (nintendo-ware::xgrp-entry-data
+                              (find 7 (nintendo-ware::xgrp-info-entries (nintendo-ware::xgrp-info group))
+                                    :key #'nintendo-ware::xgrp-entry-file-id))))
+    (assert (= #x03000000 (nintendo-ware::nintendo-ware-sound-resource-id-value (nintendo-ware::xgrp-dependency-resource-id (aref (nintendo-ware::xgrp-infx-entries (nintendo-ware::xgrp-infx group)) 0)))))
     (assert (string= "song" (nintendo-ware::xsar-string-text (aref strings 0))))
-    (assert (= #x01000000 (nintendo-ware::nintendo-ware-sound-resource-id-value (nintendo-ware::xsar-patricia-node-resource-id (aref (nintendo-ware::xsar-patricia-tree-nodes (nintendo-ware::xsar-strg-body-tree (nintendo-ware::xsar-strg-body (nintendo-ware::xsar-strg archive)))) 0)))))
+    (assert (= #x01000000 (nintendo-ware::nintendo-ware-sound-resource-id-value (nintendo-ware::xsar-patricia-node-resource-id (aref (nintendo-ware::xsar-patricia-tree-nodes (nintendo-ware::xsar-strg-tree (nintendo-ware::xsar-strg archive))) 0)))))
     (assert (= 4 (nintendo-ware::xsar-sequence-info-start-offset sequence)))
     (assert (= 80 (nintendo-ware::xsar-packed-priority-channel-priority priority)))
     (assert (nintendo-ware::xsar-packed-priority-release-priority-p priority))
     (let ((bank (aref (nintendo-ware::xsar-sequence-info-banks sequence) 0))
-          (wave (aref (nintendo-ware::xsar-bank-wave-archives (aref (nintendo-ware::xsar-info-record-banks information) 0)) 0)))
+          (wave (aref (nintendo-ware::xsar-bank-wave-archives (aref (nintendo-ware::xsar-info-banks information) 0)) 0)))
       (assert (= 3 (nintendo-ware::nintendo-ware-sound-resource-id-type bank)))
       (assert (zerop (nintendo-ware::nintendo-ware-sound-resource-id-index bank)))
       (assert (= 5 (nintendo-ware::nintendo-ware-sound-resource-id-type wave)))
       (assert (= 2 (nintendo-ware::nintendo-ware-sound-resource-id-index wave))))
-    (assert (= 4 (nintendo-ware::xsar-player-sound-limit (aref (nintendo-ware::xsar-info-record-players information) 0))))
-    (assert (= 12 (nintendo-ware::xsar-project-info-maximum-sequences (nintendo-ware::xsar-info-record-project-info information))))
-    (assert (= 24 (nintendo-ware::xsar-project-info-maximum-sequence-tracks (nintendo-ware::xsar-info-record-project-info information))))
-    (assert (= #x12345678 (nintendo-ware::xsar-project-info-options (nintendo-ware::xsar-info-record-project-info information))))
+    (assert (= 4 (nintendo-ware::xsar-player-sound-limit (aref (nintendo-ware::xsar-info-players information) 0))))
+    (assert (= 12 (nintendo-ware::xsar-project-info-maximum-sequences (nintendo-ware::xsar-info-project-info information))))
+    (assert (= 24 (nintendo-ware::xsar-project-info-maximum-sequence-tracks (nintendo-ware::xsar-info-project-info information))))
+    (assert (= #x12345678 (nintendo-ware::xsar-project-info-options (nintendo-ware::xsar-info-project-info information))))
     (assert (equalp (cons "song" embedded) (aref files 0)))
     (assert (equal '(nil) (aref files 1)))
     (assert (typep (aref (nintendo-ware::xseq-events
@@ -564,7 +508,7 @@
       (let* ((group (nintendo-ware::read-file 'nintendo-ware::xgrp
                       (xgrp-fixture #() :resource-id word)))
              (identifier (nintendo-ware::xgrp-dependency-resource-id
-                          (aref (nintendo-ware::xgrp-infx-body-entries (nintendo-ware::xgrp-infx-body (nintendo-ware::xgrp-infx group))) 0))))
+                          (aref (nintendo-ware::xgrp-infx-entries (nintendo-ware::xgrp-infx group)) 0))))
         (assert (= type (nintendo-ware::nintendo-ware-sound-resource-id-type identifier)))
         (assert (= index (nintendo-ware::nintendo-ware-sound-resource-id-index identifier)))
         (assert (= word (nintendo-ware::nintendo-ware-sound-resource-id-value identifier))))))
@@ -575,16 +519,16 @@
                         (make-array 0 :element-type '(unsigned-byte 8))))
     (let* ((group (nintendo-ware::read-file 'nintendo-ware::xgrp
                                          (xgrp-fixture payload :file-id 1234)))
-           (entry (find 1234 (nintendo-ware::xgrp-info-body-entries (nintendo-ware::xgrp-info-body (nintendo-ware::xgrp-info group)))
+           (entry (find 1234 (nintendo-ware::xgrp-info-entries (nintendo-ware::xgrp-info group))
                         :key #'nintendo-ware::xgrp-entry-file-id)))
       (assert entry)
-      (assert (typep (nintendo-ware::xgrp-file-data group (nintendo-ware::xgrp-entry-file-id entry)) '(simple-array (unsigned-byte 8) (*))))
-      (assert (equalp payload (nintendo-ware::xgrp-file-data group (nintendo-ware::xgrp-entry-file-id entry))))))
+      (assert (typep (nintendo-ware::xgrp-entry-data entry) '(simple-array (unsigned-byte 8) (*))))
+      (assert (equalp payload (nintendo-ware::xgrp-entry-data entry)))))
   (let* ((group (nintendo-ware::read-file 'nintendo-ware::xgrp
                                        (xgrp-fixture #(66 65 68 33) :available-p nil)))
-         (entry (aref (nintendo-ware::xgrp-info-body-entries (nintendo-ware::xgrp-info-body (nintendo-ware::xgrp-info group))) 0)))
+         (entry (aref (nintendo-ware::xgrp-info-entries (nintendo-ware::xgrp-info group)) 0)))
     (assert (= 7 (nintendo-ware::xgrp-entry-file-id entry)))
-    (assert (null (nintendo-ware::xgrp-file-data group (nintendo-ware::xgrp-entry-file-id entry)))))
+    (assert (null (nintendo-ware::xgrp-entry-data entry))))
   ;; A known-format child with an invalid opcode must remain opaque to XSAR.
   (let* ((bad-child (sequence-fixture #(130) :padded nil))
          (archive (nintendo-ware::read-file 'nintendo-ware::xsar (xsar-fixture bad-child)))
@@ -592,7 +536,7 @@
     (assert (string= "song" (nintendo-ware::xsar-file-name file)))
     (assert (equalp bad-child (nintendo-ware::xsar-file-data file)))
     (rejects binstruct::deserialize-error
-      (nintendo-ware::xseq-events (nintendo-ware::read-file 'nintendo-ware::xseq (nintendo-ware::xsar-file-data file)))))
+      (nintendo-ware::read-file 'nintendo-ware::xseq (nintendo-ware::xsar-file-data file))))
   ;; Unknown payloads require no magic/BOM, and STRG is optional.
   (let* ((bytes (make-array 3 :element-type '(unsigned-byte 8) :initial-contents '(1 2 3)))
          (archive (nintendo-ware::read-file 'nintendo-ware::xsar (xsar-fixture bytes :named-p nil)))
@@ -620,26 +564,26 @@
                                           (nintendo-ware::xsar-file-data
                                            (aref (nintendo-ware::xsar-files archive) 0))))
          (note (aref (nintendo-ware::xseq-events sequence) 0)))
-    (assert (eq child-endian (nintendo-ware::nintendo-ware-file-endian sequence)))
+    (assert (eq child-endian (nintendo-ware::nintendo-ware-file-header-endian (nintendo-ware::xseq-header sequence))))
     (assert (= 60 (nintendo-ware::xseq-event-note-key note)))
     (assert (= 100 (nintendo-ware::xseq-event-note-velocity note)))
     (assert (= 12 (nintendo-ware::xseq-event-note-duration note))))
   (dolist (major '(2 3 4 6))
     (let* ((stream (nintendo-ware::read-file 'nintendo-ware::xstm (xstm-fixture major)))
-           (information (nintendo-ware::xstm-information stream))
-           (metadata (nintendo-ware::xstm-info-record-stream information))
-           (seek (nintendo-ware::xstm-seek-entry-context (aref (aref (nintendo-ware::xstm-seek-rows stream) 1) 1)))
-           (channel (aref (nintendo-ware::xstm-info-record-channels information) 1))
-           (track (aref (nintendo-ware::xstm-info-record-tracks information) 0)))
+           (information (nintendo-ware::xstm-info stream))
+           (metadata (nintendo-ware::xstm-info-stream information))
+           (seek (nintendo-ware::xstm-seek-entry-context (aref (aref (nintendo-ware::xstm-seek-rows (nintendo-ware::xstm-seek stream)) 1) 1)))
+           (channel (aref (nintendo-ware::xstm-info-channels information) 1))
+           (track (aref (nintendo-ware::xstm-info-tracks information) 0)))
       (assert (eq 'nintendo-ware::dsp-adpcm (nintendo-ware::xstm-stream-info-encoding metadata)))
       (assert (eq t (nintendo-ware::xstm-stream-info-loop-p metadata)))
       (assert (equalp #(0 1) (nintendo-ware::xstm-track-channels track)))
       (assert (= -4 (nintendo-ware::xstm-dsp-seek-context-history-1 seek)))
       (assert (= 400 (nintendo-ware::xstm-dsp-seek-context-history-2 seek)))
-      (assert (equalp #(4 4 4 4 4 4 4 4) (subseq (nintendo-ware::xstm-sample-data stream) 24 32)))
+      (assert (equalp #(4 4 4 4 4 4 4 4) (subseq (nintendo-ware::nintendo-ware-section-raw-block-bytes (nintendo-ware::xstm-data stream)) 24 32)))
       (assert (= -222 (nintendo-ware::xwav-dsp-adpcm-context-history-2 (nintendo-ware::xwav-dsp-adpcm-info-loop-context (nintendo-ware::xstm-channel-codec-info channel)))))
       (when (>= major 3)
-        (let ((region (aref (nintendo-ware::xstm-regions-entries stream) 0)))
+        (let ((region (aref (nintendo-ware::xstm-regions-entries (nintendo-ware::xstm-regions stream)) 0)))
           (assert (= 1 (nintendo-ware::xstm-region-start region)))
           (assert (= 20 (nintendo-ware::xstm-region-end region)))
           (assert (= -321 (nintendo-ware::xwav-dsp-adpcm-context-history-1 (aref (nintendo-ware::xstm-region-contexts region) 0))))))
