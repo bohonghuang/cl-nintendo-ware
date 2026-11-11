@@ -508,9 +508,6 @@
           :type (map null (lambda (ignored) (declare (ignore ignored))
                             (xseq-events-unpack %events %positions labels)))))
 
-;; The event stream's endian is independent of the surrounding section.
-(defbinalias xseq-track/le (end labels) (xseq-track end labels))
-
 (defbinstruct/me (xseq-label-event-reference (:type (or null (unsigned-byte 32)))
                   (:constructor progn) (:conc-name nil)) (indices)
   (%tag 0 :type (unsigned-byte 16))

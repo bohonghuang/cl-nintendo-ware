@@ -200,7 +200,7 @@
   (rejects binstruct::deserialize-error
     (nintendo-ware::read-file 'nintendo-ware::xwar
       (container-fixture "CWAR" (list (list #x6801 "JUNK" #())))))
-  (rejects binstruct::deserialize-error
+  (rejects type-error
     (nintendo-ware::read-file 'nintendo-ware::xwar
       (encode-record 'header-record
         (make-header-record :magic (coerce (fixture-magic "CWAR") 'simple-base-string)

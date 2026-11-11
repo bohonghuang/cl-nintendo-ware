@@ -33,7 +33,7 @@ sbcl --dynamic-space-size 4096 --non-interactive --eval '(ql:quickload :cl-ninte
                         (nintendo-ware::xseq-event-note-duration event))))
 ```
 
-每个完整文件直接读取 magic、BOM 和版本，通过 BOM 选择文件头数值及 section 布局；没有独立 header 对象。完整文件 reader 不需要 `limit` 或端序参数，输入流需要支持二进制读取和 `file-position` 定位。`read-file` 读取各 section 自己的内容，不跨 section 解引用；需要关联其他 section 的提取函数按需执行声明式解析，不缓存结果。错误目录 tag、section magic、BOM 和截断在读取容器时失败；跨节目标、事件和标签错误在相应提取 API 调用时失败。解析错误直接暴露 binstruct 原生 condition，不包装；语义校验使用 `binstruct::deserialize-error`，无法取得 input／position 时这两项为 `NIL`。
+每个完整文件直接读取 magic、BOM 和版本，通过 BOM 选择文件头数值及 section 布局；没有独立 header 对象。完整文件 reader 不需要 `limit` 或端序参数，输入流需要支持二进制读取和 `file-position` 定位。`read-file` 读取各 section 自己的内容，不跨 section 解引用；需要关联其他 section 的提取函数按需执行声明式解析，不缓存结果。错误目录 tag、section magic、BOM 和截断在读取容器时失败；跨节目标、事件和标签错误在相应提取 API 调用时失败。错误直接暴露原生 condition，不包装：未知 BOM 与其他未知枚举值一样由 `defbinenum` 的 `ecase` 抛出 `type-error`，声明式布局失败使用 binstruct condition；语义校验使用 `binstruct::deserialize-error`，无法取得 input／position 时这两项为 `NIL`。
 
 | 模块 | 结构 | 文件 magic |
 |---|---|---|
@@ -188,13 +188,13 @@ file 声明要求显式 initform、`:type` 和 `:tag`；`:tag` 可为整数或�
 
 1. 默认定义为小端；`defbinstruct/be` 在本库独立的 `*endian*` 绑定为 `:big` 时提前展开 `/be`，用 `(:type 原类型)` 共享 Lisp 数据布局。
 2. 每个 ME 类型在 symbol property 上注册 reader／writer 类型展开函数，由 binstruct 的 `define-symbol-expr-expander` 调用，不生成逐类型端序 `defmethod`，也不使用 `call-next-method`。未绑定或为 `NIL` 的编译期端序默认小端。
-3. 普通类型只生成默认／BE 两份声明；仅文件头数值 alias `nintendo-ware-u16`／`nintendo-ware-u32`、SEQ track 和 SEEK row 保留强制 LE 别名。嵌套结构和数组自动选择布局，不传递运行时端序参数。
+3. 每个完整 ME 声明生成默认小端布局、指向默认布局的 `defbinalias name/le` 和共享语义类型的大端 `name/be` 布局。`/le` 自动转发声明参数，不再为文件头数值、SEQ track 或 SEEK row 手工定义。嵌套结构和数组自动选择布局，不传递运行时端序参数。
 
 也接受 binstruct 风格的可选参数列表；生产 schema 最多三个参数。递归类型用无 body 的 `(defbinstruct/me name)` 提前注册展开函数，随后提供完整声明，见 `xseq-event-union`。打包为 32 位整数的数值子字段统一用 `(:alignment 4)`，由 binstruct 按位偏移和端序处理，不手写反序布局。
 
 `defbinalias` 和 `defbinalias/me` 共用内部宏 `%defbinalias`：首个参数是要调用的宏符号，分别传入 `defbinstruct` 和 `defbinstruct/me`；类型推断、显式 `:type` 和单值布局声明只实现一次。
 
-`defbinalias/me` 与 `defbinalias` 使用相同的类型推断和显式 `:type` 约定，通过 `defbinstruct/me` 创建 LE／BE 的 `(:constructor progn)`、`(:conc-name nil)` 单值布局。
+`defbinalias/me` 与 `defbinalias` 使用相同的类型推断和显式 `:type` 约定，通过 `defbinstruct/me` 创建默认 LE／BE 的 `(:constructor progn)`、`(:conc-name nil)` 单值布局，以及自动的 `/le` alias。
 
 引用通过 `define-nintendo-ware-reference` 声明 tag 与目标布局的对应关系，结果直接是目标值或 `NIL`，不再生成含 tag／offset 的 reference 对象。多个分支使用原生 `or` 分派；同一个 tag 在不同引用声明里可以对应不同目标类型。生成的 alias 使用 ME，以保证 BE 下的目标布局也正确分派：
 

@@ -32,7 +32,7 @@
         (macroexpand `(defbinstruct (,name ,@options) ,lambda-list ,@slots))))))
 
 (defmacro defbinstruct/me (name-and-options &body body)
-  "Define LE and shared-type BE layouts and property-based type expansion."
+  "Define LE, explicit /le alias and shared-type BE layouts with type expansion."
   (destructuring-bind (name &rest options) (ensure-list name-and-options)
     (let* ((defined-p body)
            (lambda-list (when (and body (not (member :type (first body)))) (pop body)))
@@ -48,6 +48,8 @@
       `(progn
          ,@(when defined-p
              `((defbinstruct (,name ,@options) ,lambda-list ,@body)
+               (defbinalias (,(symbolicate name '#:/le) (:type ,type)) ,lambda-list
+                 (,name ,@(parsonic::lambda-list-arguments lambda-list)))
                (defbinstruct/be (,big (:type ,type) (:endian :big)
                                      ,@(remove-if (lambda (option) (member (car option) '(:type :endian))) options))
                    ,lambda-list
