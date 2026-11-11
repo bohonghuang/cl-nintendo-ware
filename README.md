@@ -207,9 +207,9 @@ file／section body 均通过原生文件位置锚点恢复 `%header`，不再�
 
 字段使用 `(my-reference %base)`。两个声明宏均接受显式 lambda-list；无参数时写 `()`。例如 `(define-nintendo-ware-reference xbnk-instrument-reference (wave-count) (#x5900 (xbnk-instrument wave-count)))` 生成 `(xbnk-instrument-reference %base wave-count)`。数组名称显式指定：`(define-nintendo-ware-reference-array instruments (wave-count) (rcurry #'xbnk-instrument-reference wave-count))`。`curry`／`rcurry` 只是宏展开标记，不创建闭包：`(curry #'reader a b)` 生成 `(reader a b base)`，`(rcurry #'reader a b)` 生成 `(reader base a b)`；标记必须为这两个符号之一，reader 必须使用 `#'`，即 `(function reader)`。数组元素类型仍由 `binstruct::lisp-type` 推导。引用 alias 连同隐式 base 最多三个参数，数组 lambda-list 不含该隐式 base。
 
-`(:sized t)` 选择 12 字节引用，否则为 8 字节。二者均由原生 `pointer` 定位、共用 `nintendo-ware-reference-target` 的 `inline` 包装；结果不含指针或供用户解引用的偏移。非空引用校验 tag 和 offset；`-1` 为空引用，保留其 tag 未定义的既有语义。Citrus 的非零基址使 pointer 可定位到 base−1，然后由 target 内的位置比较返回 `NIL`；空引用的 size 不参与 endpoint 初始化。框架不承诺零基址空引用。
+`(:sized t)` 选择 12 字节引用，否则为 8 字节。二者使用同一个 `nintendo-ware-reference` 布局，由原生 `pointer` 定位、共用 `nintendo-ware-reference-target` 的 `inline` 包装；结果不含指针或供用户解引用的偏移。非空引用校验 tag 和 offset；`-1` 为空引用，保留其 tag 未定义的既有语义。Citrus 的非零基址使 pointer 可定位到 base−1，然后由 target 内的位置比较返回 `NIL`，不进入目标布局。框架不承诺零基址空引用。
 
-sized target 如需长度，必须在开头通过 `(%size 0 :type nintendo-ware-reference-size)` 获取并保存，再读取其他字段或子引用。它通过原生位置锚点零宽读取当前 target 的预置 start／end；嵌套 reference 会覆盖这两个全局锚点，不保证返回父布局后再次查询仍得到父 size。实际 target 完成后以同名 end position 记录真正结尾。普通引用没有声明长度，目标按自身布局读取；不为其预置一个需要 seek 到的无限 endpoint。
+sized target 如需长度，必须在开头通过 `(%size 0 :type nintendo-ware-reference-size)` 获取并保存，再读取其他字段或子引用。这个 ME alias 通过原生零宽 `pointer`，按引用的端序直接读取 `$nintendo-ware-reference-size` 指向的 u32 size 字段；嵌套 reference 会覆盖该全局锚点，不保证返回父布局后再次查询仍得到父 size。普通引用没有声明长度，目标按自身布局读取，不使用 size 查询。target 以局部 `%start`／`%end` 记录实际读取范围；sized target 末尾保留原生 `peek`／`map` 声明，读取时不改动 size，理论上写入时可将实际长度回写到捕获的 size 字段位置。此回写不实现额外手工逻辑，也未测试、不保证 writer 可用；不再预置 target endpoint 或通过 endpoint 相减取得声明长度。
 
 SAR 字符串和 SAR／GRP 原始数据目标使用 sized 长度；WAR 直接返回 WAV 对象，WAV 仍由自身布局解析，不套 sized-reference 长度限制。`xwar-info-entries` 不再含 `xwar-entry` 包装，`xwar-waves` 直接返回该数组；Citrus 消费端已同步。STM 原先仅保留引用的 sample-data、REGN data、SAR stream sends／extension 也改为已解析的语义值。文件头的区块目录由内部 `nintendo-ware-file-block` 保存 tag／offset／size，供容器定位区块；它不是 typed resource reference，不导出这些目录访问器。
 

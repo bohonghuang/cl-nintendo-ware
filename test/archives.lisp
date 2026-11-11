@@ -267,7 +267,7 @@
                                                                  (cl-nintendo-ware.test::make-xwav-dsp-adpcm-context :history-2 456))) 2)))))
                        :version (* major-version #x1000000))))
 
-;; Each target captures its declared size before a child shadows the anchors.
+;; Each target captures its declared size before a child shadows the size anchor.
 (nintendo-ware::define-nintendo-ware-reference (reference-probe-child (:sized t)) ()
   (#x7001 (nintendo-ware::nintendo-ware-reference-octets)))
 (nintendo-ware::defbinstruct/me reference-probe-parent ()

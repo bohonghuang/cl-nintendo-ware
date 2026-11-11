@@ -4,43 +4,39 @@
   (map (satisfies (signed-byte 32) (curry #'= -1))
        (constantly nil) (constantly -1)))
 
-(defbinstruct/me (nintendo-ware-reference-target (:type t) (:constructor progn) (:conc-name nil)) (type base &optional (size -1))
-  ($nintendo-ware-reference-start 0 :type position)
-  ($nintendo-ware-reference-end 0 :type (ecase (<= base $nintendo-ware-reference-start)
-                                          ((t) (pointer position (map null (constantly size)) $nintendo-ware-reference-start))
-                                          ((nil) (map (null) (constantly (1- $nintendo-ware-reference-start)) (constantly nil)))))
-  (values nil :type (ecase (<= base $nintendo-ware-reference-start)
+(defbinstruct/me (nintendo-ware-reference-target (:type t)
+                  (:constructor progn) (:conc-name nil)) (type base size-base)
+  (%start 0 :type position)
+  (values nil :type (ecase (<= base %start)
                      ((t) (inline type))
                      ((nil) null)))
-  ($nintendo-ware-reference-end 0 :type position))
+  (%end 0 :type position)
+  (nil nil :type (ecase (null size-base)
+                   ((t) (null))
+                   ((nil) (binstruct::peek
+                           (map (unsigned-byte 32) #'identity
+                                (constantly (- %end %start)))
+                           size-base)))))
 
-(defbinstruct (nintendo-ware-reference-size (:type (unsigned-byte 32)) (:constructor progn) (:conc-name nil)) ()
-  (%start 0 :type (values (pointer position (map null (constantly 0))
-                                 $nintendo-ware-reference-start)))
-  (%end 0 :type (values (pointer position (map null (constantly 0))
-                               $nintendo-ware-reference-end)))
-  (values 0 :type (map null (constantly (- %end %start)))))
+;; Only sized targets may query this anchor; capture it before reading children.
+(defbinalias/me nintendo-ware-reference-size ()
+  (pointer (unsigned-byte 32) (map (null) (constantly 0) (constantly nil))
+           $nintendo-ware-reference-size))
 
 (defbinstruct/me (nintendo-ware-reference (:type t)
-                  (:constructor progn) (:conc-name nil)) (tag type base)
+                  (:constructor progn) (:conc-name nil)) (tag type base &optional sized)
   (%tag 0 :type (unsigned-byte 16))
   (nil 0 :type (unsigned-byte 16))
-  (values nil :type (pointer (nintendo-ware-reference-target (inline type) base)
-                            (satisfies (signed-byte 32)
-                              (lambda (offset)
-                                (and (<= -1 offset) (or (= offset -1) (= %tag tag)))))
-                            base)))
-
-(defbinstruct/me (nintendo-ware-sized-reference (:type t)
-                  (:constructor progn) (:conc-name nil)) (tag type base)
-  (%tag 0 :type (unsigned-byte 16))
-  (nil 0 :type (unsigned-byte 16))
-  (values nil :type (pointer (nintendo-ware-reference-target (inline type) base %size)
+  (values nil :type (pointer (nintendo-ware-reference-target
+                             (inline type) base (when %size $nintendo-ware-reference-size))
                             (satisfies (signed-byte 32)
                               (lambda (offset)
                                 (and (<= -1 offset) (or (= offset -1) (= %tag tag)))))
                             base))
-  (%size 0 :type (unsigned-byte 32)))
+  ($nintendo-ware-reference-size 0 :type position)
+  (%size nil :type (ecase sized
+                    ((nil) (null))
+                    ((t) (unsigned-byte 32)))))
 
 (defbinstruct/me (nintendo-ware-reference-octets
                   (:type (simple-array (unsigned-byte 8) (*)))
@@ -56,9 +52,7 @@
 
 (defmacro define-nintendo-ware-reference (name-and-options lambda-list &body variants)
   (destructuring-bind (name &rest options) (ensure-list name-and-options)
-    (let ((reference (if (cadr (assoc :sized options))
-                         'nintendo-ware-sized-reference
-                         'nintendo-ware-reference)))
+    (let ((sized (cadr (assoc :sized options))))
       (with-gensyms (base)
         `(defbinalias/me (,name (:type (or null ,@(remove-duplicates
                                                   (mapcar (lambda (variant)
@@ -67,7 +61,7 @@
                                                   :test #'equal))))
              (,base ,@lambda-list)
            (or ,@(loop for (tag type) in variants
-                       collect `(,reference ,tag ,type ,base))))))))
+                       collect `(nintendo-ware-reference ,tag ,type ,base ,sized))))))))
 
 (defmacro define-nintendo-ware-reference-array
     (name lambda-list (binding (function reference) &rest arguments))
