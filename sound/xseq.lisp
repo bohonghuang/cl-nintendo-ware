@@ -582,12 +582,10 @@
   ($xseq-events-start 0 :type position)
   (%size 0 :type nintendo-ware-tail-size)
   (%magic #.(coerce "" 'simple-base-string) :type (values nintendo-ware-magic))
-  (%endian :little :type (values nintendo-ware-endian))
-  (%little nil :type (map null (constantly (and (string= %magic "FSEQ") (eq %endian :little)))))
   (events #.(make-array 0 :element-type 'xseq-event)
-          :type (ecase %little
-                  ((t) (xseq-track/le (+ %position %size)))
-                  ((nil) (xseq-track/be (+ %position %size))))))
+          :type (ecase (string= %magic "CSEQ")
+                  ((t) (xseq-track/be (+ %position %size)))
+                  ((nil) (xseq-track (+ %position %size))))))
 
 (define-nintendo-ware-file (xseq (:magic ("CSEQ" "FSEQ")))
   (data (make-xseq-data) :type xseq-data :tag #x5000)
