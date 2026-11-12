@@ -54,11 +54,5 @@
                    (apply #'binstruct::expand-reader-type-expr
                           (ecase (or (and (boundp '*endian*) *endian*) :little)
                             (:little ',little) (:big ',big))
-                          arguments))
-                 (get ',name 'binstruct::expand-writer-type-expr)
-                 (lambda (&rest arguments)
-                   (apply #'binstruct::expand-writer-type-expr
-                          (ecase (or (and (boundp '*endian*) *endian*) :little)
-                            (:little ',little) (:big ',big))
                           arguments))))))))
 

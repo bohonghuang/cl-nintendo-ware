@@ -185,7 +185,7 @@ CSTM SEEK 上下文固定小端；当前 FSTM SEEK 布局按 Citric 的参考实
 `defbinstruct/me` 的规则：
 
 1. 默认定义为小端；`defbinstruct/be` 在本库独立的 `*endian*` 绑定为 `:big` 时提前展开 `/be`，用 `(:type 原类型)` 共享 Lisp 数据布局。
-2. 每个 ME 类型自动生成指向默认定义的 `/le` alias。reader／writer 的 symbol-property 函数只选择 `/le` 或 `/be`，将参数原样透传给 binstruct 的 `expand-reader-type-expr`／`expand-writer-type-expr`；未绑定或为 `NIL` 的编译期端序默认小端。
+2. 每个 ME 类型自动生成指向默认定义的 `/le` alias。reader 的 symbol-property 函数只选择 `/le` 或 `/be`，将参数原样透传给 binstruct 的 `expand-reader-type-expr`；未绑定或为 `NIL` 的编译期端序默认小端。不注册 writer plist function，writer 保留 binstruct 原生实现。
 3. inline 参数处理和 reader／writer 展开归 binstruct；ME 宏不扫描 inline 参数，不手写 parser unit 或 emitter 调用。既有调用方和显式强制 LE alias 保持原样。
 
 也接受 binstruct 风格的可选参数列表；生产 schema 最多三个参数。递归类型用无 body 的 `(defbinstruct/me name)` 提前注册展开函数，随后提供完整声明，见 `xseq-event-union`。打包为 32 位整数的数值子字段统一用 `(:alignment 4)`，由 binstruct 按位偏移和端序处理，不手写反序布局。
