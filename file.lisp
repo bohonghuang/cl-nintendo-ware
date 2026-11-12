@@ -14,16 +14,6 @@
   ($nintendo-ware-file-start 0 :type position)
   (values 0 :type (map null (constantly $nintendo-ware-file-start))))
 
-(defbinstruct (nintendo-ware-file-sections-position (:type non-negative-fixnum)
-                                                 (:constructor progn) (:conc-name nil)) ()
-  ($nintendo-ware-file-sections 0 :type position)
-  (values 0 :type (map null (constantly $nintendo-ware-file-sections))))
-
-(defbinstruct (nintendo-ware-file-end-position (:type non-negative-fixnum)
-                                            (:constructor progn) (:conc-name nil)) ()
-  ($nintendo-ware-file-end 0 :type position)
-  (values 0 :type (map null (constantly $nintendo-ware-file-end))))
-
 (defbinalias nintendo-ware-magic ()
   (pointer (simple-base-string 4) (map null (constantly 0)) $nintendo-ware-file-start))
 (defbinalias/me nintendo-ware-version ()
@@ -42,12 +32,8 @@
                                             (map null (constantly 0)) %position))
                            (curry #'= tag)))
   (%origin 0 :type (values (pointer position (map null (constantly 0)) $nintendo-ware-file-start)))
-  (%directory 0 :type (values (pointer position (map null (constantly 0)) $nintendo-ware-file-sections)))
-  (%end 0 :type (values (pointer position (map null (constantly 0)) $nintendo-ware-file-end)))
   (values nil :type (nintendo-ware-reference tag (inline type) %origin t))
-  (%restore-origin 0 :type (values (pointer nintendo-ware-file-position (map null (constantly %origin)))))
-  (%restore-directory 0 :type (values (pointer nintendo-ware-file-sections-position (map null (constantly %directory)))))
-  (%restore-end 0 :type (values (pointer nintendo-ware-file-end-position (map null (constantly %end))))))
+  (%restore-origin 0 :type (values (pointer nintendo-ware-file-position (map null (constantly %origin))))))
 
 (defbinstruct nintendo-ware-file (expected-magic section/be section/le)
   ($nintendo-ware-file-start 0 :type position)
@@ -58,9 +44,6 @@
   (%header-size 20 :type (ecase endian (:little nintendo-ware-u16/le) (:big nintendo-ware-u16/be)))
   (version 0 :type (ecase endian (:little nintendo-ware-u32/le) (:big nintendo-ware-u32/be)))
   (%file-size 20 :type (ecase endian (:little nintendo-ware-u32/le) (:big nintendo-ware-u32/be)))
-  (%limit 0 :type (values (pointer nintendo-ware-file-end-position
-                                  (map null (constantly (+ %origin %file-size))))))
-  ($nintendo-ware-file-sections 0 :type position)
   (%block-count 0 :type (ecase endian (:little nintendo-ware-u16/le) (:big nintendo-ware-u16/be)))
   (%padding 0 :type (ecase endian (:little nintendo-ware-u16/le) (:big nintendo-ware-u16/be)))
   (sections #() :type (ecase endian

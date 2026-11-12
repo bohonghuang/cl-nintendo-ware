@@ -142,7 +142,7 @@ GRP 条目通过 `nintendo-ware::xgrp-entry-file-id` 保留归档中的原始文
 
 ## 事件与端序
 
-`xseq-events` 返回具体事件对象的向量，可直接以 `xseq-event-note`、`xseq-event-tempo` 等类型进行 CLOS 分派。字段直接表达音高、力度、时值、数值及内嵌 `sub-event`；不暴露 opcode、事件原始字节或二进制位置。开轨、跳转、调用的 `index` 是该向量的零基索引。DATA 不读取 LABL；LABL 保留原声明的标签名称和偏移，本次不做标签偏移到事件索引的关联，也不校验标签是否指向事件边界。
+`xseq-events` 返回具体事件对象的向量，可直接以 `xseq-event-note`、`xseq-event-tempo` 等类型进行 CLOS 分派。字段直接表达音高、力度、时值、数值及内嵌 `sub-event`；不暴露 opcode、事件原始字节或二进制位置。开轨、跳转、调用的 `index` 是该向量的零基索引。DATA 与 LABL 互不引用；LABL 的 `xseq-label-entry-offset` 直接保留原始有符号 offset（包括 `-1`），不跟随目标、不转换为事件索引，也不校验事件边界。
 
 `define-xseq-event` 仿照 Nitro 的 `define-sseq-event`，从同一份字段声明生成完整和 `/partial` 布局；random/variable 内嵌的子事件使用 `/partial`，省略最后一个参数，而不是最后一个字节。多字节事件标记不产生额外的消费对象，reader 直接返回具体事件类型。
 
@@ -168,9 +168,9 @@ CSTM SEEK 上下文固定小端；当前 FSTM SEEK 布局按 Citric 的参考实
   (info (make-sample-info) :type sample-info :tag #x1000))
 ```
 
-不再构造或重读旧 header 对象。file-section accessor 保持单参数签名，返回 `sections` 中首个匹配语义类型的 section 或 `NIL`。`$nintendo-ware-file-sections` 位于文件原点 +16，指向目录 count；首项位于该锚点 +4。每个目录引用返回后恢复所属文件的起点、目录与终点锚点，避免内嵌 WAV 覆盖外层上下文。BOM 使用固定 BE 枚举：FF FE 为 LE、FE FF 为 BE，未知值暴露原生 `type-error`。GRP／XSAR 只读取原始子文件数据；显式读取子文件时，由其自身容器读取 BOM。高阶 `inline` 用于容器和 typed reference 的共用包装，具体记录和事件不直接使用高阶 parser。
+不再构造或重读旧 header 对象。file-section accessor 保持单参数签名，返回 `sections` 中首个匹配语义类型的 section 或 `NIL`。每个目录引用返回后恢复所属文件的起点锚点，避免内嵌 WAV 覆盖外层上下文。BOM 使用固定 BE 枚举：FF FE 为 LE、FE FF 为 BE，未知值暴露原生 `type-error`。GRP／XSAR 只读取原始子文件数据；显式读取子文件时，由其自身容器读取 BOM。高阶 `inline` 用于容器和 typed reference 的共用包装，具体记录和事件不直接使用高阶 parser。
 
-只有确实需要剩余长度的布局使用零宽类型 `nintendo-ware-tail-size`，保存在 `%size`：它通过当前 section 的原生终点锚点返回剩余长度，不消费输入。需要绝对结束位置时，就地用 `%position + %size` 计算。目前 SEQ 的无计数事件流和 SEEK 的尾部 padding 使用此布局；不向其他 body 注入 header 或尾长字段。
+只有确实需要剩余长度的布局使用零宽类型 `nintendo-ware-tail-size`，保存在 `%size`：它通过当前 section 的起点锚点回读对应端序的 size 字段，计算剩余长度，不消费输入。需要绝对结束位置时，就地用 `%position + %size` 计算。目前 SEQ 的无计数事件流和 SEEK 的尾部 padding 使用此布局；不向其他 body 注入 header 或尾长字段。
 
 ```lisp
 (defbinstruct/me sample-point

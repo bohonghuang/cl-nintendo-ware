@@ -509,24 +509,12 @@
 ;; The event stream's endian is independent of the surrounding section.
 (defbinalias xseq-track/le (end) (xseq-track end))
 
-(defbinstruct/me (xseq-label-event-index (:type (unsigned-byte 32))
-                  (:constructor progn) (:conc-name nil)) ()
-  (%position 0 :type position)
-  (%base 0 :type (values (pointer position (map null (constantly 0)) $xseq-events-start)))
-  (values 0 :type (map null (constantly (- %position %base)))))
-(define-nintendo-ware-reference xseq-label-event-reference ()
-  (#x1f00 (xseq-label-event-index)))
-
-(defbinstruct/me (xseq-label-index-at-reference (:type (or null (unsigned-byte 32)))
-                                              (:constructor progn) (:conc-name nil)) (source)
-  (%base 0 :type position)
-  (values 0 :type (values (pointer (xseq-label-event-reference %base) (map null (constantly source))))))
-
 (defbinstruct/me xseq-label-entry ()
-  (%source 0 :type position)
-  (index 0 :type (pointer (xseq-label-index-at-reference %source)
-                         (map null (constantly 0)) $xseq-events-start))
-  (nil #.(make-array 0 :element-type '(unsigned-byte 8)) :type (simple-array (unsigned-byte 8) (8)))
+  (%tag 0 :type (unsigned-byte 16))
+  (nil 0 :type (unsigned-byte 16))
+  (offset -1 :type (satisfies (signed-byte 32)
+                   (lambda (offset)
+                     (and (<= -1 offset) (or (= offset -1) (= %tag #x1f00))))))
   (length 0 :type (unsigned-byte 32))
   (name #.(coerce "" 'simple-base-string) :type (simple-base-string length))
   (nil 0 :type (satisfies (unsigned-byte 8))))
@@ -577,7 +565,6 @@
 (define-nintendo-ware-section (xseq-data (:magic "DATA"))
   ;; Unlike counted records, this event stream ends at the DATA boundary.
   (%position 0 :type position)
-  ($xseq-events-start 0 :type position)
   (%size 0 :type nintendo-ware-tail-size)
   (%magic #.(coerce "" 'simple-base-string) :type (values nintendo-ware-magic))
   (events #.(make-array 0 :element-type 'xseq-event)

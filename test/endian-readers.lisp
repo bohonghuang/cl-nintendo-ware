@@ -51,6 +51,23 @@
                (info (tail-probe-info file)))
           (assert (= #x01020304 (tail-probe-info-body-value (tail-probe-info-body info))))
           (assert (equalp tail (tail-probe-info-body-tail (tail-probe-info-body info)))))
+        ;; LABL stores offsets verbatim, even without a DATA section.
+        (dolist (offset '(-1 0 #x12345678))
+          (let* ((payload
+                   (octets-join
+                    (encode-record 'reference-table
+                      (make-reference-table :count 1
+                        :entries (vector (make-reference :type #x5100 :offset 12))))
+                    (encode-record 'xseq-label-entry
+                      (make-xseq-label-entry :target (make-reference :type #x1f00 :offset offset)
+                        :length 5 :name #.(coerce "start" 'simple-base-string)))))
+                 (file (nintendo-ware::read-file 'nintendo-ware::xseq
+                         (container-fixture "CSEQ" (list (list #x5001 "LABL" payload)))))
+                 (label (aref (nintendo-ware::xseq-labels-body-entries
+                                (nintendo-ware::xseq-labels-body (nintendo-ware::xseq-labels file))) 0)))
+            (assert (null (nintendo-ware::xseq-data file)))
+            (assert (= offset (nintendo-ware::xseq-label-entry-offset label)))
+            (assert (string= "start" (nintendo-ware::xseq-label-entry-name label)))))
         (let* ((little (and (eq family :f) (eq endian :little)))
                (payload (if little
                             #(162 225 44 1 160 60 100 244 255 12 0 240 128 3 254 255 240 172 5 255)
@@ -72,6 +89,9 @@
                            #(136 2 0 0 11 162 138 0 0 11 255 137 0 0 10)))
                  (flow (nintendo-ware::read-file 'nintendo-ware::xseq (sequence-fixture body :label-offset 11)))
                  (events (nintendo-ware::xseq-events flow)))
+            (assert (= 11 (nintendo-ware::xseq-label-entry-offset
+                           (aref (nintendo-ware::xseq-labels-body-entries
+                                   (nintendo-ware::xseq-labels-body (nintendo-ware::xseq-labels flow))) 0))))
             (assert (= 3 (nintendo-ware::xseq-event-open-track-index (aref events 0))))
             (assert (= 3 (nintendo-ware::xseq-event-call-index
                            (nintendo-ware::xseq-event-if-sub-event (aref events 1)))))
