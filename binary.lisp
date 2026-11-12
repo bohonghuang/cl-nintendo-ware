@@ -27,7 +27,9 @@
       ;; going through a field's type hook.
       (let ((options (loop for (key value) in options
                            collect (if (eq key :include)
-                                       (list key (binstruct::expand-reader-type value))
+                                       (list key (let* ((symbol (car (ensure-list value)))
+                                                        (*package* (symbol-package symbol)))
+                                                   (cons (symbolicate symbol '#:/be) (cdr (ensure-list value)))))
                                        (list key value)))))
         (macroexpand `(defbinstruct (,name ,@options) ,lambda-list ,@slots))))))
 
@@ -55,7 +57,7 @@
                                     (:little little)
                                     (:big big))
                                 ,args))
-                     (get ',little 'binstruct::expand-writer-type-expr)
+                     (get ',little 'binstruct::expand-reader-type-expr)
                      (lambda (&rest ,args)
                        (with-gensyms (,symbol)
                          (subst ',name ,symbol (apply #'binstruct::expand-reader-type-expr ,symbol ,args))))

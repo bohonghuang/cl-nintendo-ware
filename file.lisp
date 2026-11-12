@@ -48,7 +48,7 @@
            (body (symbolicate name '-body))
            (variants (loop for (slot initform . fields) in sections
                            append (loop for tag in (ensure-list (getf fields :tag))
-                                        collect `(nintendo-ware-file-section ,tag ,(getf fields :type))))))
+                                        collect `(nintendo-ware-file-section ,tag ,(ensure-list (getf fields :type)))))))
       `(progn
          (defbinalias/me (,body (:type t)) () (or ,@variants))
          (defbinstruct (,name (:include (nintendo-ware-file ',magic
