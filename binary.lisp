@@ -53,9 +53,9 @@
                (setf (get ',name 'binstruct::expand-reader-type-expr)
                      (lambda (&rest ,args)
                        (apply #'binstruct::expand-reader-type-expr
-                                ',(ecase (or (when (boundp '*endian*) *endian*) :little)
-                                    (:little little)
-                                    (:big big))
+                                (ecase (or (when (boundp '*endian*) *endian*) :little)
+                                  (:little ',little)
+                                  (:big ',big))
                                 ,args))
                      (get ',little 'binstruct::expand-reader-type-expr)
                      (lambda (&rest ,args)

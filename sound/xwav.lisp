@@ -25,12 +25,17 @@
   (#x0300 (xwav-dsp-adpcm-info))
   (#x0301 (xwav-ima-adpcm-info)))
 
+(defbinstruct/me (xwav-ima-samples (:type (simple-array (unsigned-byte 4) (*)))
+                                (:constructor progn) (:conc-name nil)) (count)
+  (values #.(make-array 0 :element-type '(unsigned-byte 4))
+          :type (simple-array (unsigned-byte 4) (count))))
+
 (define-nintendo-ware-reference xwav-samples-reference (codec sample-count)
   (#x1f00 (ecase codec
             (pcm-8 (simple-array (signed-byte 8) (sample-count)))
             (pcm-16 (simple-array (signed-byte 16) (sample-count)))
             (dsp-adpcm (simple-array (unsigned-byte 8) ((* 8 (ceiling sample-count 14)))))
-            (ima-adpcm (simple-array (unsigned-byte 4) (sample-count))))))
+            (ima-adpcm (xwav-ima-samples sample-count)))))
 
 (defbinstruct/me (xwav-samples-at-reference (:type (or null array))
                                           (:constructor progn) (:conc-name nil)) (source codec count)

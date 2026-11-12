@@ -10,7 +10,7 @@
 - `define-nintendo-ware-file` and `define-nintendo-ware-section` follow Nitro: name/options then fields, no lambda list. Concrete files, sections and their bodies take no arguments. Public containers use inline body, a native end-position marker before padding, and declarative remaining padding. Keep this future-writer structure; do not implement size backpatching or promise writer correctness. Bodies recover their header from the native file anchor. Modern files still locate sections through sized references, not assumed contiguous order.
 - `defbinstruct/me` defines default LE and shared-type BE readers and registers reader/writer symbol-property expanders. Only header, SEQ track and SEEK row retain forced-LE aliases. Protected BE expansion uses this library's `*endian*`; inline container arguments must explicitly select the corresponding body parser rather than relying on schema-type dispatch.
 - Return binstruct structures directly. The explicit cl-nitro-style `xsar-files` helper returns a simple-vector of `(name . data)` conses, with `xsar-file-name`/`xsar-file-data` as car/cdr accessors. Otherwise do not add post-parse result models, resource views, hand-built object graphs or manual binary decoding.
-- Preserve serial ASDF order. `file.lisp` loads before `section.lisp`; `sound/sound.lisp` loads before every concrete sound module. Complete-file readers are generated in their owning modules after their schemas.
+- Declare real ASDF component dependencies explicitly with `:depends-on`; do not use `:serial t` to chain unrelated formats or tests. Shared macros and schemas load before their consumers; `sound/sound.lisp` precedes concrete sound modules. WAR and STM depend on WAV; WSD depends on BNK. Complete-file readers are generated in their owning modules after their schemas.
 - XSAR extracts raw octet vectors declaratively from sized references; never dispatch embedded readers, inspect child magic/BOM or validate child events while reading XSAR. Callers explicitly select `read-file` types afterward. Keep file IDs including absent/external entries (NIL data); zero-length data stays an octet vector. Names are optional resource aliases, not synthesized filenames; later named resources win in sounds/banks/wave-archives/groups order. WAR/GRP embedded parsing is unchanged.
 - Public API ergonomics take priority over exporting implementation details. Keep `package.lisp` concise like cl-nitro: expose `read-file`, file symbols and genuinely useful file-level extraction tools (`xseq-events`, `xwar-waves`, `xsar-files` and its `xsar-file-name`/`xsar-file-data` aliases). Do not export a section, field accessor, event type, constructor or macro merely to make it accessible; prefer requiring users to explicitly use `nintendo-ware::` for internals. Do not add trivial wrappers or an extractor for every field/file just to expand the public surface. Declare all public exports in `package.lisp`'s `defpackage`, never in modules or macro expansions. Keep internal field definitions unchanged; all library references in tests use `nintendo-ware::`. Reloading the package declaration after the library must not produce package-variance warnings.
 
@@ -23,11 +23,13 @@
 
 Use SBCL with Quicklisp initialized. After moving the repository into `local-projects/`, run `(ql:register-local-projects)`.
 
+Always load systems with `asdf:load-system`. NEVER use `ql:quickload`, including for dependencies, builds, tests or smoke runs. Compiler diagnostics MUST remain visible: NEVER use silent/quiet-compilation wrappers, output suppression or handlers that hide compiler errors or warnings. Expose compiler errors and warnings in tool output and report failures rather than suppressing them.
+
 ```bash
 # Load/build
-sbcl --non-interactive --eval '(ql:quickload :cl-nintendo-ware :silent t)'
+sbcl --non-interactive --eval '(asdf:load-system :cl-nintendo-ware)'
 # All reader tests
-sbcl --non-interactive --eval '(ql:quickload :cl-nintendo-ware :silent t)' \
+sbcl --non-interactive --eval '(asdf:load-system :cl-nintendo-ware)' \
   --eval '(asdf:test-system :cl-nintendo-ware)'
 ```
 
