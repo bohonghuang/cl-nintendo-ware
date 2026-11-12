@@ -337,10 +337,9 @@
          (events (nintendo-ware::xseq-events sequence))
          (note (aref events 0)) (tempo (aref events 1))
          (random (aref events 2)) (extended (aref events 3))
-         (label (aref (nintendo-ware::xseq-labels-entries (nintendo-ware::xseq-labels sequence)) 0)))
-    (assert (= #x01020300 (nintendo-ware::nintendo-ware-file-header-version (nintendo-ware::xseq-header sequence))))
+         (label (aref (nintendo-ware::xseq-labels-body-entries (nintendo-ware::xseq-labels-body (nintendo-ware::xseq-labels sequence))) 0)))
+    (assert (= #x01020300 (nintendo-ware::nintendo-ware-file-version sequence)))
     (assert (string= "start" (nintendo-ware::xseq-label-entry-name label)))
-    (assert (= 0 (nintendo-ware::xseq-label-entry-index label)))
     (assert (typep note 'nintendo-ware::xseq-event-note))
     (assert (= 60 (nintendo-ware::xseq-event-note-key note)))
     (assert (= 100 (nintendo-ware::xseq-event-note-velocity note)))
@@ -354,8 +353,7 @@
     (assert (= -2 (nintendo-ware::xseq-event-set-variable-value extended)))
     (assert (typep (aref events 4) 'nintendo-ware::xseq-event-finish))
     (assert (equalp sequence (nintendo-ware::read-file 'nintendo-ware::xseq (flexi-streams:make-in-memory-input-stream bytes))))
-    (rejects binstruct::deserialize-error (nintendo-ware::read-file 'nintendo-ware::xwav bytes))
-    (rejects binstruct::deserialize-error (nintendo-ware::read-file 'nintendo-ware::xseq (sequence-fixture #(#xff) :label-offset 24))))
+    (rejects binstruct::deserialize-error (nintendo-ware::read-file 'nintendo-ware::xwav bytes)))
   ;; Enum operands remain semantic under ordinary and nested event readers.
   (let ((events (nintendo-ware::xseq-events
                  (nintendo-ware::read-file 'nintendo-ware::xseq
@@ -393,9 +391,7 @@
   ;; Byte targets 11 and 10 become event indices 3 and 2, including nested control flow.
   (let* ((sequence (nintendo-ware::read-file 'nintendo-ware::xseq
                      (sequence-fixture #(136 2 0 0 11 162 138 0 0 11 255 137 0 0 10) :label-offset 11)))
-         (events (nintendo-ware::xseq-events sequence))
-         (label (aref (nintendo-ware::xseq-labels-entries (nintendo-ware::xseq-labels sequence)) 0)))
-    (assert (= 3 (nintendo-ware::xseq-label-entry-index label)))
+         (events (nintendo-ware::xseq-events sequence)))
     (assert (= 3 (nintendo-ware::xseq-event-open-track-index (aref events 0))))
     (assert (= 3 (nintendo-ware::xseq-event-call-index (nintendo-ware::xseq-event-if-sub-event (aref events 1)))))
     (assert (= 2 (nintendo-ware::xseq-event-jump-index (aref events 3)))))

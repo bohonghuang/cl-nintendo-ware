@@ -1,108 +1,96 @@
 (in-package #:nintendo-ware)
 
-(defbinstruct (nintendo-ware-file-byte-order (:type (member :little :big)) (:constructor progn) (:conc-name nil) (:endian :big)) ()
-  (%value #xfffe :type (satisfies (unsigned-byte 16) (rcurry #'member '(#xfffe #xfeff))))
-  (values :little :type (map null (lambda (ignored) (declare (ignore ignored))
-                                   (ecase %value (#xfffe :little) (#xfeff :big))))))
+(defbinenum (nintendo-ware-file-byte-order (:type (unsigned-byte 16)) (:endian :big)) ()
+  (:little #xfffe)
+  (:big #xfeff))
 
-(defbinstruct/me nintendo-ware-file-block ()
-  (type 0 :type (unsigned-byte 16))
-  (padding 0 :type (unsigned-byte 16))
-  (offset -1 :type (signed-byte 32))
-  (size 0 :type (unsigned-byte 32)))
-
-(defbinstruct/me nintendo-ware-file-header (start magic endian)
-  (start 0 :type (map null (constantly start)))
-  (magic #.(coerce "" 'simple-base-string) :type (map null (constantly magic)))
-  (endian :little :type (map null (constantly endian)))
-  (header-size 20 :type (unsigned-byte 16))
-  (version 0 :type (unsigned-byte 32))
-  (file-size 20 :type (unsigned-byte 32))
-  (block-count 0 :type (unsigned-byte 16))
-  (padding 0 :type (unsigned-byte 16))
-  (references #() :type (simple-array nintendo-ware-file-block (block-count)))
-  (%valid nil :type (map null (lambda (ignored) (declare (ignore ignored))
-                                (validate-header references)))))
-
-;; Explicit LE entry: embedded headers do not inherit their parent's endian.
-(defbinalias nintendo-ware-file-header/le (start magic endian) (nintendo-ware-file-header start magic endian))
-
-(defbinstruct (nintendo-ware-file-header-reader (:type nintendo-ware-file-header) (:constructor progn) (:conc-name nil)) ()
-  (%start 0 :type position)
-  (%magic #.(coerce "" 'simple-base-string) :type (simple-base-string 4))
-  (%endian :little :type nintendo-ware-file-byte-order)
-  (values nil :type (ecase %endian
-                     (:little (nintendo-ware-file-header/le %start %magic %endian))
-                     (:big (nintendo-ware-file-header/be %start %magic %endian)))))
-
-(defun nintendo-ware-file-header-version-major (header)
-  (mod (floor (nintendo-ware-file-header-version header) (if (char= (char (nintendo-ware-file-header-magic header) 0) #\C) #x1000000 #x10000)) 256))
-
-(defun validate-header (references)
-  (loop :for index :below (length references) :for current := (aref references index)
-        :do (loop :for previous-index :below index :for previous := (aref references previous-index)
-                  :do (when (= (nintendo-ware-file-block-type current) (nintendo-ware-file-block-type previous))
-                        (error 'binstruct::deserialize-error
-                               :input nil :position nil
-                               :info "Duplicate block tag"))))
-  nil)
-
-(defun block-reference (header type &optional (required t))
-  (or (find type (nintendo-ware-file-header-references header) :key #'nintendo-ware-file-block-type)
-      (when required (error 'binstruct::deserialize-error
-                            :input nil :position nil
-                            :info (format nil "Missing block #x~X" type)))))
-
-(defun block-start (header type)
-  (+ (nintendo-ware-file-header-start header) (nintendo-ware-file-block-offset (block-reference header type))))
+(defbinalias/me nintendo-ware-u16 () (unsigned-byte 16))
+(defbinalias/me nintendo-ware-u32 () (unsigned-byte 32))
+(defbinalias nintendo-ware-u16/le () nintendo-ware-u16)
+(defbinalias nintendo-ware-u32/le () nintendo-ware-u32)
 
 (defbinstruct (nintendo-ware-file-position (:type non-negative-fixnum)
-                                           (:constructor progn) (:conc-name nil)) ()
+                                        (:constructor progn) (:conc-name nil)) ()
   ($nintendo-ware-file-start 0 :type position)
   (values 0 :type (map null (constantly $nintendo-ware-file-start))))
 
-(defbinstruct nintendo-ware-file (expected-magic body/be body/le)
+(defbinstruct (nintendo-ware-file-sections-position (:type non-negative-fixnum)
+                                                 (:constructor progn) (:conc-name nil)) ()
+  ($nintendo-ware-file-sections 0 :type position)
+  (values 0 :type (map null (constantly $nintendo-ware-file-sections))))
+
+(defbinstruct (nintendo-ware-file-end-position (:type non-negative-fixnum)
+                                            (:constructor progn) (:conc-name nil)) ()
+  ($nintendo-ware-file-end 0 :type position)
+  (values 0 :type (map null (constantly $nintendo-ware-file-end))))
+
+(defbinalias nintendo-ware-magic ()
+  (pointer (simple-base-string 4) (map null (constantly 0)) $nintendo-ware-file-start))
+(defbinalias nintendo-ware-endian ()
+  (pointer nintendo-ware-file-byte-order (map null (constantly 4)) $nintendo-ware-file-start))
+(defbinstruct (nintendo-ware-version (:type (unsigned-byte 32))
+                                   (:constructor progn) (:conc-name nil)) ()
+  (%endian :little :type (values nintendo-ware-endian))
+  (values 0 :type (values (pointer (ecase %endian
+                                    (:little nintendo-ware-u32/le)
+                                    (:big nintendo-ware-u32/be))
+                                  (map null (constantly 8)) $nintendo-ware-file-start))))
+(defbinstruct (nintendo-ware-major-version (:type (unsigned-byte 8))
+                                         (:constructor progn) (:conc-name nil)) ()
+  (%magic #.(coerce "" 'simple-base-string) :type (values nintendo-ware-magic))
+  (%version 0 :type nintendo-ware-version)
+  (values 0 :type (map null (constantly
+                            (ldb (byte 8 (if (char= (char %magic 0) #\C) 24 16)) %version)))))
+
+(defbinstruct/me (nintendo-ware-file-section (:type t)
+                                           (:constructor progn) (:conc-name nil)) (tag type)
+  (%position 0 :type position)
+  (%tag 0 :type (satisfies (values (pointer (unsigned-byte 16)
+                                            (map null (constantly 0)) %position))
+                           (curry #'= tag)))
+  (%origin 0 :type (values (pointer position (map null (constantly 0)) $nintendo-ware-file-start)))
+  (%directory 0 :type (values (pointer position (map null (constantly 0)) $nintendo-ware-file-sections)))
+  (%end 0 :type (values (pointer position (map null (constantly 0)) $nintendo-ware-file-end)))
+  (values nil :type (nintendo-ware-reference tag (inline type) %origin t))
+  (%restore-origin 0 :type (values (pointer nintendo-ware-file-position (map null (constantly %origin)))))
+  (%restore-directory 0 :type (values (pointer nintendo-ware-file-sections-position (map null (constantly %directory)))))
+  (%restore-end 0 :type (values (pointer nintendo-ware-file-end-position (map null (constantly %end))))))
+
+(defbinstruct nintendo-ware-file (expected-magic section/be section/le)
   ($nintendo-ware-file-start 0 :type position)
-  (header (make-nintendo-ware-file-header)
-          :type (satisfies nintendo-ware-file-header-reader
-                           (lambda (header) (member (nintendo-ware-file-header-magic header) expected-magic :test #'string=))))
-  (body nil :type (ecase (nintendo-ware-file-header-endian header)
-                    (:big (inline body/be))
-                    (:little (inline body/le))))
-  (%nintendo-ware-file-end 0 :type position)
+  (%origin 0 :type position)
+  (magic #.(coerce "" 'simple-base-string)
+         :type (satisfies (simple-base-string 4) (rcurry #'member expected-magic :test #'string=)))
+  (endian :little :type nintendo-ware-file-byte-order)
+  (%header-size 20 :type (ecase endian (:little nintendo-ware-u16/le) (:big nintendo-ware-u16/be)))
+  (version 0 :type (ecase endian (:little nintendo-ware-u32/le) (:big nintendo-ware-u32/be)))
+  (%file-size 20 :type (ecase endian (:little nintendo-ware-u32/le) (:big nintendo-ware-u32/be)))
+  (%limit 0 :type (values (pointer nintendo-ware-file-end-position
+                                  (map null (constantly (+ %origin %file-size))))))
+  ($nintendo-ware-file-sections 0 :type position)
+  (%block-count 0 :type (ecase endian (:little nintendo-ware-u16/le) (:big nintendo-ware-u16/be)))
+  (%padding 0 :type (ecase endian (:little nintendo-ware-u16/le) (:big nintendo-ware-u16/be)))
+  (sections #() :type (ecase endian
+                       (:big (simple-array (inline section/be) (%block-count)))
+                       (:little (simple-array (inline section/le) (%block-count)))))
+  (%end 0 :type position)
   (nil #.(make-array 0 :element-type '(unsigned-byte 8))
-       :type (simple-array (unsigned-byte 8)
-                ((- (nintendo-ware-file-header-file-size header)
-                    (- %nintendo-ware-file-end (nintendo-ware-file-header-start header)))))))
+       :type (simple-array (unsigned-byte 8) ((- %file-size (- %end %origin))))))
 
 (defmacro define-nintendo-ware-file (name-and-options &body sections)
   (destructuring-bind (name &rest options) (ensure-list name-and-options)
     (let* ((magic (ensure-list (cadr (assoc :magic options))))
-           (body (symbolicate name '-body)))
+           (body (symbolicate name '-body))
+           (variants (loop for (slot initform . fields) in sections
+                           append (loop for tag in (ensure-list (getf fields :tag))
+                                        collect `(nintendo-ware-file-section ,tag ,(getf fields :type))))))
       `(progn
-         (defbinstruct/me ,body ()
-           (%header (make-nintendo-ware-file-header) :type nintendo-ware-file-header-at-start)
-           ;; Embedded readers may change the native file anchor. Restore this
-           ;; file's origin before each field, including after embedded files.
-           ,@(loop for section in sections
-                   append `((nil nil
-                               :type (values (pointer nintendo-ware-file-position
-                                              (map null (constantly (nintendo-ware-file-header-start %header))))))
-                            ,section)))
+         (defbinalias/me (,body (:type t)) () (or ,@variants))
          (defbinstruct (,name (:include (nintendo-ware-file ',magic
-                                          (,(symbolicate body '/be))
-                                          (,body)))
+                                          (,(symbolicate body '/be)) (,body)))
                              ,@(remove :magic options :key #'car)) ())
-         ,@(with-gensyms (instance value)
-             (loop for section in sections
-                   for slot-name = (binstruct::slot-name section)
-                   for accessor = (symbolicate name '- slot-name)
-                   for inner = (symbolicate body '- slot-name)
-                   unless (binstruct::slot-excluded-p section)
-                     collect `(progn
-                                (declaim (inline ,accessor (setf ,accessor)))
-                                (defun ,accessor (,instance)
-                                  (,inner (,(symbolicate name '-body) ,instance)))
-                                (defun (setf ,accessor) (,value ,instance)
-                                  (setf (,inner (,(symbolicate name '-body) ,instance)) ,value)))))))))
-
+         ,@(loop for (slot initform . fields) in sections
+                 for type = (binstruct::lisp-type (getf fields :type))
+                 collect `(defun ,(symbolicate name '- slot) (file)
+                            (find-if (lambda (section) (typep section ',type))
+                                     (,(symbolicate name '-sections) file))))))))

@@ -497,7 +497,7 @@
   (nil 0 :type (map (satisfies position (rcurry #'<= end))
                    (lambda (position) (declare (ignore position)) (vector-push-extend %start positions)))))
 
-(defbinstruct/me (xseq-track (:type (simple-array xseq-event (*))) (:constructor progn) (:conc-name nil)) (end labels)
+(defbinstruct/me (xseq-track (:type (simple-array xseq-event (*))) (:constructor progn) (:conc-name nil)) (end)
   (%positions #() :type (map null (lambda (ignored) (declare (ignore ignored))
                                    (make-array 0 :element-type 'integer :adjustable t :fill-pointer 0))))
   (%events #() :type (simple-array (xseq-track-event end %positions) (*)))
@@ -506,10 +506,10 @@
        :type (simple-array (satisfies (unsigned-byte 8) #'zerop) ((- end %end))))
   (values #.(make-array 0 :element-type 'xseq-event)
           :type (map null (lambda (ignored) (declare (ignore ignored))
-                            (xseq-events-unpack %events %positions labels)))))
+                            (xseq-events-unpack %events %positions)))))
 
 ;; The event stream's endian is independent of the surrounding section.
-(defbinalias xseq-track/le (end labels) (xseq-track end labels))
+(defbinalias xseq-track/le (end) (xseq-track end))
 
 (defbinstruct/me (xseq-label-event-index (:type (unsigned-byte 32))
                   (:constructor progn) (:conc-name nil)) ()
@@ -519,9 +519,16 @@
 (define-nintendo-ware-reference xseq-label-event-reference ()
   (#x1f00 (xseq-label-event-index)))
 
+(defbinstruct/me (xseq-label-index-at-reference (:type (or null (unsigned-byte 32)))
+                                              (:constructor progn) (:conc-name nil)) (source)
+  (%base 0 :type position)
+  (values 0 :type (values (pointer (xseq-label-event-reference %base) (map null (constantly source))))))
+
 (defbinstruct/me xseq-label-entry ()
-  (%base 0 :type (values (pointer position (map null (constantly 0)) $xseq-events-start)))
-  (index 0 :type (xseq-label-event-reference %base))
+  (%source 0 :type position)
+  (index 0 :type (pointer (xseq-label-index-at-reference %source)
+                         (map null (constantly 0)) $xseq-events-start))
+  (nil #.(make-array 0 :element-type '(unsigned-byte 8)) :type (simple-array (unsigned-byte 8) (8)))
   (length 0 :type (unsigned-byte 32))
   (name #.(coerce "" 'simple-base-string) :type (simple-base-string length))
   (nil 0 :type (satisfies (unsigned-byte 8))))
@@ -548,7 +555,7 @@
       (when child (resolve-xseq-event child indices (typep event '(or xseq-event-random xseq-event-variable))))))
   event)
 
-(defun xseq-events-unpack (events positions labels)
+(defun xseq-events-unpack (events positions)
   (let* ((last (position-if (lambda (event) (typep event '(or xseq-event-finish xseq-event-return xseq-event-jump))) events :from-end t))
          (indices (make-hash-table)))
     (unless last (error 'binstruct::deserialize-error
@@ -567,34 +574,27 @@
           (base (aref positions 0)))
       (loop for index to last do (setf (gethash (- (aref positions index) base) indices) index))
       (loop for event across result do (resolve-xseq-event event indices))
-      (loop for label across labels when label
-            do (setf (xseq-label-entry-index label)
-                     (or (gethash (xseq-label-entry-index label) indices) (error 'binstruct::deserialize-error
-                                                                                 :input nil :position nil
-                                                                                 :info "Invalid SEQ label"))))
       result)))
 
 (define-nintendo-ware-section (xseq-data (:magic "DATA"))
   ;; Unlike counted records, this event stream ends at the DATA boundary.
   (%position 0 :type position)
   ($xseq-events-start 0 :type position)
-  (%size 0 :type nintendo-ware-section-tail-size)
-  (labels nil :type (values (pointer xseq-labels (map null (constantly (block-start %header #x5001))))))
-  (%little nil :type (map null (lambda (ignored) (declare (ignore ignored))
-                                  (and (string= (nintendo-ware-file-header-magic %header) "FSEQ") (eq (nintendo-ware-file-header-endian %header) :little)))))
-  (%label-entries #() :type (map null (lambda (ignored) (declare (ignore ignored)) (xseq-labels-entries labels))))
+  (%size 0 :type nintendo-ware-tail-size)
+  (%magic #.(coerce "" 'simple-base-string) :type (values nintendo-ware-magic))
+  (%endian :little :type (values nintendo-ware-endian))
+  (%little nil :type (map null (constantly (and (string= %magic "FSEQ") (eq %endian :little)))))
   (events #.(make-array 0 :element-type 'xseq-event)
           :type (ecase %little
-                  ((t) (xseq-track/le (+ %position %size) %label-entries))
-                  ((nil) (xseq-track/be (+ %position %size) %label-entries)))))
+                  ((t) (xseq-track/le (+ %position %size)))
+                  ((nil) (xseq-track/be (+ %position %size))))))
 
 (define-nintendo-ware-file (xseq (:magic ("CSEQ" "FSEQ")))
-  (data nil :type (values (pointer xseq-data (map null (constantly (block-start %header #x5000))))))
-  (labels nil :type (map null (lambda (ignored) (declare (ignore ignored))
-                               (xseq-data-labels data)))))
+  (data (make-xseq-data) :type xseq-data :tag #x5000)
+  (labels (make-xseq-labels) :type xseq-labels :tag #x5001))
 
 (defun xseq-events (sequence)
-  (xseq-data-events (xseq-data sequence)))
+  (xseq-data-body-events (xseq-data-body (xseq-data sequence))))
 
 (defbinio xseq stream)
 

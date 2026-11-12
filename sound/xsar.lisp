@@ -16,11 +16,6 @@
   (release-reserved 0 :type (unsigned-byte 7))
   (reserved 0 :type (unsigned-byte 16)))
 
-(defbinstruct (xsar-data-position (:type non-negative-fixnum)
-                                       (:constructor progn) (:conc-name nil)) ()
-  ($xsar-data-start 0 :type position)
-  (values 0 :type (map null (constantly $xsar-data-start))))
-
 (defbinenum (xsar-pan-mode (:type (unsigned-byte 8))) ()
   (dual 0)
   (balance 1))
@@ -374,9 +369,20 @@
   (0 (nintendo-ware-reference-octets))
   (#x1f00 (nintendo-ware-reference-octets)))
 
+(defbinstruct/me (xsar-data-at-reference (:type (or null (simple-array (unsigned-byte 8) (*))))
+                                       (:constructor progn) (:conc-name nil)) (source)
+  (%base 0 :type position)
+  (values nil :type (values (pointer (xsar-data-reference %base) (map null (constantly source))))))
+
 (defbinstruct/me xsar-internal-file ()
-  (%base 0 :type (values (pointer position (map null (constantly 0)) $xsar-data-start)))
-  (data nil :type (xsar-data-reference %base)))
+  (%source 0 :type position)
+  (%offset -1 :type (values (pointer (signed-byte 32) (map null (constantly 4)) %source)))
+  (data nil :type (ecase (= %offset -1)
+                   ((t) (xsar-data-reference %source))
+                   ((nil) (values (pointer (xsar-data-at-reference %source)
+                                            (map null (constantly 0)) $xsar-data-start)))))
+  (nil #.(make-array 0 :element-type '(unsigned-byte 8))
+       :type (simple-array (unsigned-byte 8) ((if (= %offset -1) 0 12)))))
 
 (define-nintendo-ware-reference xsar-file-location-reference ()
   (#x220c (xsar-internal-file))
@@ -441,13 +447,14 @@
   (#x220b (xsar-project-info)))
 
 (define-nintendo-ware-section (xsar-info (:magic "INFO"))
-  (nil nil :type (values (pointer xsar-data-position (map null (constantly (if (block-reference %header #x2002 nil) (+ 8 (block-start %header #x2002)) 8))))))
   (%info-start 0 :type position)
+  (%magic #.(coerce "" 'simple-base-string) :type (values nintendo-ware-magic))
+  (%version 0 :type nintendo-ware-version)
   (%tracks-p 0 :type
     (map null (constantly
-               (if (string= (nintendo-ware-file-header-magic %header) "CSAR")
-                   (cond ((>= (nintendo-ware-file-header-version %header) #x02030200) 2)
-                         ((>= (nintendo-ware-file-header-version %header) #x02030000) 1)
+               (if (string= %magic "CSAR")
+                   (cond ((>= %version #x02030200) 2)
+                         ((>= %version #x02030000) 1)
                          (t 0))
                    0))))
   (sounds nil :type (xsar-sounds-reference %info-start %tracks-p))
@@ -459,12 +466,13 @@
   (files nil :type (xsar-files-reference %info-start))
   (project-info nil :type (xsar-project-reference %info-start)))
 
+(define-nintendo-ware-section (xsar-data (:magic "FILE"))
+  ($xsar-data-start 0 :type position))
+
 (define-nintendo-ware-file (xsar (:magic ("CSAR" "FSAR")))
-  (strg nil :type (ecase (not (null (block-reference %header #x2000 nil))) ((nil) null) ((t) (values (pointer xsar-strg (map null (constantly (block-start %header #x2000))))))))
-  (info nil :type (values (pointer xsar-info (map null (constantly (block-start %header #x2001))))))
-  (file nil :type (ecase (not (null (block-reference %header #x2002 nil)))
-                     ((nil) null)
-                     ((t) (values (pointer (nintendo-ware-section-raw-block "FILE") (map null (constantly (block-start %header #x2002)))))))))
+  (strg (make-xsar-strg) :type xsar-strg :tag #x2000)
+  (info (make-xsar-info) :type xsar-info :tag #x2001)
+  (file (make-xsar-data) :type xsar-data :tag #x2002))
 
 (defun xsar-files (xsar)
   "Return a simple vector of (NAME . DATA) conses indexed by file ID.
@@ -479,9 +487,9 @@ as in cl-nitro: sounds, banks, wave archives, then groups. No files are parsed."
                                (let ((location (xsar-file-location entry)))
                                  (when (typep location 'xsar-internal-file)
                                    (xsar-internal-file-data location))))))
-                     (xsar-info-files info)))
+                     (xsar-info-body-files (xsar-info-body info))))
          (strg (xsar-strg xsar))
-         (strings (when strg (xsar-strg-strings strg))))
+         (strings (when strg (xsar-strg-body-strings (xsar-strg-body strg)))))
     (when strings
       (flet ((fill-names (entries file-id string-index)
                (when entries
@@ -490,13 +498,13 @@ as in cl-nitro: sounds, banks, wave archives, then groups. No files are parsed."
                      (when index
                        (setf (car (aref files (funcall file-id entry)))
                              (xsar-string-text (aref strings index)))))))))
-        (fill-names (xsar-info-sounds info)
+        (fill-names (xsar-info-body-sounds (xsar-info-body info))
                     #'xsar-sound-file-id #'xsar-sound-string-index)
-        (fill-names (xsar-info-banks info)
+        (fill-names (xsar-info-body-banks (xsar-info-body info))
                     #'xsar-bank-file-id #'xsar-bank-string-index)
-        (fill-names (xsar-info-wave-archives info)
+        (fill-names (xsar-info-body-wave-archives (xsar-info-body info))
                     #'xsar-wave-archive-file-id #'xsar-wave-archive-string-index)
-        (fill-names (xsar-info-groups info)
+        (fill-names (xsar-info-body-groups (xsar-info-body info))
                     #'xsar-group-file-id #'xsar-group-string-index)))
     files))
 

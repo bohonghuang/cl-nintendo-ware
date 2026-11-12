@@ -14,17 +14,34 @@
 (define-nintendo-ware-reference xstm-region-data-reference (channels count)
   (#x1f00 (xstm-region-data channels count)))
 
+(defbinstruct/me (xstm-regions-at-reference (:type (or null (simple-array xstm-region (*))))
+                                          (:constructor progn) (:conc-name nil)) (source channels count)
+  (%base 0 :type position)
+  (values nil :type (values (pointer (xstm-region-data-reference %base channels count)
+                                    (map null (constantly source))))))
+
 (defbinstruct/me xstm-region-info (channels count)
   ($xstm-region-info-start 0 :type position)
   (entry-size 0 :type (unsigned-byte 16))
   (padding 0 :type (unsigned-byte 16))
-  (%base 0 :type (values (pointer position (map null (constantly 0)) $xstm-regions-start)))
-  (data nil :type (xstm-region-data-reference %base channels count)))
+  (%source 0 :type position)
+  (%offset -1 :type (values (pointer (signed-byte 32) (map null (constantly 4)) %source)))
+  (data nil :type (ecase (= %offset -1)
+                   ((t) (xstm-region-data-reference %source channels count))
+                   ((nil) (values (pointer (xstm-regions-at-reference %source channels count)
+                                            (map null (constantly 0)) $xstm-regions-start)))))
+  (nil #.(make-array 0 :element-type '(unsigned-byte 8))
+       :type (simple-array (unsigned-byte 8) ((if (= %offset -1) 0 8)))))
 
 (defbinalias/me (xstm-samples (:type (simple-array (unsigned-byte 8) (*)))) (count)
   (simple-array (unsigned-byte 8) (count)))
 (define-nintendo-ware-reference xstm-samples-reference (count)
   (#x1f00 (xstm-samples count)))
+
+(defbinstruct/me (xstm-samples-at-reference (:type (or null (simple-array (unsigned-byte 8) (*))))
+                                          (:constructor progn) (:conc-name nil)) (source count)
+  (%base 0 :type position)
+  (values nil :type (values (pointer (xstm-samples-reference %base count) (map null (constantly source))))))
 
 (defbinstruct/me xstm-original-loop-info ()
   (start 0 :type (unsigned-byte 32))
@@ -34,6 +51,7 @@
   (value 0 :type (unsigned-byte 32)))
 
 (defbinstruct/me xstm-stream-info (major-version)
+  ($xstm-stream-info-start 0 :type position)
   (encoding 'pcm-8 :type nintendo-ware-sound-sample-codec)
   (loop-p nil :type (boolean (unsigned-byte 8)))
   (channel-count 0 :type (unsigned-byte 8))
@@ -49,10 +67,17 @@
   (last-block-padded-size 0 :type (unsigned-byte 32))
   (seek-entry-size 0 :type (unsigned-byte 32))
   (seek-interval-samples 0 :type (unsigned-byte 32))
-  (%base 0 :type (values (pointer position (map null (constantly 0)) $xstm-data-start)))
-  (sample-data nil :type (xstm-samples-reference %base
-                         (* channel-count (+ (* (max 0 (1- block-count)) block-size)
-                                             last-block-padded-size))))
+  (%sample-reference 0 :type position)
+  (%sample-offset -1 :type (values (pointer (signed-byte 32) (map null (constantly 4)) %sample-reference)))
+  (sample-data nil :type (ecase (= %sample-offset -1)
+                          ((t) (xstm-samples-reference %sample-reference 0))
+                          ((nil)
+                           (values (pointer (xstm-samples-at-reference %sample-reference
+                                              (* channel-count (+ (* (max 0 (1- block-count)) block-size)
+                                                                  last-block-padded-size)))
+                                            (map null (constantly 0)) $xstm-data-start)))))
+  (nil #.(make-array 0 :element-type '(unsigned-byte 8))
+       :type (simple-array (unsigned-byte 8) ((if (= %sample-offset -1) 0 8))))
   (region-info nil :type (ecase (>= major-version 3)
                           ((nil) null) ((t) (xstm-region-info channel-count region-count))))
   (original-loop-info nil :type (ecase (>= major-version 4) ((nil) null) ((t) xstm-original-loop-info)))
@@ -86,22 +111,9 @@
 (define-nintendo-ware-reference xstm-stream-reference (version)
   (#x4100 (xstm-stream-info version)))
 
-(defbinstruct (xstm-data-position (:type non-negative-fixnum)
-              (:constructor progn) (:conc-name nil)) ()
-  ($xstm-data-start 0 :type position)
-  (values 0 :type (map null (constantly $xstm-data-start))))
-(defbinstruct (xstm-regions-position (:type non-negative-fixnum)
-              (:constructor progn) (:conc-name nil)) ()
-  ($xstm-regions-start 0 :type position)
-  (values 0 :type (map null (constantly $xstm-regions-start))))
-
 (define-nintendo-ware-section (xstm-info (:magic "INFO"))
-  (%major-version 0 :type (map null (lambda (ignored) (declare (ignore ignored)) (nintendo-ware-file-header-version-major %header))))
+  (%major-version 0 :type nintendo-ware-major-version)
   (%info-start 0 :type position)
-  (nil nil :type (values (pointer xstm-data-position (map null (constantly (+ 8 (block-start %header #x4002)))))))
-  (nil nil :type (values (pointer xstm-regions-position
-                         (map null (constantly (if (block-reference %header #x4003 nil)
-                                                  (+ 8 (block-start %header #x4003)) 8))))))
   (stream nil :type (values (xstm-stream-reference %info-start %major-version)))
   (tracks nil :type (xstm-tracks-reference %info-start))
   (channels nil :type (xstm-channels-reference %info-start (xstm-stream-info-encoding stream))))
@@ -119,20 +131,24 @@
 ;; CSTM SEEK payloads remain LE even inside a BE container.
 (defbinalias xstm-seek-row/le (encoding stride channels) (xstm-seek-row encoding stride channels))
 
-;; SEEK and REGN follow the same INFO reference without moving their cursor.
-(defbinalias/me (xstm-referenced-stream-info (:type (or null xstm-stream-info))) (header)
-  (values (pointer (xstm-stream-reference (+ 8 (block-start header #x4000))
-                                         (nintendo-ware-file-header-version-major header))
-                   (map null (constantly (+ 8 (block-start header #x4000)))))))
+(defbinstruct (xstm-seek-padding-position (:type non-negative-fixnum)
+                                         (:constructor progn) (:conc-name nil)) ()
+  ($xstm-seek-padding-start 0 :type position)
+  (values 0 :type (map null (constantly $xstm-seek-padding-start))))
 
-(define-nintendo-ware-section (xstm-seek (:magic "SEEK"))
-  ;; SEEK row counts come from INFO; only its trailing padding needs the tail.
-  (%size 0 :type nintendo-ware-section-tail-size)
-  (%information (make-xstm-stream-info) :type (xstm-referenced-stream-info %header))
-  (%c-type-p nil :type (map null (lambda (ignored) (declare (ignore ignored)) (char= (char (nintendo-ware-file-header-magic %header) 0) #\C))))
-  (%encoding 'dsp-adpcm :type (map null (lambda (ignored) (declare (ignore ignored)) (xstm-stream-info-encoding %information))))
-  (%stride 4 :type (map null (lambda (ignored) (declare (ignore ignored))
-                             (xstm-stream-info-seek-entry-size %information))))
+(defbinstruct/me (xstm-seek-padding (:type (simple-array (unsigned-byte 8) (*)))
+                                   (:constructor progn) (:conc-name nil)) (end)
+  (%position 0 :type position)
+  (values #.(make-array 0 :element-type '(unsigned-byte 8))
+          :type (simple-array (unsigned-byte 8) ((- end %position)))))
+
+;; Resolve SEEK directly from the stream-info anchor, independently of directory order.
+(defbinstruct/me (xstm-seek-rows (:type (simple-array t (*)))
+                                (:constructor progn) (:conc-name nil)) (source %c-type-p)
+  (%major-version 0 :type nintendo-ware-major-version)
+  (%information (make-xstm-stream-info) :type (xstm-stream-info %major-version))
+  (%encoding 'dsp-adpcm :type (map null (constantly (xstm-stream-info-encoding %information))))
+  (%stride 4 :type (map null (constantly (xstm-stream-info-seek-entry-size %information))))
   (%rows 0 :type (map null (lambda (ignored) (declare (ignore ignored))
                            (if (member %encoding '(dsp-adpcm ima-adpcm))
                                (let ((interval (xstm-stream-info-seek-interval-samples %information)))
@@ -140,31 +156,49 @@
                                                                  :input nil :position nil
                                                                  :info "Zero SEEK interval"))
                                  (ceiling (xstm-stream-info-sample-count %information) interval)) 0))))
-  (%bytes 0 :type (map null (lambda (ignored) (declare (ignore ignored))
-                            (* %rows %stride (xstm-stream-info-channel-count %information)))))
-  (rows #() :type (ecase %c-type-p
-                    ((t) (simple-array (xstm-seek-row/le %encoding %stride (xstm-stream-info-channel-count %information)) (%rows)))
-                    ((nil) (simple-array (xstm-seek-row/be %encoding %stride (xstm-stream-info-channel-count %information)) (%rows)))))
-  (padding #.(make-array 0 :element-type '(unsigned-byte 8)) :type (simple-array (unsigned-byte 8) ((- %size %bytes)))))
+  (%bytes 0 :type (map null (constantly (* %rows %stride (xstm-stream-info-channel-count %information)))))
+  (values #() :type (values (pointer
+                             (ecase %c-type-p
+                               ((t) (simple-array (xstm-seek-row/le %encoding %stride (xstm-stream-info-channel-count %information)) (%rows)))
+                               ((nil) (simple-array (xstm-seek-row/be %encoding %stride (xstm-stream-info-channel-count %information)) (%rows))))
+                             (map null (constantly source)))))
+  (%padding-start 0 :type (values (pointer xstm-seek-padding-position
+                                          (map null (constantly (+ source %bytes)))))))
 
+(define-nintendo-ware-section (xstm-seek (:magic "SEEK"))
+  (%source 0 :type position)
+  (%size 0 :type nintendo-ware-tail-size)
+  (%magic #.(coerce "" 'simple-base-string) :type (values nintendo-ware-magic))
+  (rows #() :type (pointer (xstm-seek-rows %source (char= (char %magic 0) #\C))
+                          (map null (constantly 0)) $xstm-stream-info-start))
+  (padding #.(make-array 0 :element-type '(unsigned-byte 8))
+           :type (pointer (xstm-seek-padding (+ %source %size))
+                          (map null (constantly 0)) $xstm-seek-padding-start))
+  (nil #.(make-array 0 :element-type '(unsigned-byte 8)) :type (simple-array (unsigned-byte 8) (%size))))
+
+(defbinstruct/me (xstm-region-entries (:type (or null (simple-array xstm-region (*))))
+                                     (:constructor progn) (:conc-name nil)) ()
+  (%major-version 0 :type nintendo-ware-major-version)
+  (%information (make-xstm-stream-info) :type (xstm-stream-info %major-version))
+  (values nil :type (map null (lambda (ignored)
+                               (declare (ignore ignored))
+                               (unless (eq (xstm-stream-info-encoding %information) 'dsp-adpcm)
+                                 (error 'binstruct::deserialize-error :input nil :position nil
+                                        :info "Invalid REGN entry layout"))
+                               (xstm-region-info-data (xstm-stream-info-region-info %information))))))
 
 (define-nintendo-ware-section (xstm-regions (:magic "REGN"))
-  (%regions-start 0 :type position)
-  (%information (make-xstm-stream-info) :type (xstm-referenced-stream-info %header))
-  (%count 0 :type (map null (lambda (ignored) (declare (ignore ignored)) (xstm-stream-info-region-count %information))))
-  (%stride 0 :type (map null (lambda (ignored) (declare (ignore ignored))
-                              (let ((stride (xstm-region-info-entry-size (xstm-stream-info-region-info %information))))
-                                (unless (eq (xstm-stream-info-encoding %information) 'dsp-adpcm)
-                                  (error 'binstruct::deserialize-error
-                                         :input nil :position nil
-                                         :info "Invalid REGN entry layout")) stride))))
-  (entries #() :type (map null (constantly (xstm-region-info-data (xstm-stream-info-region-info %information))))))
+  ($xstm-regions-start 0 :type position)
+  (entries #() :type (pointer xstm-region-entries (map null (constantly 0)) $xstm-stream-info-start)))
+
+(define-nintendo-ware-section (xstm-data (:magic "DATA"))
+  ($xstm-data-start 0 :type position))
 
 (define-nintendo-ware-file (xstm (:magic ("CSTM" "FSTM")))
-  (info nil :type (values (pointer xstm-info (map null (constantly (block-start %header #x4000))))))
-  (seek nil :type (ecase (not (null (block-reference %header #x4001 nil))) ((nil) null) ((t) (values (pointer xstm-seek (map null (constantly (block-start %header #x4001))))))))
-  (data nil :type (values (pointer (nintendo-ware-section-raw-block "DATA") (map null (constantly (block-start %header #x4002))))))
-  (regions nil :type (ecase (not (null (block-reference %header #x4003 nil))) ((nil) null) ((t) (values (pointer xstm-regions (map null (constantly (block-start %header #x4003)))))))))
+  (info (make-xstm-info) :type xstm-info :tag #x4000)
+  (seek (make-xstm-seek) :type xstm-seek :tag #x4001)
+  (data (make-xstm-data) :type xstm-data :tag #x4002)
+  (regions (make-xstm-regions) :type xstm-regions :tag #x4003))
 
 (defbinio xstm stream)
 

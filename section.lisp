@@ -1,36 +1,29 @@
 (in-package #:nintendo-ware)
 
-(defbinstruct (nintendo-ware-file-header-at-start (:type nintendo-ware-file-header) (:constructor progn) (:conc-name nil)) ()
-  (values nil :type (pointer nintendo-ware-file-header-reader (map null (constantly 0)) $nintendo-ware-file-start)))
+(defbinstruct (nintendo-ware-section-end-position (:type non-negative-fixnum)
+                                               (:constructor progn) (:conc-name nil)) ()
+  ($nintendo-ware-section-end 0 :type position)
+  (values 0 :type (map null (constantly $nintendo-ware-section-end))))
 
 (defbinstruct/me nintendo-ware-section (expected-magic content)
   ($nintendo-ware-section-start 0 :type position)
   (magic #.(coerce "" 'simple-base-string)
          :type (satisfies (simple-base-string 4) (rcurry #'string= expected-magic)))
   (size 8 :type (unsigned-byte 32))
-  (%start 0 :type (map null (constantly $nintendo-ware-section-start)))
+  (%start 0 :type position)
+  (%limit 0 :type (values (pointer nintendo-ware-section-end-position
+                                  (map null (constantly (+ %start (- size 8)))))))
   (body nil :type (inline content))
-  (%nintendo-ware-section-end 0 :type position)
+  (%end 0 :type position)
   (nil #.(make-array 0 :element-type '(unsigned-byte 8))
-       :type (simple-array (unsigned-byte 8)
-                ((- size (- %nintendo-ware-section-end %start))))))
+       :type (simple-array (unsigned-byte 8) ((- size 8 (- %end %start))))))
 
-(defbinalias/me (nintendo-ware-section-start-magic-size (:type list)) ()
-  (pointer (list position (simple-base-string 4) (unsigned-byte 32))
-           (map null (constantly 0) (constantly nil)) $nintendo-ware-section-start))
-
-;; Like Nitro: observe the section header and current position without
-;; consuming input. Only layouts with an uncounted tail need this type.
-(defbinstruct/me (nintendo-ware-section-tail-size (:type (unsigned-byte 32))
-                                                (:constructor progn) (:conc-name nil)) ()
+;; Only uncounted tails need an endpoint; ordinary bodies have no header layer.
+(defbinstruct/me (nintendo-ware-tail-size (:type (unsigned-byte 32))
+                                        (:constructor progn) (:conc-name nil)) ()
   (%position 0 :type position)
-  (%header (list 0 #.(coerce "" 'simple-base-string) 0)
-           :type nintendo-ware-section-start-magic-size)
-  (values 0 :type (map null (lambda (ignored) (declare (ignore ignored))
-                             (- (third %header) (- %position (first %header)))))))
-
-(defbinstruct/me nintendo-ware-section-body ()
-  (%header (make-nintendo-ware-file-header) :type nintendo-ware-file-header-at-start))
+  (%end 0 :type (values (pointer position (map null (constantly 0)) $nintendo-ware-section-end)))
+  (values 0 :type (map null (constantly (- %end %position)))))
 
 (defmacro define-nintendo-ware-section (name-and-options &body slots)
   (destructuring-bind (name &rest options) (ensure-list name-and-options)
@@ -38,30 +31,11 @@
            (options (remove :magic options :key #'car))
            (body (symbolicate name '-body)))
       `(progn
-         (defbinstruct/me (,body (:include nintendo-ware-section-body)) () ,@slots)
-         ;; INLINE receives a parser, not a schema type subject to ME dispatch.
+         (defbinstruct/me ,body () ,@slots)
+         ;; INLINE arguments explicitly select their endian-specific body parser.
          (defbinstruct (,name (:include (nintendo-ware-section ,magic (,body))) ,@options) ())
          (defbinstruct/be (,(symbolicate name '/be)
                            (:type ,(or (cadr (assoc :type options)) name))
                            (:include (nintendo-ware-section ,magic (,(symbolicate body '/be))))
                            ,@(remove-if (lambda (option) (member (car option) '(:type :endian))) options)) ())
-         (defbinstruct/me ,name)
-         ,@(with-gensyms (instance value)
-             (loop for slot in (remove-duplicates slots :key #'car)
-                   for slot-name = (binstruct::slot-name slot)
-                   for accessor = (symbolicate name '- slot-name)
-                   for inner = (symbolicate body '- slot-name)
-                   unless (binstruct::slot-excluded-p slot)
-                     collect `(progn
-                                (declaim (inline ,accessor (setf ,accessor)))
-                                (defun ,accessor (,instance)
-                                  (,inner (,(symbolicate name '-body) ,instance)))
-                                (defun (setf ,accessor) (,value ,instance)
-                                  (setf (,inner (,(symbolicate name '-body) ,instance)) ,value)))))))))
-
-
-(defbinstruct/me nintendo-ware-section-raw-block (expected-magic)
-  (magic #.(coerce "" 'simple-base-string) :type (satisfies (simple-base-string 4) (rcurry #'string= expected-magic)))
-  (size 0 :type (unsigned-byte 32))
-  (bytes #.(make-array 0 :element-type '(unsigned-byte 8)) :type (simple-array (unsigned-byte 8) ((- size 8)))))
-
+         (defbinstruct/me ,name)))))

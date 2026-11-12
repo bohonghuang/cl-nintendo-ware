@@ -1,10 +1,5 @@
 (in-package #:cl-nintendo-ware)
 
-(defbinstruct (xwav-data-position (:type non-negative-fixnum)
-                                       (:constructor progn) (:conc-name nil)) ()
-  ($xwav-data-start 0 :type position)
-  (values 0 :type (map null (constantly $xwav-data-start))))
-
 (defbinstruct/me xwav-dsp-adpcm-context ()
   (predictor-scale 0 :type (unsigned-byte 16))
   (history-1 0 :type (signed-byte 16))
@@ -37,11 +32,19 @@
             (dsp-adpcm (simple-array (unsigned-byte 8) ((* 8 (ceiling sample-count 14)))))
             (ima-adpcm (simple-array (unsigned-byte 4) (sample-count))))))
 
+(defbinstruct/me (xwav-samples-at-reference (:type (or null array))
+                                          (:constructor progn) (:conc-name nil)) (source codec count)
+  (%base 0 :type position)
+  (values nil :type (values (pointer (xwav-samples-reference %base codec count)
+                                    (map null (constantly source))))))
+
 (defbinstruct/me xwav-channel (codec sample-count)
   (%start 0 :type position)
-  (%data-start 0 :type (values (pointer position (map null (constantly 0)) $xwav-data-start)))
   (data #.(make-array 0 :element-type '(signed-byte 8))
-        :type (xwav-samples-reference %data-start codec sample-count))
+        :type (pointer (xwav-samples-at-reference %start codec sample-count)
+                       (map null (constantly 0)) $xwav-data-start))
+  (nil #.(make-array 0 :element-type '(unsigned-byte 8))
+       :type (simple-array (unsigned-byte 8) (8)))
   (codec-info nil :type (xwav-codec-reference %start))
   (reserved 0 :type (unsigned-byte 32)))
 
@@ -49,8 +52,6 @@
   (#x7100 (xwav-channel codec sample-count)))
 
 (define-nintendo-ware-section (xwav-info (:magic "INFO"))
-  (nil nil :type (values (pointer xwav-data-position
-                         (map null (constantly (+ 8 (block-start %header #x7001)))))))
   (codec 'pcm-8 :type nintendo-ware-sound-sample-codec)
   (loop-p nil :type (boolean (unsigned-byte 8)))
   (padding 0 :type (unsigned-byte 16))
@@ -64,13 +65,20 @@
 
 ;; Samples are read once through the channel references. DATA retains only its
 ;; section header, not a second copy of the complete encoded payload.
-(define-nintendo-ware-section (xwav-data (:magic "DATA")))
+(define-nintendo-ware-section (xwav-data (:magic "DATA"))
+  ($xwav-data-start 0 :type position))
 
 (define-nintendo-ware-file (xwav (:magic ("CWAV" "FWAV")))
-  (info nil :type (values (pointer xwav-info (map null (constantly (block-start %header #x7000))))))
-  (data nil :type (values (pointer xwav-data (map null (constantly (block-start %header #x7001)))))))
+  (info (make-xwav-info) :type xwav-info :tag #x7000)
+  (data (make-xwav-data) :type xwav-data :tag #x7001))
 
-(defbinalias (xwav-embedded (:type xwav)) () xwav)
+(defbinstruct (xwav-embedded (:type xwav) (:constructor progn) (:conc-name nil)) ()
+  ;; Each WAR entry starts a fresh lifetime for its sample-data anchor.
+  (%reset nil :type (map (null)
+                        (lambda (ignored)
+                          (declare (ignore ignored))
+                          (setf (cdr (binstruct::pointer-base '$xwav-data-start)) nil))))
+  (values nil :type xwav))
 
 (defbinio xwav stream)
 
