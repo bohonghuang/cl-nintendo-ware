@@ -32,22 +32,18 @@
         (macroexpand `(defbinstruct (,name ,@options) ,lambda-list ,@slots))))))
 
 (defmacro defbinstruct/me (name-and-options &body body)
-  "Define LE and shared-type BE layouts and property-based type expansion."
+  "Define LE, an explicit /le alias and shared-type BE layouts."
   (destructuring-bind (name &rest options) (ensure-list name-and-options)
     (let* ((defined-p body)
            (lambda-list (when (and body (not (member :type (first body)))) (pop body)))
            (type (or (cadr (assoc :type options)) name))
-           (inline-parameters
-             (labels ((collect-parameters (form)
-                        (when (consp form)
-                          (if (eq (car form) 'inline)
-                              (list (second form))
-                              (mappend #'collect-parameters form)))))
-               (collect-parameters body)))
+           (little (symbolicate name '#:/le))
            (big (symbolicate name '#:/be)))
       `(progn
          ,@(when defined-p
              `((defbinstruct (,name ,@options) ,lambda-list ,@body)
+               (defbinalias (,little (:type ,type)) ,lambda-list
+                 (,name ,@lambda-list))
                (defbinstruct/be (,big (:type ,type) (:endian :big)
                                      ,@(remove-if (lambda (option) (member (car option) '(:type :endian))) options))
                    ,lambda-list
@@ -55,26 +51,14 @@
          (eval-when (:compile-toplevel :load-toplevel :execute)
            (setf (get ',name 'binstruct::expand-reader-type-expr)
                  (lambda (&rest arguments)
-                   (cons (ecase (or (and (boundp '*endian*) *endian*) :little)
-                           (:little ',name) (:big ',big))
-                         ,(if inline-parameters
-                              `(mapcar (lambda (argument parameter)
-                                         (if (member parameter ',inline-parameters)
-                                             (let ((binstruct::*place* (binstruct::place-null))
-                                                   (binstruct::*slots* nil))
-                                               (binstruct::expand-reader-type-unit
-                                                argument
-                                                :endian (or (and (boundp '*endian*) *endian*) :little)
-                                                :alignment binstruct::+alignment-default+))
-                                             argument))
-                                       arguments ',(parsonic::lambda-list-arguments lambda-list))
-                              'arguments)))
+                   (apply #'binstruct::expand-reader-type-expr
+                          (ecase (or (and (boundp '*endian*) *endian*) :little)
+                            (:little ',little) (:big ',big))
+                          arguments))
                  (get ',name 'binstruct::expand-writer-type-expr)
                  (lambda (&rest arguments)
-                   `(progn
-                      ,(binstruct::finish-writer-partial-byte)
-                      (,(ecase (or (and (boundp '*endian*) *endian*) :little)
-                          (:little ',(binstruct::emitter-name-symbol name))
-                          (:big ',(binstruct::emitter-name-symbol big)))
-                       ,binstruct::*output* ,binstruct::*value* ,@arguments)))))))))
+                   (apply #'binstruct::expand-writer-type-expr
+                          (ecase (or (and (boundp '*endian*) *endian*) :little)
+                            (:little ',little) (:big ',big))
+                          arguments))))))))
 
