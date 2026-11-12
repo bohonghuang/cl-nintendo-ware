@@ -12,8 +12,8 @@
        :type (simple-array (unsigned-byte 8) ((- size 8 (- %end %start))))))
 
 ;; Only uncounted tails need to reread their section size.
-(defbinstruct/me (nintendo-ware-tail-size (:type (unsigned-byte 32))
-                                        (:constructor progn) (:conc-name nil)) ()
+(defbinstruct/me (nintendo-ware-section-tail-size (:type (unsigned-byte 32))
+                                                (:constructor progn) (:conc-name nil)) ()
   (%position 0 :type position)
   (%start 0 :type (values (pointer position (map null (constantly 0)) $nintendo-ware-section-start)))
   (%size 0 :type (values (pointer (unsigned-byte 32) (map null (constantly 4)) $nintendo-ware-section-start)))

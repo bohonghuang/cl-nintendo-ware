@@ -4,7 +4,7 @@
 ;; rather than only at the beginning of a production section body.
 (nintendo-ware::define-nintendo-ware-section (tail-probe-info (:magic "INFO"))
   (value 0 :type (unsigned-byte 32))
-  (%size 0 :type nintendo-ware::nintendo-ware-tail-size)
+  (%size 0 :type nintendo-ware::nintendo-ware-section-tail-size)
   (tail #.(make-array 0 :element-type '(unsigned-byte 8))
         :type (simple-array (unsigned-byte 8) (%size))))
 

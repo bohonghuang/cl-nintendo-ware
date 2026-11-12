@@ -167,7 +167,7 @@
 
 (define-nintendo-ware-section (xstm-seek (:magic "SEEK"))
   (%source 0 :type position)
-  (%size 0 :type nintendo-ware-tail-size)
+  (%size 0 :type nintendo-ware-section-tail-size)
   (%magic #.(coerce "" 'simple-base-string) :type (values nintendo-ware-magic))
   (rows #() :type (pointer (xstm-seek-rows %source (char= (char %magic 0) #\C))
                           (map null (constantly 0)) $xstm-stream-info-start))

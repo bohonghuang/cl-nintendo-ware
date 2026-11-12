@@ -48,7 +48,7 @@ sbcl --dynamic-space-size 4096 --non-interactive --eval '(ql:quickload :cl-ninte
 
 模块和所属类型、函数、宏统一使用 `x` 加 magic 后三位的前缀；`x` 同时涵盖 C/F 两种容器。例如事件声明宏为 `define-xseq-event`，音符类型为 `xseq-event-note`。这是直接重命名，旧名称不再提供兼容别名。
 
-`common.lisp` 仅保留输入分派。`reference.lisp` 集中通用引用布局、辅助类型及引用声明宏，在 `binary.lisp` 之后、`file.lisp` 之前加载。文件头和文件容器位于 `file.lisp`，区块布局位于 `section.lisp`。`sound/sound.lisp` 在所有 `sound/x___.lisp` 之前加载，共用 codec、channel-index 数组、resource ID 和 wave ID 布局统一使用 `nintendo-ware-sound-` 前缀。NintendoWare 专有类型使用库或模块前缀，通用 VLQ 原语保持原名；记录位域类型统一命名为 `*-flags`。SAR 专用的 File ID 数组、资源 ID 数组、priority 数值字段位于 `sound/xsar.lisp`，使用 `xsar-sound-group-files`、`xsar-resource-ids`、`xsar-packed-priority`；WSD 专用 pan/filter 数值字段位于 `sound/xwsd.lisp`，使用 `xwsd-packed-pan`、`xwsd-packed-filter`，访问器同样带模块前缀。
+`common.lisp` 保留共用的 magic/version 查询和 major-version 布局。`reference.lisp` 集中通用引用布局、辅助类型及引用声明宏，在 `binary.lisp` 之后、`file.lisp` 之前加载。`read-file` 及输入类型分派、文件头和文件容器位于 `file.lisp`，区块布局位于 `section.lisp`。`sound/sound.lisp` 在所有 `sound/x___.lisp` 之前加载，共用 codec、channel-index 数组、resource ID 和 wave ID 布局统一使用 `nintendo-ware-sound-` 前缀。NintendoWare 专有类型使用库或模块前缀，通用 VLQ 原语保持原名；记录位域类型统一命名为 `*-flags`。SAR 专用的 File ID 数组、资源 ID 数组、priority 数值字段位于 `sound/xsar.lisp`，使用 `xsar-sound-group-files`、`xsar-resource-ids`、`xsar-packed-priority`；WSD 专用 pan/filter 数值字段位于 `sound/xwsd.lisp`，使用 `xwsd-packed-pan`、`xwsd-packed-filter`，访问器同样带模块前缀。
 
 仅含计数、定位锚点和元素数组的布局使用 `(:constructor progn)`、`(:conc-name nil)` 和显式的 `(:type (simple-array ... (*)))`，直接返回数组，不再生成 `*-table` 结构或要求调用 `*-table-entries`／`*-table-count`。计数只用于解析，调用方使用 `length`。普通记录的数组访问器如 `xwsd-track-events`、`xwsd-item-tracks`、`xwsd-item-notes` 保持不变；section 字段通过原生 body 访问，如 `xwsd-info-body-items`、`xbnk-info-body-instruments`、`xstm-info-body-tracks`／`xstm-info-body-channels`、`xsar-strg-body-strings` 和 `xsar-info-body-sounds`。共用数组布局为 `nintendo-ware-sound-channel-indices`、`nintendo-ware-sound-wave-ids` 和 `xsar-resource-ids`。`xstm-seek-row` 同样直接返回 SEEK entry 数组。空引用保持 `NIL`，非空引用的零计数返回空数组，数组内空引用不压缩索引；不提供旧包装的兼容别名。具有 upper bounds、range 或 Patricia root 等独立语义字段的记录以及原生 section 容器保持结构。
 
@@ -170,7 +170,7 @@ CSTM SEEK 上下文固定小端；当前 FSTM SEEK 布局按 Citric 的参考实
 
 不再构造或重读旧 header 对象。file-section accessor 保持单参数签名，返回 `sections` 中首个匹配语义类型的 section 或 `NIL`。每个目录引用返回后恢复所属文件的起点锚点，避免内嵌 WAV 覆盖外层上下文。BOM 使用固定 BE 枚举：FF FE 为 LE、FE FF 为 BE，未知值暴露原生 `type-error`。GRP／XSAR 只读取原始子文件数据；显式读取子文件时，由其自身容器读取 BOM。高阶 `inline` 用于容器和 typed reference 的共用包装，具体记录和事件不直接使用高阶 parser。
 
-只有确实需要剩余长度的布局使用零宽类型 `nintendo-ware-tail-size`，保存在 `%size`：它通过当前 section 的起点锚点回读对应端序的 size 字段，计算剩余长度，不消费输入。需要绝对结束位置时，就地用 `%position + %size` 计算。目前 SEQ 的无计数事件流和 SEEK 的尾部 padding 使用此布局；不向其他 body 注入 header 或尾长字段。
+只有确实需要剩余长度的布局使用零宽类型 `nintendo-ware-section-tail-size`，保存在 `%size`：它通过当前 section 的起点锚点回读对应端序的 size 字段，计算剩余长度，不消费输入。需要绝对结束位置时，就地用 `%position + %size` 计算。目前 SEQ 的无计数事件流和 SEEK 的尾部 padding 使用此布局；不向其他 body 注入 header 或尾长字段。
 
 ```lisp
 (defbinstruct/me sample-point

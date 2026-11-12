@@ -565,7 +565,7 @@
 (define-nintendo-ware-section (xseq-data (:magic "DATA"))
   ;; Unlike counted records, this event stream ends at the DATA boundary.
   (%position 0 :type position)
-  (%size 0 :type nintendo-ware-tail-size)
+  (%size 0 :type nintendo-ware-section-tail-size)
   (%magic #.(coerce "" 'simple-base-string) :type (values nintendo-ware-magic))
   (events #.(make-array 0 :element-type 'xseq-event)
           :type (ecase (string= %magic "CSEQ")
