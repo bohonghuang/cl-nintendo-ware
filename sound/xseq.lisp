@@ -498,15 +498,13 @@
                    (lambda (position) (declare (ignore position)) (vector-push-extend %start positions)))))
 
 (defbinstruct/me (xseq-track (:type (simple-array xseq-event (*))) (:constructor progn) (:conc-name nil)) (end)
-  (%positions #() :type (map null (lambda (ignored) (declare (ignore ignored))
-                                   (make-array 0 :element-type 'integer :adjustable t :fill-pointer 0))))
+  (%positions #() :type (map null (constantly (make-array 0 :element-type 'integer :adjustable t :fill-pointer 0))))
   (%events #() :type (simple-array (xseq-track-event end %positions) (*)))
   (%end 0 :type position)
   (nil #.(make-array 0 :element-type '(unsigned-byte 8))
        :type (simple-array (satisfies (unsigned-byte 8) #'zerop) ((- end %end))))
   (values #.(make-array 0 :element-type 'xseq-event)
-          :type (map null (lambda (ignored) (declare (ignore ignored))
-                            (xseq-events-unpack %events %positions)))))
+          :type (map null (constantly (xseq-events-unpack %events %positions)))))
 
 ;; The event stream's endian is independent of the surrounding section.
 (defbinalias xseq-track/le (end) (xseq-track end))

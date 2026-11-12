@@ -147,18 +147,16 @@
                                 (:constructor progn) (:conc-name nil)) (source %c-type-p)
   (%major-version 0 :type nintendo-ware-major-version)
   (%information (make-xstm-stream-info) :type (xstm-stream-info %major-version))
-  (%encoding 'dsp-adpcm :type (map null (lambda (ignored) (declare (ignore ignored)) (xstm-stream-info-encoding %information))))
-  (%stride 4 :type (map null (lambda (ignored) (declare (ignore ignored))
-                             (xstm-stream-info-seek-entry-size %information))))
-  (%rows 0 :type (map null (lambda (ignored) (declare (ignore ignored))
-                           (if (member %encoding '(dsp-adpcm ima-adpcm))
-                               (let ((interval (xstm-stream-info-seek-interval-samples %information)))
-                                 (unless (plusp interval) (error 'binstruct::deserialize-error
-                                                                 :input nil :position nil
-                                                                 :info "Zero SEEK interval"))
-                                 (ceiling (xstm-stream-info-sample-count %information) interval)) 0))))
-  (%bytes 0 :type (map null (lambda (ignored) (declare (ignore ignored))
-                            (* %rows %stride (xstm-stream-info-channel-count %information)))))
+  (%encoding 'dsp-adpcm :type (map null (constantly (xstm-stream-info-encoding %information))))
+  (%stride 4 :type (map null (constantly (xstm-stream-info-seek-entry-size %information))))
+  (%rows 0 :type (map null (constantly
+                          (if (member %encoding '(dsp-adpcm ima-adpcm))
+                              (let ((interval (xstm-stream-info-seek-interval-samples %information)))
+                                (unless (plusp interval) (error 'binstruct::deserialize-error
+                                                                :input nil :position nil
+                                                                :info "Zero SEEK interval"))
+                                (ceiling (xstm-stream-info-sample-count %information) interval)) 0))))
+  (%bytes 0 :type (map null (constantly (* %rows %stride (xstm-stream-info-channel-count %information)))))
   (values #() :type (values (pointer
                              (ecase %c-type-p
                                ((t) (simple-array (xstm-seek-row/le %encoding %stride (xstm-stream-info-channel-count %information)) (%rows)))
@@ -182,12 +180,12 @@
                                      (:constructor progn) (:conc-name nil)) ()
   (%major-version 0 :type nintendo-ware-major-version)
   (%information (make-xstm-stream-info) :type (xstm-stream-info %major-version))
-  (values nil :type (map null (lambda (ignored)
-                               (declare (ignore ignored))
-                               (unless (eq (xstm-stream-info-encoding %information) 'dsp-adpcm)
-                                 (error 'binstruct::deserialize-error :input nil :position nil
-                                        :info "Invalid REGN entry layout"))
-                               (xstm-region-info-data (xstm-stream-info-region-info %information))))))
+  (values nil :type (map null (constantly
+                              (progn
+                                (unless (eq (xstm-stream-info-encoding %information) 'dsp-adpcm)
+                                  (error 'binstruct::deserialize-error :input nil :position nil
+                                         :info "Invalid REGN entry layout"))
+                                (xstm-region-info-data (xstm-stream-info-region-info %information)))))))
 
 (define-nintendo-ware-section (xstm-regions (:magic "REGN"))
   ($xstm-regions-start 0 :type position)

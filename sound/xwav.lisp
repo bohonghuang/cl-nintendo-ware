@@ -75,9 +75,7 @@
 (defbinstruct (xwav-embedded (:type xwav) (:constructor progn) (:conc-name nil)) ()
   ;; Each WAR entry starts a fresh lifetime for its sample-data anchor.
   (%reset nil :type (map (null)
-                        (lambda (ignored)
-                          (declare (ignore ignored))
-                          (setf (cdr (binstruct::pointer-base '$xwav-data-start)) nil))))
+                        (constantly (setf (cdr (binstruct::pointer-base '$xwav-data-start)) nil))))
   (values nil :type xwav))
 
 (defbinio xwav stream)
