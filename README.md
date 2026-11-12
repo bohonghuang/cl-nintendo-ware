@@ -170,7 +170,7 @@ CSTM SEEK 上下文固定小端；当前 FSTM SEEK 布局按 Citric 的参考实
 
 不再构造或重读旧 header 对象。file-section accessor 保持单参数签名，返回 `sections` 中首个匹配语义类型的 section 或 `NIL`。每个目录引用返回后恢复所属文件的起点锚点，避免内嵌 WAV 覆盖外层上下文。BOM 使用固定 BE 枚举：FF FE 为 LE、FE FF 为 BE，未知值暴露原生 `type-error`。GRP／XSAR 只读取原始子文件数据；显式读取子文件时，由其自身容器读取 BOM。高阶 `inline` 用于容器和 typed reference 的共用包装，具体记录和事件不直接使用高阶 parser。
 
-只有确实需要剩余长度的布局使用零宽类型 `nintendo-ware-section-tail-size`，保存在 `%size`：它通过当前 section 的起点锚点回读对应端序的 size 字段，计算剩余长度，不消费输入。需要绝对结束位置时，就地用 `%position + %size` 计算。目前 SEQ 的无计数事件流和 SEEK 的尾部 padding 使用此布局；不向其他 body 注入 header 或尾长字段。
+只有确实需要剩余长度的布局使用零宽类型 `nintendo-ware-section-tail-size`，保存在 `%size`：它通过当前 section 的起点锚点回读对应端序的 size 字段，计算剩余长度，不消费输入。需要绝对结束位置时，就地用 `%position + %size` 计算。目前只有 SEQ 的无计数事件流使用此布局；不向其他 body 注入 header 或尾长字段。
 
 ```lisp
 (defbinstruct/me sample-point
@@ -212,7 +212,7 @@ CSTM SEEK 上下文固定小端；当前 FSTM SEEK 布局按 Citric 的参考实
 
 sized target 如需长度，必须在开头通过 `(%size 0 :type nintendo-ware-reference-size)` 获取并保存，再读取其他字段或子引用。这个 ME alias 通过原生零宽 `pointer`，按引用的端序直接读取 `$nintendo-ware-reference-size` 指向的 u32 size 字段；嵌套 reference 会覆盖该全局锚点，不保证返回父布局后再次查询仍得到父 size。普通引用没有声明长度，目标按自身布局读取，不使用 size 查询。target 以局部 `%start`／`%end` 记录实际读取范围；sized target 末尾保留原生 `peek`／`map` 声明，读取时不改动 size，写入时可将实际长度回写到捕获的 size 字段位置。sized 分支以 `0` 初始化 size 占位值。临时 LE／BE smoke 已验证 tag 为 0、非零基址下的 3 字节目标 size 回填、零长度目标及普通引用不含 size 字段；这不是完整 writer 验证。回写不实现额外手工逻辑；不再预置 target endpoint 或通过 endpoint 相减取得声明长度。
 
-SAR 字符串和 SAR／GRP 原始数据目标使用 sized 长度；WAR 直接返回 WAV 对象，WAV 仍由自身布局解析，不套 sized-reference 长度限制。`xwar-waves` 直接提取 `xwar-info-body-entries` 的 WAV／NIL 数组。STM 的 sample-data、REGN data、SAR stream sends／extension 也都是已解析的语义值。DATA／FILE／REGN 建立原生目标位置，INFO 中的引用在锚点就绪时完成解析；SEEK／REGN 需要的 stream 参数通过原生 stream-info 锚点取得。不会在 accessor 或 `read-file` 返回后补做二进制解析。WAR 每个 `xwav-embedded` 入口清空 `$xwav-data-start` 对应的 `pointer-base` cdr，隔离相邻 WAV 的已知位置和 pending callbacks；不改共享 reference 布局。
+SAR 字符串和 SAR／GRP 原始数据目标使用 sized 长度；WAR 直接返回 WAV 对象，WAV 仍由自身布局解析，不套 sized-reference 长度限制。`xwar-waves` 直接提取 `xwar-info-body-entries` 的 WAV／NIL 数组。STM 的 DATA／SEEK／REGN section 只建立各自的全局目标锚点，由 INFO 的原生 pointer 解析样本、SEEK rows／padding 和 REGN entries；SEEK／REGN 不反向读取 stream-info。样本和 REGN 结果仍分别保存在 `xstm-stream-info-sample-data`、`xstm-region-info-data`；SEEK 结果位于 `xstm-info-body-seek-data`，通过 `xstm-seek-data-rows`／`xstm-seek-data-padding` 访问。INFO 直接传入 REGN 的 channel-count、entry-size 和 count，不回读 INFO 字段。不会在 accessor 或 `read-file` 返回后补做二进制解析。WAR 每个 `xwav-embedded` 入口清空 `$xwav-data-start` 对应的 `pointer-base` cdr，隔离相邻 WAV 的已知位置和 pending callbacks；不改共享 reference 布局。
 
 `$...` 是供其他结构访问的 global position，并支持原生延迟解析；仅当前结构使用的位置和解析变量统一为局部 `%...`。pointer 基址直接传符号，不包 `progn`；typed reference 的调用方通过零宽原生 pointer 获取跨结构基址的数值。生成的引用数组各自捕获局部位置，不会覆盖外层数组基址。pointer 不在字段类型最外层时包原生 `values`，需要立即使用引用目标的字段也使用 `values`。不添加目录跨度、重叠或 sized-reference 子文件长度校验；文件／区块 size 参与尾部 padding 读取，截断 padding 也会导致读取失败，不承诺完整格式校验或受限输入沙箱。
 

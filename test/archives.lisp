@@ -201,7 +201,9 @@
                        (append (when named-p (list (list #x2000 "STRG" strings)))
                                (list (list #x2001 "INFO" info) (list #x2002 "FILE" embedded))))))
 
-(defun xstm-fixture (&optional (major-version 2))
+(defun xstm-fixture (major-version
+                     &key (section-order '(#x4000 #x4001 #x4002 #x4003))
+                       (encoding 2) (seek-interval 14) (sample-offset 0) (region-offset 0))
   (let* ((codec-info (cl-nintendo-ware.test::make-xwav-dsp-adpcm-info
                       :coefficients (make-array 16 :element-type '(signed-byte 16) :initial-element 123)
                       :initial-context (cl-nintendo-ware.test::make-xwav-dsp-adpcm-context :history-1 -111)
@@ -211,7 +213,7 @@
             (if (>= major-version 3)
                 (encode-record 'cl-nintendo-ware.test::xstm-region-info
                                (cl-nintendo-ware.test::make-xstm-region-info :entry-size 20
-                                :data-reference (cl-nintendo-ware.test::make-reference :type #x1f00 :offset 0))) #())
+                                :data-reference (cl-nintendo-ware.test::make-reference :type #x1f00 :offset region-offset))) #())
             (if (>= major-version 4)
                 (encode-record 'cl-nintendo-ware.test::xstm-original-loop-info
                                (cl-nintendo-ware.test::make-xstm-original-loop-info :start 1 :end 28)) #())
@@ -227,11 +229,11 @@
                       :third (fixture-reference address #x0101 'channels 'info))))
              (list 'stream 'cl-nintendo-ware.test::xstm-stream-info
                    (lambda (address) (declare (ignore address))
-                     (cl-nintendo-ware.test::make-xstm-stream-info :encoding 2 :loop-flag 1 :channel-count 2 :sample-rate 32000
+                     (cl-nintendo-ware.test::make-xstm-stream-info :encoding encoding :loop-flag 1 :channel-count 2 :sample-rate 32000
                       :region-count (if (>= major-version 3) 1 0)
                       :loop-start 0 :sample-count 28 :block-count 2 :block-size 8 :block-sample-count 14
                       :last-block-size 8 :last-block-sample-count 14 :last-block-padded-size 8
-                      :seek-entry-size 4 :seek-interval-samples 14 :sample-data-reference (cl-nintendo-ware.test::make-reference :type #x1f00 :offset 0))))
+                      :seek-entry-size 4 :seek-interval-samples seek-interval :sample-data-reference (cl-nintendo-ware.test::make-reference :type #x1f00 :offset sample-offset))))
              (list 'extensions 'cl-nintendo-ware.test::byte-payload
                    (lambda (address) (declare (ignore address))
                      (cl-nintendo-ware.test::make-byte-payload :bytes extensions)) (length extensions))
@@ -257,15 +259,17 @@
                             :collect (encode-record 'cl-nintendo-ware.test::xstm-dsp-seek-context
                                       (cl-nintendo-ware.test::make-xstm-dsp-seek-context :history-1 (- value) :history-2 (* value 100)))))))
          (payload (apply #'octets-join (loop :for value :from 1 :to 4 :collect (make-array 8 :initial-element value)))))
-    (container-fixture "CSTM"
-                       (append (list (list #x4000 "INFO" info) (list #x4001 "SEEK" seek) (list #x4002 "DATA" payload))
-                               (when (>= major-version 3)
-                                 (list (list #x4003 "REGN"
-                                             (encode-record 'cl-nintendo-ware.test::xstm-region-record
-                                              (cl-nintendo-ware.test::make-xstm-region-record :start 1 :end 20
-                                               :contexts (vector (cl-nintendo-ware.test::make-xwav-dsp-adpcm-context :history-1 -321)
-                                                                 (cl-nintendo-ware.test::make-xwav-dsp-adpcm-context :history-2 456))) 2)))))
-                       :version (* major-version #x1000000))))
+    (let ((sections
+            (append (list (list #x4000 "INFO" info) (list #x4001 "SEEK" seek) (list #x4002 "DATA" payload))
+                    (when (>= major-version 3)
+                      (list (list #x4003 "REGN"
+                                  (encode-record 'cl-nintendo-ware.test::xstm-region-record
+                                   (cl-nintendo-ware.test::make-xstm-region-record :start 1 :end 20
+                                    :contexts (vector (cl-nintendo-ware.test::make-xwav-dsp-adpcm-context :history-1 -321)
+                                                      (cl-nintendo-ware.test::make-xwav-dsp-adpcm-context :history-2 456))) 2)))))))
+      (container-fixture "CSTM"
+                         (remove nil (mapcar (lambda (tag) (assoc tag sections)) section-order))
+                         :version (* major-version #x1000000)))))
 
 ;; Each target captures its declared size before a child shadows the size anchor.
 (nintendo-ware::define-nintendo-ware-reference (reference-probe-child (:sized t)) ()
@@ -567,25 +571,39 @@
     (assert (= 60 (nintendo-ware::xseq-event-note-key note)))
     (assert (= 100 (nintendo-ware::xseq-event-note-velocity note)))
     (assert (= 12 (nintendo-ware::xseq-event-note-duration note))))
-  (dolist (major '(2 3 4 6))
-    (let* ((stream (nintendo-ware::read-file 'nintendo-ware::xstm (xstm-fixture major)))
-           (information (nintendo-ware::xstm-info stream))
-           (metadata (nintendo-ware::xstm-info-body-stream (nintendo-ware::xstm-info-body information)))
-           (seek (nintendo-ware::xstm-seek-entry-context (aref (aref (nintendo-ware::xstm-seek-body-rows (nintendo-ware::xstm-seek-body (nintendo-ware::xstm-seek stream))) 1) 1)))
-           (channel (aref (nintendo-ware::xstm-info-body-channels (nintendo-ware::xstm-info-body information)) 1))
-           (track (aref (nintendo-ware::xstm-info-body-tracks (nintendo-ware::xstm-info-body information)) 0)))
-      (assert (eq 'nintendo-ware::dsp-adpcm (nintendo-ware::xstm-stream-info-encoding metadata)))
-      (assert (eq t (nintendo-ware::xstm-stream-info-loop-p metadata)))
-      (assert (equalp #(0 1) (nintendo-ware::xstm-track-channels track)))
-      (assert (= -4 (nintendo-ware::xstm-dsp-seek-context-history-1 seek)))
-      (assert (= 400 (nintendo-ware::xstm-dsp-seek-context-history-2 seek)))
-      (assert (equalp #(4 4 4 4 4 4 4 4) (subseq (nintendo-ware::xstm-stream-info-sample-data metadata) 24 32)))
-      (assert (= -222 (nintendo-ware::xwav-dsp-adpcm-context-history-2 (nintendo-ware::xwav-dsp-adpcm-info-loop-context (nintendo-ware::xstm-channel-codec-info channel)))))
-      (when (>= major 3)
-        (let ((region (aref (nintendo-ware::xstm-regions-body-entries (nintendo-ware::xstm-regions-body (nintendo-ware::xstm-regions stream))) 0)))
-          (assert (= 1 (nintendo-ware::xstm-region-start region)))
-          (assert (= 20 (nintendo-ware::xstm-region-end region)))
-          (assert (= -321 (nintendo-ware::xwav-dsp-adpcm-context-history-1 (aref (nintendo-ware::xstm-region-contexts region) 0))))))
-      (when (>= major 4) (assert (= 28 (nintendo-ware::xstm-original-loop-info-end (nintendo-ware::xstm-stream-info-original-loop-info metadata)))))
-      (when (>= major 6) (assert (= 42 (nintendo-ware::xstm-secret-info-value (nintendo-ware::xstm-stream-info-secret-info metadata)))))))
+  (dolist (order '((#x4000 #x4001 #x4002 #x4003)
+                   (#x4003 #x4001 #x4002 #x4000)
+                   (#x4001 #x4000 #x4003 #x4002)))
+    (dolist (major '(2 3 4 6))
+      (let* ((stream (nintendo-ware::read-file 'nintendo-ware::xstm (xstm-fixture major :section-order order)))
+             (information (nintendo-ware::xstm-info-body (nintendo-ware::xstm-info stream)))
+             (metadata (nintendo-ware::xstm-info-body-stream information))
+             (seek-data (nintendo-ware::xstm-info-body-seek-data information))
+             (seek (nintendo-ware::xstm-seek-entry-context (aref (aref (nintendo-ware::xstm-seek-data-rows seek-data) 1) 1)))
+             (channel (aref (nintendo-ware::xstm-info-body-channels information) 1))
+             (track (aref (nintendo-ware::xstm-info-body-tracks information) 0)))
+        (assert (eq 'nintendo-ware::dsp-adpcm (nintendo-ware::xstm-stream-info-encoding metadata)))
+        (assert (eq t (nintendo-ware::xstm-stream-info-loop-p metadata)))
+        (assert (equalp #(0 1) (nintendo-ware::xstm-track-channels track)))
+        (assert (= -4 (nintendo-ware::xstm-dsp-seek-context-history-1 seek)))
+        (assert (= 400 (nintendo-ware::xstm-dsp-seek-context-history-2 seek)))
+        (assert (equalp #(0 0 0 0 0 0 0 0) (nintendo-ware::xstm-seek-data-padding seek-data)))
+        (assert (equalp #(4 4 4 4 4 4 4 4) (subseq (nintendo-ware::xstm-stream-info-sample-data metadata) 24 32)))
+        (assert (= -222 (nintendo-ware::xwav-dsp-adpcm-context-history-2 (nintendo-ware::xwav-dsp-adpcm-info-loop-context (nintendo-ware::xstm-channel-codec-info channel)))))
+        (when (>= major 3)
+          (let ((region (aref (nintendo-ware::xstm-region-info-data (nintendo-ware::xstm-stream-info-region-info metadata)) 0)))
+            (assert (= 1 (nintendo-ware::xstm-region-start region)))
+            (assert (= 20 (nintendo-ware::xstm-region-end region)))
+            (assert (= -321 (nintendo-ware::xwav-dsp-adpcm-context-history-1 (aref (nintendo-ware::xstm-region-contexts region) 0))))))
+        (when (>= major 4) (assert (= 28 (nintendo-ware::xstm-original-loop-info-end (nintendo-ware::xstm-stream-info-original-loop-info metadata)))))
+        (when (>= major 6) (assert (= 42 (nintendo-ware::xstm-secret-info-value (nintendo-ware::xstm-stream-info-secret-info metadata)))))))
+    (rejects binstruct::deserialize-error
+      (nintendo-ware::read-file 'nintendo-ware::xstm (xstm-fixture 3 :section-order order :seek-interval 0)))
+    (rejects binstruct::deserialize-error
+      (nintendo-ware::read-file 'nintendo-ware::xstm (xstm-fixture 3 :section-order order :encoding 0)))
+    (let* ((stream (nintendo-ware::read-file 'nintendo-ware::xstm
+                                          (xstm-fixture 3 :section-order order :sample-offset -1 :region-offset -1)))
+           (metadata (nintendo-ware::xstm-info-body-stream (nintendo-ware::xstm-info-body (nintendo-ware::xstm-info stream)))))
+      (assert (null (nintendo-ware::xstm-stream-info-sample-data metadata)))
+      (assert (null (nintendo-ware::xstm-region-info-data (nintendo-ware::xstm-stream-info-region-info metadata))))))
   (format t "SAR extraction and GRP/WSD/STM reader scenarios passed.~%"))
