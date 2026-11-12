@@ -42,17 +42,24 @@
       `(progn
          ,@(when defined-p
              `((defbinstruct (,name ,@options) ,lambda-list ,@body)
-               (defbinalias (,little (:type ,type)) ,lambda-list
-                 (,name ,@lambda-list))
                (defbinstruct/be (,big (:type ,type) (:endian :big)
                                      ,@(remove-if (lambda (option) (member (car option) '(:type :endian))) options))
                    ,lambda-list
                  ,@body)))
-         (eval-when (:compile-toplevel :load-toplevel :execute)
-           (setf (get ',name 'binstruct::expand-reader-type-expr)
-                 (lambda (&rest arguments)
-                   (apply #'binstruct::expand-reader-type-expr
-                          (ecase (or (and (boundp '*endian*) *endian*) :little)
-                            (:little ',little) (:big ',big))
-                          arguments))))))))
+         ,(with-gensyms (args symbol)
+            `(eval-when (:compile-toplevel :load-toplevel :execute)
+               (setf (get ',name 'binstruct::expand-reader-type-expr)
+                     (lambda (&rest ,args)
+                       (apply #'binstruct::expand-reader-type-expr
+                                ',(ecase (or (when (boundp '*endian*) *endian*) :little)
+                                    (:little little)
+                                    (:big big))
+                                ,args))
+                     (get ',little 'binstruct::expand-writer-type-expr)
+                     (lambda (&rest ,args)
+                       (with-gensyms (,symbol)
+                         (subst ',name ,symbol (apply #'binstruct::expand-reader-type-expr ,symbol ,args))))
+                     (get ',little 'binstruct::expand-writer-type-expr)
+                     (lambda (&rest ,args)
+                       (apply #'binstruct::expand-writer-type-expr ',name ,args)))))))))
 
