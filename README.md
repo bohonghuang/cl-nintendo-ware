@@ -10,13 +10,15 @@ Common Lisp NintendoWare C/F 音频文件读取库，覆盖 3DS、Wii U、Switch
 
 ```lisp
 (ql:register-local-projects)
-(ql:quickload :cl-nintendo-ware)
+(asdf:load-system :cl-nintendo-ware)
 ```
 
 ```bash
-sbcl --dynamic-space-size 4096 --non-interactive --eval '(ql:quickload :cl-nintendo-ware :silent t)' \
+sbcl --dynamic-space-size 4096 --non-interactive --eval '(asdf:load-system :cl-nintendo-ware)' \
   --eval '(asdf:test-system :cl-nintendo-ware)'
 ```
+
+ME 的显式 LE parser 别名与原布局共享语义类型；BE 容器的原生 `:include` 参数显式选择对应 BE body parser，并保留 body 符号所属包。inline 参数展开遵循 binstruct 的 reader hook，递归布局的前置注册保留原参数。STM SEEK 的 magic 默认值为新建的四字符 base-string，避免空字符串索引警告及共享常量造成的分支折叠。
 
 包名 `cl-nintendo-ware`，唯一昵称 `nintendo-ware`。
 

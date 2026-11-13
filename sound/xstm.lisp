@@ -124,7 +124,8 @@
 (defbinstruct/me xstm-seek-data (information)
   (%start 0 :type position)
   (%size 0 :type (values (pointer (unsigned-byte 32) (map null (constantly -4)) %start)))
-  (%magic #.(coerce "" 'simple-base-string) :type (values nintendo-ware-magic))
+  (%magic (make-string 4 :element-type 'base-char :initial-element #\Space)
+          :type (values nintendo-ware-magic))
   (%encoding 'dsp-adpcm :type (map null (constantly (xstm-stream-info-encoding information))))
   (%stride 4 :type (map null (constantly (xstm-stream-info-seek-entry-size information))))
   (%rows 0 :type (map null (constantly

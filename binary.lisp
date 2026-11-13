@@ -29,7 +29,13 @@
                            collect (if (eq key :include)
                                        (list key (let* ((symbol (car (ensure-list value)))
                                                         (*package* (symbol-package symbol)))
-                                                   (cons (symbolicate symbol '#:/be) (cdr (ensure-list value)))))
+                                                   (cons (symbolicate symbol '#:/be)
+                                                         (mapcar (lambda (argument)
+                                                                   (if (consp argument)
+                                                                       (let ((*package* (symbol-package (car argument))))
+                                                                         (cons (symbolicate (car argument) '#:/be) (cdr argument)))
+                                                                       argument))
+                                                                 (cdr (ensure-list value))))))
                                        (list key value)))))
         (macroexpand `(defbinstruct (,name ,@options) ,lambda-list ,@slots))))))
 
@@ -50,7 +56,7 @@
       `(progn
          ,@(when defined-p
              `((defbinstruct (,name ,@options) ,lambda-list ,@body)
-               (defbinalias ,little ,lambda-list
+               (defbinalias (,little (:type ,type)) ,lambda-list
                  (,name . ,(loop :for arg :in (parsonic::lambda-list-arguments lambda-list)
                                  :if (member arg inline-args)
                                    :collect `(inline ,arg)
@@ -64,11 +70,17 @@
             `(eval-when (:compile-toplevel :load-toplevel :execute)
                (setf (get ',name 'binstruct::expand-reader-type-expr)
                      (lambda (&rest ,args)
-                       (apply #'binstruct::expand-reader-type-expr
-                                (ecase (or (when (boundp '*endian*) *endian*) :little)
-                                  (:little ',little)
-                                  (:big ',big))
-                                ,args))
+                       (ecase (or (when (boundp '*endian*) *endian*) :little)
+                         (:little
+                          (apply #'binstruct::expand-reader-type-expr-default ',name
+                                 ,(if inline-args
+                                      `(loop for argument in ,args
+                                             for parameter in ',(parsonic::lambda-list-arguments lambda-list)
+                                             collect (if (member parameter ',inline-args)
+                                                         (binstruct::expand-reader-type argument)
+                                                         argument))
+                                      args)))
+                         (:big (apply #'binstruct::expand-reader-type-expr ',big ,args))))
                      (get ',name 'binstruct::expand-writer-type-expr)
                      (lambda (&rest ,args)
                        (apply #'binstruct::expand-writer-type-expr
