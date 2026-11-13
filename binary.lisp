@@ -40,15 +40,27 @@
            (lambda-list (when (and body (not (member :type (first body)))) (pop body)))
            (type (or (cadr (assoc :type options)) name))
            (little (symbolicate name '#:/le))
-           (big (symbolicate name '#:/be)))
+           (big (symbolicate name '#:/be))
+           (inline-args (labels ((traverse (object) ;; Simple inline args collector
+                                   (when (consp object)
+                                     (if (eq (car object) 'inline)
+                                         (list (cadr object))
+                                         (nconc (traverse (car object)) (traverse (cdr object)))))))
+                          (delete-duplicates (traverse body)))))
       `(progn
          ,@(when defined-p
              `((defbinstruct (,name ,@options) ,lambda-list ,@body)
+               (defbinalias ,little ,lambda-list
+                 (,name . ,(loop :for arg :in (parsonic::lambda-list-arguments lambda-list)
+                                 :if (member arg inline-args)
+                                   :collect `(inline ,arg)
+                                 :else
+                                   :collect arg)))
                (defbinstruct/be (,big (:type ,type) (:endian :big)
                                      ,@(remove-if (lambda (option) (member (car option) '(:type :endian))) options))
                    ,lambda-list
                  ,@body)))
-         ,(with-gensyms (args symbol)
+         ,(with-gensyms (args)
             `(eval-when (:compile-toplevel :load-toplevel :execute)
                (setf (get ',name 'binstruct::expand-reader-type-expr)
                      (lambda (&rest ,args)
@@ -57,11 +69,10 @@
                                   (:little ',little)
                                   (:big ',big))
                                 ,args))
-                     (get ',little 'binstruct::expand-reader-type-expr)
+                     (get ',name 'binstruct::expand-writer-type-expr)
                      (lambda (&rest ,args)
-                       (with-gensyms (,symbol)
-                         (subst ',name ,symbol (apply #'binstruct::expand-reader-type-expr ,symbol ,args))))
-                     (get ',little 'binstruct::expand-writer-type-expr)
-                     (lambda (&rest ,args)
-                       (apply #'binstruct::expand-writer-type-expr ',name ,args)))))))))
-
+                       (apply #'binstruct::expand-writer-type-expr
+                                (ecase (or (when (boundp '*endian*) *endian*) :little)
+                                  (:little ',little)
+                                  (:big ',big))
+                                ,args)))))))))

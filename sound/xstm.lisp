@@ -121,9 +121,6 @@
 (defbinalias/me (xstm-seek-row (:type (simple-array xstm-seek-entry (*)))) (encoding stride channels)
   (simple-array (xstm-seek-entry encoding stride) (channels)))
 
-;; CSTM SEEK payloads remain LE even inside a BE container.
-(defbinalias xstm-seek-row/le (encoding stride channels) (xstm-seek-row encoding stride channels))
-
 (defbinstruct/me xstm-seek-data (information)
   (%start 0 :type position)
   (%size 0 :type (values (pointer (unsigned-byte 32) (map null (constantly -4)) %start)))

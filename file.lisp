@@ -6,8 +6,6 @@
 
 (defbinalias/me nintendo-ware-u16 () (unsigned-byte 16))
 (defbinalias/me nintendo-ware-u32 () (unsigned-byte 32))
-(defbinalias nintendo-ware-u16/le () nintendo-ware-u16)
-(defbinalias nintendo-ware-u32/le () nintendo-ware-u32)
 
 (defbinstruct (nintendo-ware-file-position (:type non-negative-fixnum)
                                         (:constructor progn) (:conc-name nil)) ()

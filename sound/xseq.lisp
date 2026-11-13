@@ -506,8 +506,6 @@
   (values #.(make-array 0 :element-type 'xseq-event)
           :type (map null (constantly (xseq-events-unpack %events %positions)))))
 
-;; The event stream's endian is independent of the surrounding section.
-(defbinalias xseq-track/le (end) (xseq-track end))
 
 (defbinstruct/me xseq-label-entry ()
   (%tag 0 :type (unsigned-byte 16))

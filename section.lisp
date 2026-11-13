@@ -26,10 +26,4 @@
            (body (symbolicate name '-body)))
       `(progn
          (defbinstruct/me ,body () ,@slots)
-         ;; INLINE arguments explicitly select their endian-specific body parser.
-         (defbinstruct (,name (:include (nintendo-ware-section ,magic (,body))) ,@options) ())
-         (defbinstruct/be (,(symbolicate name '/be)
-                           (:type ,(or (cadr (assoc :type options)) name))
-                           (:include (nintendo-ware-section ,magic (,(symbolicate body '/be))))
-                           ,@(remove-if (lambda (option) (member (car option) '(:type :endian))) options)) ())
-         (defbinstruct/me ,name)))))
+         (defbinstruct/me (,name (:include (nintendo-ware-section ,magic (,body))) ,@options) ())))))
