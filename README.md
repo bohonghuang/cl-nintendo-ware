@@ -18,7 +18,7 @@ sbcl --dynamic-space-size 4096 --non-interactive --eval '(asdf:load-system :cl-n
   --eval '(asdf:test-system :cl-nintendo-ware)'
 ```
 
-ME 的显式 LE parser 别名与原布局共享语义类型；BE 容器的原生 `:include` 参数显式选择对应 BE body parser，并保留 body 符号所属包。inline 参数展开遵循 binstruct 的 reader hook，递归布局的前置注册保留原参数。STM SEEK 的 magic 默认值为新建的四字符 base-string，避免空字符串索引警告及共享常量造成的分支折叠。
+ME 的显式 LE/BE 布局与原布局共享语义类型；`:include` 的 inline 参数及端序选择由 binstruct 原生展开，库不改写 include 名称，reader/writer hook 使用相同的端序分派。依赖 binstruct 的 include 祖先调用经过类型展开 hook；LE 布局保留原生继承协议，不使用返回值别名替代。STM SEEK 的 magic 默认值为新建的四字符 base-string，避免空字符串索引警告及共享常量造成的分支折叠。
 
 包名 `cl-nintendo-ware`，唯一昵称 `nintendo-ware`。
 
