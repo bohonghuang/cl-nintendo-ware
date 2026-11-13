@@ -45,6 +45,15 @@
   (infx (make-xgrp-infx) :type xgrp-infx :tag #x7802)
   (file (make-xgrp-file) :type xgrp-file :tag #x7801))
 
+(defun xgrp-entries (file)
+  "Return group entries with their original file IDs and data."
+  (xgrp-info-entries (xgrp-info file)))
+
+(defun xgrp-dependencies (file)
+  "Return resource dependency records, or NIL when INFX is absent."
+  (let ((section (xgrp-infx file)))
+    (when section (xgrp-infx-entries section))))
+
 (defbinio xgrp stream)
 
 (defmethod read-file ((type (eql 'xgrp)) (stream stream))

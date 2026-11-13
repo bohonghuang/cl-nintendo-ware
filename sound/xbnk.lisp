@@ -161,6 +161,14 @@
 (define-nintendo-ware-file (xbnk (:magic ("CBNK" "FBNK")))
   (info (make-xbnk-info) :type xbnk-info :tag #x5800))
 
+(defun xbnk-instruments (file)
+  "Return instrument definitions in instrument-index order."
+  (xbnk-info-instruments (xbnk-info file)))
+
+(defun xbnk-waves (file)
+  "Return referenced wave IDs in wave-index order."
+  (xbnk-info-waves (xbnk-info file)))
+
 (defbinio xbnk stream)
 
 (defmethod read-file ((type (eql 'xbnk)) (stream stream))

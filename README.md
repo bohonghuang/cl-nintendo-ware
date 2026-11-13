@@ -24,7 +24,7 @@ ME 保留默认 LE 布局、显式 `/le` 别名和共享语义类型的 BE 布�
 
 ## 读取文件
 
-`read-file` 仿照 cl-nitro，是按文件类型符号和输入类型分派的 generic function。公开 API 只有 `read-file`、下表八个文件符号，以及文件级提取工具 `xseq-events`／`xwar-waves`／`xsar-files` 和文件条目访问器 `xsar-file-name`／`xsar-file-data`；全部在 `package.lisp` 的 `defpackage` 中声明。section、字段访问器、事件类型、构造器和声明宏保持内部，测试一律使用 `::`，模块和宏不得动态导出它们。类型参数例如 `'nintendo-ware:xseq`，不接受 `:auto`、关键字或 C/F 格式名称。输入支持 pathname、文件名字符串、二进制流和 octet vector；pathname 打开为流，向量包装为内存输入流，各格式的流方法调用对应的内部 `read-x...` reader。
+`read-file` 仿照 cl-nitro，是按文件类型符号和输入类型分派的 generic function。公开 API 仅覆盖第一层：`read-file`、下表八个文件符号，以及从文件直接提取本质数据的函数。返回的事件、声道、乐器、item、流元数据和依赖记录通过内部 `nintendo-ware::` API 继续访问，不逐项导出其类型或字段；section、引用、body、构造器和声明宏保持内部。全部导出在 `package.lisp` 的 `defpackage` 中声明，模块和宏不得动态导出。类型参数例如 `'nintendo-ware:xseq`，不接受 `:auto`、关键字或 C/F 格式名称。输入支持 pathname、文件名字符串、二进制流和 octet vector；pathname 打开为流，向量包装为内存输入流，各格式的流方法调用对应的内部 `read-x...` reader。
 
 ```lisp
 (let* ((file (nintendo-ware:read-file 'nintendo-ware:xseq #P"/path/to/music.bcseq"))
@@ -47,6 +47,19 @@ ME 保留默认 LE 布局、显式 `/le` 别名和共享语义类型的 BE 布�
 | `sound/xstm.lisp` | `xstm` | CSTM / FSTM |
 | `sound/xsar.lisp` | `xsar` | CSAR / FSAR |
 | `sound/xgrp.lisp` | `xgrp` | CGRP / FGRP |
+
+| 文件 | 公开的文件级提取 API | 返回内容 |
+|---|---|---|
+| SEQ | `xseq-events` | 语义事件数组，流程目标已转换为事件索引 |
+| WAV | `xwav-channels`；`xwav-codec`、`xwav-sample-rate`、`xwav-loop-p`、`xwav-loop-start`、`xwav-loop-end` | 声道数组及波形属性；loop-end 为排他结束样本位置，也是样本数 |
+| WAR | `xwar-waves` | 按 wave index 排列的 WAV／NIL 向量 |
+| BNK | `xbnk-instruments`、`xbnk-waves` | 乐器定义数组及引用的 wave ID 数组 |
+| WSD | `xwsd-items`、`xwsd-waves` | item 数组及引用的 wave ID 数组 |
+| STM | `xstm-stream`、`xstm-tracks`、`xstm-channels`、`xstm-seek-table` | 流元数据（含样本与 region 数据）、track／channel 数组及 SEEK 记录 |
+| SAR | `xsar-files`；`xsar-file-name`、`xsar-file-data` | 按 file ID 排列的 `(name . raw-data)` 条目及其访问器 |
+| GRP | `xgrp-entries`、`xgrp-dependencies` | 保留 file ID 的成员条目数组及资源依赖数组；缺少 INFX 时依赖为 NIL |
+
+新增提取函数直接返回已解析的字段，不复制数组、不解码音频、不再次读取二进制。数组保留原有索引及 NIL 项；下一层字段仍使用内部 API，例如 `(nintendo-ware::xwav-channel-data (aref (nintendo-ware:xwav-channels wave) 0))`。
 
 模块和所属类型、函数、宏统一使用 `x` 加 magic 后三位的前缀；`x` 同时涵盖 C/F 两种容器。例如事件声明宏为 `define-xseq-event`，音符类型为 `xseq-event-note`。这是直接重命名，旧名称不再提供兼容别名。
 

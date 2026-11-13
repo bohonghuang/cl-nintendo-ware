@@ -167,6 +167,22 @@
   (data (make-xstm-data) :type xstm-data :tag #x4002)
   (regions (make-xstm-regions) :type xstm-regions :tag #x4003))
 
+(defun xstm-stream (file)
+  "Return parsed stream metadata, including sample and region data."
+  (xstm-info-stream (xstm-info file)))
+
+(defun xstm-tracks (file)
+  "Return track records in track-index order."
+  (xstm-info-tracks (xstm-info file)))
+
+(defun xstm-channels (file)
+  "Return channel records in channel-index order."
+  (xstm-info-channels (xstm-info file)))
+
+(defun xstm-seek-table (file)
+  "Return parsed SEEK data, including rows and padding."
+  (xstm-info-seek-data (xstm-info file)))
+
 (defbinio xstm stream)
 
 (defmethod read-file ((type (eql 'xstm)) (stream stream))

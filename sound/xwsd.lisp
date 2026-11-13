@@ -151,6 +151,14 @@
 (define-nintendo-ware-file (xwsd (:magic ("CWSD" "FWSD")))
   (info (make-xwsd-info) :type xwsd-info :tag (#x6800 #x4800)))
 
+(defun xwsd-items (file)
+  "Return wave-sound items in item-index order."
+  (xwsd-info-items (xwsd-info file)))
+
+(defun xwsd-waves (file)
+  "Return referenced wave IDs in wave-index order."
+  (xwsd-info-waves (xwsd-info file)))
+
 (defbinio xwsd stream)
 
 (defmethod read-file ((type (eql 'xwsd)) (stream stream))

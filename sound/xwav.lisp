@@ -78,6 +78,30 @@
                         (constantly (setf (cdr (binstruct::pointer-base '$xwav-data-start)) nil))))
   (values nil :type xwav))
 
+(defun xwav-channels (file)
+  "Return channels in channel-index order."
+  (xwav-info-channels (xwav-info file)))
+
+(defun xwav-codec (file)
+  "Return the sample codec."
+  (xwav-info-codec (xwav-info file)))
+
+(defun xwav-sample-rate (file)
+  "Return the sample rate in Hz."
+  (xwav-info-sample-rate (xwav-info file)))
+
+(defun xwav-loop-p (file)
+  "Return whether the wave loops."
+  (xwav-info-loop-p (xwav-info file)))
+
+(defun xwav-loop-start (file)
+  "Return the loop start sample index."
+  (xwav-info-loop-start (xwav-info file)))
+
+(defun xwav-loop-end (file)
+  "Return the exclusive end sample index, also the sample count."
+  (xwav-info-loop-end (xwav-info file)))
+
 (defbinio xwav stream)
 
 (defmethod read-file ((type (eql 'xwav)) (stream stream))
