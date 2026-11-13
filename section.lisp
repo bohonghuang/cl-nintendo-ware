@@ -26,4 +26,17 @@
            (body (symbolicate name '-body)))
       `(progn
          (defbinstruct/me ,body () ,@slots)
-         (defbinstruct/me (,name (:include (nintendo-ware-section ,magic (,body))) ,@options) ())))))
+         (defbinstruct/me (,name (:include (nintendo-ware-section ,magic (,body))) ,@options) ())
+         ,@(with-gensyms (instance value)
+             (loop for slot in (remove-duplicates slots :key #'car)
+                   for slot-name = (binstruct::slot-name slot)
+                   for accessor-name = (symbolicate name '- slot-name)
+                   for body-accessor-name = (symbolicate name '-body)
+                   for inner-accessor-name = (symbolicate body '- slot-name)
+                   unless (binstruct::slot-excluded-p slot)
+                     collect `(progn
+                                (declaim (inline ,accessor-name (setf ,accessor-name)))
+                                (defun ,accessor-name (,instance)
+                                  (,inner-accessor-name (,body-accessor-name ,instance)))
+                                (defun (setf ,accessor-name) (,value ,instance)
+                                  (setf (,inner-accessor-name (,body-accessor-name ,instance)) ,value)))))))))

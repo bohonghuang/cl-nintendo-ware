@@ -52,11 +52,10 @@ ME 保留默认 LE 布局、显式 `/le` 别名和共享语义类型的 BE 布�
 
 `common.lisp` 保留共用的 magic/version 查询和 major-version 布局。`reference.lisp` 集中通用引用布局、辅助类型及引用声明宏，在 `binary.lisp` 之后、`file.lisp` 之前加载。`read-file` 及输入类型分派、文件头和文件容器位于 `file.lisp`，区块布局位于 `section.lisp`。`sound/sound.lisp` 在所有 `sound/x___.lisp` 之前加载，共用 codec、channel-index 数组、resource ID 和 wave ID 布局统一使用 `nintendo-ware-sound-` 前缀。NintendoWare 专有类型使用库或模块前缀，通用 VLQ 原语保持原名；记录位域类型统一命名为 `*-flags`。SAR 专用的 File ID 数组、资源 ID 数组、priority 数值字段位于 `sound/xsar.lisp`，使用 `xsar-sound-group-files`、`xsar-resource-ids`、`xsar-packed-priority`；WSD 专用 pan/filter 数值字段位于 `sound/xwsd.lisp`，使用 `xwsd-packed-pan`、`xwsd-packed-filter`，访问器同样带模块前缀。
 
-仅含计数、定位锚点和元素数组的布局使用 `(:constructor progn)`、`(:conc-name nil)` 和显式的 `(:type (simple-array ... (*)))`，直接返回数组，不再生成 `*-table` 结构或要求调用 `*-table-entries`／`*-table-count`。计数只用于解析，调用方使用 `length`。普通记录的数组访问器如 `xwsd-track-events`、`xwsd-item-tracks`、`xwsd-item-notes` 保持不变；section 字段通过原生 body 访问，如 `xwsd-info-body-items`、`xbnk-info-body-instruments`、`xstm-info-body-tracks`／`xstm-info-body-channels`、`xsar-strg-body-strings` 和 `xsar-info-body-sounds`。共用数组布局为 `nintendo-ware-sound-channel-indices`、`nintendo-ware-sound-wave-ids` 和 `xsar-resource-ids`。`xstm-seek-row` 同样直接返回 SEEK entry 数组。空引用保持 `NIL`，非空引用的零计数返回空数组，数组内空引用不压缩索引；不提供旧包装的兼容别名。具有 upper bounds、range 或 Patricia root 等独立语义字段的记录以及原生 section 容器保持结构。
+仅含计数、定位锚点和元素数组的布局使用 `(:constructor progn)`、`(:conc-name nil)` 和显式的 `(:type (simple-array ... (*)))`，直接返回数组，不再生成 `*-table` 结构或要求调用 `*-table-entries`／`*-table-count`。计数只用于解析，调用方使用 `length`。普通记录的数组访问器如 `xwsd-track-events`、`xwsd-item-tracks`、`xwsd-item-notes` 保持不变；section 字段可直接通过自动生成的访问器访问，如 `xwsd-info-items`、`xbnk-info-instruments`、`xstm-info-tracks`／`xstm-info-channels`、`xsar-strg-strings` 和 `xsar-info-sounds`。共用数组布局为 `nintendo-ware-sound-channel-indices`、`nintendo-ware-sound-wave-ids` 和 `xsar-resource-ids`。`xstm-seek-row` 同样直接返回 SEEK entry 数组。空引用保持 `NIL`，非空引用的零计数返回空数组，数组内空引用不压缩索引；不提供旧包装的兼容别名。具有 upper bounds、range 或 Patricia root 等独立语义字段的记录以及原生 section 容器保持结构。
 
 ```lisp
-(let* ((items (nintendo-ware::xwsd-info-body-items
-               (nintendo-ware::xwsd-info-body (nintendo-ware::xwsd-info wsd))))
+(let* ((items (nintendo-ware::xwsd-info-items (nintendo-ware::xwsd-info wsd)))
        (item (aref items 0))
        (track (aref (nintendo-ware::xwsd-item-tracks item) 0)))
   (loop for event across (nintendo-ware::xwsd-track-events track)
@@ -162,7 +161,7 @@ CSTM SEEK 上下文固定小端；当前 FSTM SEEK 布局按 Citric 的参考实
 
 ## 声明模式
 
-`define-nintendo-ware-file`、`define-nintendo-ware-section` 按 `cl-nitro` 的声明方式，名称／选项后直接写字段，不带参数表；具体 file、section 及其 body reader 均无参数。file 直接读取 magic、BOM、version 和 sized-reference 目录，保留语义 section 数组；BOM 选择明确的 LE／BE 数值和 section union 布局。目录 union 只接受声明的 tag，没有 unknown fallback。section 使用明确端序的 `inline` body，字段通过 `xxx-body` 与 `xxx-body-field` 访问，不生成转发 getter／setter。容器保留原生起止锚点、padding 前的局部 `%end` 和声明式 remaining padding；目前不实现 size 回写，也不保证 writer 可用。区块按真实目录引用定位，不假设目录顺序与物理顺序一致或区块连续排列。
+`define-nintendo-ware-file`、`define-nintendo-ware-section` 按 `cl-nitro` 的声明方式，名称／选项后直接写字段，不带参数表；具体 file、section 及其 body reader 均无参数。file 直接读取 magic、BOM、version 和 sized-reference 目录，保留语义 section 数组；BOM 选择明确的 LE／BE 数值和 section union 布局。目录 union 只接受声明的 tag，没有 unknown fallback。section 使用明确端序的 `inline` body，并仿照 `cl-nitro` 为未被 binstruct 排除的字段自动生成 `xxx-field` getter／`(setf xxx-field)`，以内联函数转发到原生 body 访问器；这些访问器保持包内部，不自动导出。容器保留原生起止锚点、padding 前的局部 `%end` 和声明式 remaining padding；目前不实现 size 回写，也不保证 writer 可用。区块按真实目录引用定位，不假设目录顺序与物理顺序一致或区块连续排列。
 
 ```lisp
 (define-nintendo-ware-section (sample-info (:magic "INFO"))
