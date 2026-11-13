@@ -18,7 +18,7 @@ sbcl --dynamic-space-size 4096 --non-interactive --eval '(asdf:load-system :cl-n
   --eval '(asdf:test-system :cl-nintendo-ware)'
 ```
 
-ME 的显式 LE/BE 布局与原布局共享语义类型；`:include` 的 inline 参数及端序选择由 binstruct 原生展开，库不改写 include 名称，reader/writer hook 使用相同的端序分派。依赖 binstruct 的 include 祖先调用经过类型展开 hook；LE 布局保留原生继承协议，不使用返回值别名替代。STM SEEK 的 magic 默认值为新建的四字符 base-string，避免空字符串索引警告及共享常量造成的分支折叠。
+ME 保留默认 LE 布局、显式 `/le` 别名和共享语义类型的 BE 布局；naive inline 收集器为 `/le` 别名转发 parser 参数。LE 的 `:include` 保持不变；BE 的祖先名称在祖先所属包中通过 `find-symbol` 查找对应 `/be`，不存在即报错，其余参数仍由 binstruct 原生展开。reader/writer hook 对称选择 `/le` 或 `/be`；binstruct 的 include 使用 default expansion，不经过该 hook。STM SEEK 的 magic 默认值为新建的四字符 base-string，避免空字符串索引警告及共享常量造成的分支折叠。
 
 包名 `cl-nintendo-ware`，唯一昵称 `nintendo-ware`。
 
@@ -78,6 +78,8 @@ BNK、WSD、SAR 的可选参数各有记录专属位域 set，开关字段使用
 ### WAV 原生采样数据
 
 `xwav-channel-data` 由声明中的 `ecase` 按 codec 直接读取最终专用数组，不先读取 octet vector 再做符号转换、拼接 PCM16 或拆 nibble。移除旧 `xwav-channel-encoded-data`，不提供兼容副本。`count` 为 `xwav-info-body-loop-end`，也是非循环波形的样本数。
+
+IMA 样本直接声明为 `(simple-array (unsigned-byte 4) (sample-count))`，使用 binstruct 修复后的原生数组解析，不再单独定义 `xwav-ima-samples` 包装布局。
 
 | `xwav-info-body-codec` | `xwav-channel-data` 元素类型 | 长度与顺序 |
 |---|---|---|

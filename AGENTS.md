@@ -25,12 +25,13 @@ Use SBCL with Quicklisp initialized. After moving the repository into `local-pro
 
 Always load systems with `asdf:load-system`. NEVER use `ql:quickload`, including for dependencies, builds, tests or smoke runs. Compiler diagnostics MUST remain visible: NEVER use silent/quiet-compilation wrappers, output suppression or handlers that hide compiler errors or warnings. Expose compiler errors and warnings in tool output and report failures rather than suppressing them.
 
+For tests, invoke `asdf:test-system` directly: it compiles and loads the required systems itself. NEVER precede it with `asdf:load-system` in a load + test sequence.
+
 ```bash
 # Load/build
 sbcl --non-interactive --eval '(asdf:load-system :cl-nintendo-ware)'
 # All reader tests
-sbcl --non-interactive --eval '(asdf:load-system :cl-nintendo-ware)' \
-  --eval '(asdf:test-system :cl-nintendo-ware)'
+sbcl --dynamic-space-size 4096 --non-interactive --eval '(asdf:test-system :cl-nintendo-ware)'
 ```
 
 No configured lint command, application executable or playback command. Smoke the actual library, e.g. `(nintendo-ware:read-file 'nintendo-ware:xseq #P"/path/to/music.bcseq")`.

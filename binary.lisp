@@ -34,13 +34,37 @@
            (big (symbolicate name '#:/be)))
       `(progn
          ,@(when defined-p
-             `((defbinstruct (,name ,@options) ,lambda-list ,@body)
-               (defbinstruct (,little (:type ,type) (:endian :little)
-                                     ,@(remove-if (lambda (option) (member (car option) '(:type :endian))) options))
-                   ,lambda-list
-                 ,@body)
+             `((eval-when (:compile-toplevel :load-toplevel :execute)
+                 (remprop ',name 'binstruct::expand-reader-type-expr)
+                 (remprop ',name 'binstruct::expand-writer-type-expr))
+               (defbinstruct (,name ,@options) ,lambda-list ,@body)
+               (defbinalias (,little (:type ,type)) ,lambda-list
+                 (,name . ,(loop :with inline-args
+                                   := (labels ((traverse (object)
+                                                 (when (consp object)
+                                                   (if (eq (car object) 'inline)
+                                                       (list (cadr object))
+                                                       (nconc (traverse (car object)) (traverse (cdr object)))))))
+                                        (delete-duplicates (traverse body)))
+                                 :for arg :in (parsonic::lambda-list-arguments lambda-list)
+                                 :if (member arg inline-args)
+                                   :collect `(inline ,arg)
+                                 :else
+                                   :collect arg)))
                (defbinstruct/be (,big (:type ,type) (:endian :big)
-                                     ,@(remove-if (lambda (option) (member (car option) '(:type :endian))) options))
+                                     ,@(loop :for option :in options
+                                             :nconc
+                                             (case (car option)
+                                               ((:type :endian))
+                                               (:include
+                                                (destructuring-bind (ancestor &rest arguments) (ensure-list (cadr option))
+                                                  (let ((big-ancestor
+                                                          (find-symbol (concatenate 'string (symbol-name ancestor) "/BE")
+                                                                       (symbol-package ancestor))))
+                                                    (unless big-ancestor
+                                                      (error "No big-endian include layout for ~S." ancestor))
+                                                    (list `(:include (,big-ancestor ,@arguments))))))
+                                               (otherwise (list option)))))
                    ,lambda-list
                  ,@body)))
          ,(with-gensyms (args)
@@ -48,14 +72,14 @@
                (setf (get ',name 'binstruct::expand-reader-type-expr)
                      (lambda (&rest ,args)
                        (apply #'binstruct::expand-reader-type-expr
-                                (ecase (or (when (boundp '*endian*) *endian*) :little)
-                                  (:little ',little)
-                                  (:big ',big))
-                                ,args))
+                              (ecase (or (when (boundp '*endian*) *endian*) :little)
+                                (:little ',little)
+                                (:big ',big))
+                              ,args))
                      (get ',name 'binstruct::expand-writer-type-expr)
                      (lambda (&rest ,args)
                        (apply #'binstruct::expand-writer-type-expr
-                                (ecase (or (when (boundp '*endian*) *endian*) :little)
-                                  (:little ',little)
-                                  (:big ',big))
-                                ,args)))))))))
+                              (ecase (or (when (boundp '*endian*) *endian*) :little)
+                                (:little ',little)
+                                (:big ',big))
+                              ,args)))))))))
