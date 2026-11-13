@@ -169,7 +169,7 @@ GRP 条目通过 `nintendo-ware::xgrp-entry-file-id` 保留归档中的原始文
 
 容器 BOM 与事件字节序分别处理：CSEQ 事件固定大端；Wii U FSEQ 为大端；Switch FSEQ 为小端。文件声明选择事件流布局，消费端无需处理端序。所有平台共享事件声明，不施加平台 opcode 白名单。
 
-CSTM SEEK 上下文固定小端；当前 FSTM SEEK 布局按 Citric 的参考实现使用大端上下文，独立于区块头 BOM。WAV PCM16 按自身 BOM 解析为有符号样本；DSP 帧字节和 IMA nibble 顺序遵循 codec，不随容器端序交换。STM 的样本仍为原始字节，由 `xstm-stream-info-sample-data` 保存；DATA 只建立样本区锚点。
+STM SEEK 上下文通过普通 ME 布局继承容器 BOM，不按 C/F magic 首字符选择端序。这是参考实现存在争议时采用的统一策略，不代表已确认所有真实文件的 SEEK 编码：Citric 按 C/F 选择 LE/BE，而 3sf/ntdlib 固定使用 LE。CSEQ 事件固定 BE 的规则不变。WAV PCM16 按自身 BOM 解析为有符号样本；DSP 帧字节和 IMA nibble 顺序遵循 codec，不随容器端序交换。STM 的样本仍为原始字节，由 `xstm-stream-info-sample-data` 保存；DATA 只建立样本区锚点。
 
 ## 声明模式
 

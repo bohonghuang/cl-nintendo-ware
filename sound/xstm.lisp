@@ -124,8 +124,6 @@
 (defbinstruct/me xstm-seek-data (information)
   (%start 0 :type position)
   (%size 0 :type (values (pointer (unsigned-byte 32) (map null (constantly -4)) %start)))
-  (%magic (make-string 4 :element-type 'base-char :initial-element #\Space)
-          :type (values nintendo-ware-magic))
   (%encoding 'dsp-adpcm :type (map null (constantly (xstm-stream-info-encoding information))))
   (%stride 4 :type (map null (constantly (xstm-stream-info-seek-entry-size information))))
   (%rows 0 :type (map null (constantly
@@ -135,9 +133,7 @@
                                                                 :input nil :position nil
                                                                 :info "Zero SEEK interval"))
                                 (ceiling (xstm-stream-info-sample-count information) interval)) 0))))
-  (rows #() :type (ecase (char= (char %magic 0) #\C)
-                   ((t) (simple-array (xstm-seek-row/le %encoding %stride (xstm-stream-info-channel-count information)) (%rows)))
-                   ((nil) (simple-array (xstm-seek-row/be %encoding %stride (xstm-stream-info-channel-count information)) (%rows)))))
+  (rows #() :type (simple-array (xstm-seek-row %encoding %stride (xstm-stream-info-channel-count information)) (%rows)))
   (%end 0 :type position)
   (padding #.(make-array 0 :element-type '(unsigned-byte 8))
            :type (simple-array (unsigned-byte 8) ((- %size 8 (- %end %start))))))

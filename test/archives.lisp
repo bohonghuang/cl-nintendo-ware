@@ -253,11 +253,10 @@
              (list 'channel-2 'cl-nintendo-ware.test::reference (lambda (address) (fixture-reference address #x0300 'codec-2 'channel-2)))
              (list 'codec-1 'cl-nintendo-ware.test::xwav-dsp-adpcm-info (lambda (address) (declare (ignore address)) codec-info))
              (list 'codec-2 'cl-nintendo-ware.test::xwav-dsp-adpcm-info (lambda (address) (declare (ignore address)) codec-info)))))
-         (seek (let ((*fixture-endian* (if (eq *fixture-family* :c) :little :big)))
-                 (apply #'octets-join
+         (seek (apply #'octets-join
                       (loop :for value :from 1 :to 4
                             :collect (encode-record 'cl-nintendo-ware.test::xstm-dsp-seek-context
-                                      (cl-nintendo-ware.test::make-xstm-dsp-seek-context :history-1 (- value) :history-2 (* value 100)))))))
+                                      (cl-nintendo-ware.test::make-xstm-dsp-seek-context :history-1 (- value) :history-2 (* value 100))))))
          (payload (apply #'octets-join (loop :for value :from 1 :to 4 :collect (make-array 8 :initial-element value)))))
     (let ((sections
             (append (list (list #x4000 "INFO" info) (list #x4001 "SEEK" seek) (list #x4002 "DATA" payload))
