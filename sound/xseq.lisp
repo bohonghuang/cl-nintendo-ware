@@ -575,7 +575,7 @@
   (labels (make-xseq-labels) :type xseq-labels :tag #x5001))
 
 (defun xseq-events (sequence)
-  (xseq-data-body-events (xseq-data-body (xseq-data sequence))))
+  (xseq-data-events (xseq-data sequence)))
 
 (defbinio xseq stream)
 

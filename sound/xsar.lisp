@@ -486,9 +486,9 @@ as in cl-nitro: sounds, banks, wave archives, then groups. No files are parsed."
                                (let ((location (xsar-file-location entry)))
                                  (when (typep location 'xsar-internal-file)
                                    (xsar-internal-file-data location))))))
-                     (xsar-info-body-files (xsar-info-body info))))
+                     (xsar-info-files info)))
          (strg (xsar-strg xsar))
-         (strings (when strg (xsar-strg-body-strings (xsar-strg-body strg)))))
+         (strings (when strg (xsar-strg-strings strg))))
     (when strings
       (flet ((fill-names (entries file-id string-index)
                (when entries
@@ -497,13 +497,13 @@ as in cl-nitro: sounds, banks, wave archives, then groups. No files are parsed."
                      (when index
                        (setf (car (aref files (funcall file-id entry)))
                              (xsar-string-text (aref strings index)))))))))
-        (fill-names (xsar-info-body-sounds (xsar-info-body info))
+        (fill-names (xsar-info-sounds info)
                     #'xsar-sound-file-id #'xsar-sound-string-index)
-        (fill-names (xsar-info-body-banks (xsar-info-body info))
+        (fill-names (xsar-info-banks info)
                     #'xsar-bank-file-id #'xsar-bank-string-index)
-        (fill-names (xsar-info-body-wave-archives (xsar-info-body info))
+        (fill-names (xsar-info-wave-archives info)
                     #'xsar-wave-archive-file-id #'xsar-wave-archive-string-index)
-        (fill-names (xsar-info-body-groups (xsar-info-body info))
+        (fill-names (xsar-info-groups info)
                     #'xsar-group-file-id #'xsar-group-string-index)))
     files))
 

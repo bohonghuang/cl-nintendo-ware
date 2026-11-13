@@ -30,14 +30,12 @@
                  (let ((wave (nintendo-ware::read-file 'nintendo-ware::xwav stream)))
                    (assert (equalp #(1 2 3)
                                    (nintendo-ware::xwav-channel-data
-                                    (aref (nintendo-ware::xwav-info-body-channels
-                                           (nintendo-ware::xwav-info-body (nintendo-ware::xwav-info wave))) 0)))))
+                                    (aref (nintendo-ware::xwav-info-channels (nintendo-ware::xwav-info wave)) 0)))))
                  (assert (= (length first) (file-position stream)))
                  (let ((wave (nintendo-ware::read-file 'nintendo-ware::xwav stream)))
                    (assert (equalp #(-128 -1 127)
                                    (nintendo-ware::xwav-channel-data
-                                    (aref (nintendo-ware::xwav-info-body-channels
-                                           (nintendo-ware::xwav-info-body (nintendo-ware::xwav-info wave))) 0)))))
+                                    (aref (nintendo-ware::xwav-info-channels (nintendo-ware::xwav-info wave)) 0)))))
                  (assert (= (+ (length first) (length second)) (file-position stream))))
             (close stream))
           (rejects error
@@ -49,8 +47,8 @@
                        (coerce (container-fixture "CTST" (list (list #x1000 "INFO" payload)))
                                '(simple-array (unsigned-byte 8) (*)))))
                (info (tail-probe-info file)))
-          (assert (= #x01020304 (tail-probe-info-body-value (tail-probe-info-body info))))
-          (assert (equalp tail (tail-probe-info-body-tail (tail-probe-info-body info)))))
+          (assert (= #x01020304 (tail-probe-info-value info)))
+          (assert (equalp tail (tail-probe-info-tail info))))
         ;; LABL stores offsets verbatim, even without a DATA section.
         (dolist (offset '(-1 0 #x12345678))
           (let* ((payload
@@ -63,8 +61,7 @@
                         :length 5 :name #.(coerce "start" 'simple-base-string)))))
                  (file (nintendo-ware::read-file 'nintendo-ware::xseq
                          (container-fixture "CSEQ" (list (list #x5001 "LABL" payload)))))
-                 (label (aref (nintendo-ware::xseq-labels-body-entries
-                                (nintendo-ware::xseq-labels-body (nintendo-ware::xseq-labels file))) 0)))
+                 (label (aref (nintendo-ware::xseq-labels-entries (nintendo-ware::xseq-labels file)) 0)))
             (assert (null (nintendo-ware::xseq-data file)))
             (assert (= offset (nintendo-ware::xseq-label-entry-offset label)))
             (assert (string= "start" (nintendo-ware::xseq-label-entry-name label)))))
@@ -90,8 +87,7 @@
                  (flow (nintendo-ware::read-file 'nintendo-ware::xseq (sequence-fixture body :label-offset 11)))
                  (events (nintendo-ware::xseq-events flow)))
             (assert (= 11 (nintendo-ware::xseq-label-entry-offset
-                           (aref (nintendo-ware::xseq-labels-body-entries
-                                   (nintendo-ware::xseq-labels-body (nintendo-ware::xseq-labels flow))) 0))))
+                           (aref (nintendo-ware::xseq-labels-entries (nintendo-ware::xseq-labels flow)) 0))))
             (assert (= 3 (nintendo-ware::xseq-event-open-track-index (aref events 0))))
             (assert (= 3 (nintendo-ware::xseq-event-call-index
                            (nintendo-ware::xseq-event-if-sub-event (aref events 1)))))
@@ -117,7 +113,7 @@
                                 (list #x6801 "FILE" wave)))))
              (parsed (nintendo-ware::read-file 'nintendo-ware::xwar archive))
              (embedded (aref (nintendo-ware::xwar-waves parsed) 0))
-             (channel (aref (nintendo-ware::xwav-info-body-channels (nintendo-ware::xwav-info-body (nintendo-ware::xwav-info embedded))) 0)))
+             (channel (aref (nintendo-ware::xwav-info-channels (nintendo-ware::xwav-info embedded)) 0)))
         (assert (eq endian (nintendo-ware::nintendo-ware-file-endian parsed)))
         (assert (eq child-endian (nintendo-ware::nintendo-ware-file-endian embedded)))
         (ecase codec
@@ -134,10 +130,10 @@
            (bytes (let ((*fixture-family* :f) (*fixture-endian* endian))
                     (xgrp-fixture child)))
            (group (nintendo-ware::read-file 'nintendo-ware::xgrp bytes))
-           (entry (find 7 (nintendo-ware::xgrp-info-body-entries (nintendo-ware::xgrp-info-body (nintendo-ware::xgrp-info group)))
+           (entry (find 7 (nintendo-ware::xgrp-info-entries (nintendo-ware::xgrp-info group))
                         :key #'nintendo-ware::xgrp-entry-file-id))
            (nested (nintendo-ware::read-file 'nintendo-ware::xgrp (nintendo-ware::xgrp-entry-data entry)))
-           (nested-entry (find 7 (nintendo-ware::xgrp-info-body-entries (nintendo-ware::xgrp-info-body (nintendo-ware::xgrp-info nested)))
+           (nested-entry (find 7 (nintendo-ware::xgrp-info-entries (nintendo-ware::xgrp-info nested))
                                :key #'nintendo-ware::xgrp-entry-file-id))
            (parsed-sequence (nintendo-ware::read-file 'nintendo-ware::xseq
                                                     (nintendo-ware::xgrp-entry-data nested-entry))))
@@ -149,6 +145,6 @@
         (assert (= #x03000000
                    (nintendo-ware::nintendo-ware-sound-resource-id-value
                     (nintendo-ware::xgrp-dependency-resource-id
-                     (aref (nintendo-ware::xgrp-infx-body-entries (nintendo-ware::xgrp-infx-body (nintendo-ware::xgrp-infx container))) 0))))))))
+                     (aref (nintendo-ware::xgrp-infx-entries (nintendo-ware::xgrp-infx container)) 0))))))))
   (assert (not (boundp 'nintendo-ware::*endian*)))
   (format t "Shared-type ME, C/F containers, event endian and mixed embedded files passed.~%"))

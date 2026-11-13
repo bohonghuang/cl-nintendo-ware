@@ -7,8 +7,8 @@
                    'nintendo-ware::xsar
                    (asdf:system-relative-pathname :cl-nintendo-ware #P"test/data/mset.bcsar")))
          (info (nintendo-ware::xsar-info archive))
-         (strings (nintendo-ware::xsar-strg-body-strings (nintendo-ware::xsar-strg-body (nintendo-ware::xsar-strg archive))))
-         (sounds (nintendo-ware::xsar-info-body-sounds (nintendo-ware::xsar-info-body info)))
+         (strings (nintendo-ware::xsar-strg-strings (nintendo-ware::xsar-strg archive)))
+         (sounds (nintendo-ware::xsar-info-sounds info))
          (files (nintendo-ware::xsar-files archive))
          ;; This test chooses to parse every file. XSAR only returned bytes.
          (contents (map 'vector
@@ -20,7 +20,7 @@
                            nintendo-ware::xbnk nintendo-ware::xbnk nintendo-ware::xbnk nintendo-ware::xbnk nintendo-ware::xbnk
                            nintendo-ware::xwar nintendo-ware::xwar nintendo-ware::xwar nintendo-ware::xwar
                            nintendo-ware::xwar nintendo-ware::xwar nintendo-ware::xwar)))
-         (project (nintendo-ware::xsar-info-body-project-info (nintendo-ware::xsar-info-body info))))
+         (project (nintendo-ware::xsar-info-project-info info)))
     (assert (string= "CSAR" (nintendo-ware::nintendo-ware-file-magic archive)))
     (assert (eq :little (nintendo-ware::nintendo-ware-file-endian archive)))
     (assert (= 67 (length strings)))
@@ -112,7 +112,7 @@
               (assert (string= expected-name (name (nintendo-ware::xsar-sound-string-index sound))))
               (assert (= file-id (nintendo-ware::xsar-sound-file-id sound)))
               (assert (= volume (nintendo-ware::xsar-sound-volume sound))))
-      (let ((banks (nintendo-ware::xsar-info-body-banks (nintendo-ware::xsar-info-body info))))
+      (let ((banks (nintendo-ware::xsar-info-banks info)))
         (assert (= 5 (length banks)))
         (loop for bank across banks for (expected-name file-id) in
               '(("BANK_CTR_MSET_BGM" 7)
@@ -129,7 +129,7 @@
     ;; are absent in this asset and must remain NIL, not materialized defaults.
     (loop for file-id in '(5 6)
           for expected-items in '(((1.0f0 0)) ((1.0f0 0) (0.8f0 1) (1.8f0 1) (1.0f0 2))) do
-      (let ((items (nintendo-ware::xwsd-info-body-items (nintendo-ware::xwsd-info-body (nintendo-ware::xwsd-info (aref contents file-id))))))
+      (let ((items (nintendo-ware::xwsd-info-items (nintendo-ware::xwsd-info (aref contents file-id)))))
         (assert (= (length expected-items) (length items)))
         (loop for item across items for (pitch wave-index) in expected-items do
           (let* ((parameters (nintendo-ware::xwsd-item-parameters item))
@@ -171,12 +171,12 @@
                 (assert (= (length expected-waves) (length waves)))
                 (loop for wave across waves for (codec rate sample-count) in expected-waves do
                   (let* ((wave-info (nintendo-ware::xwav-info wave))
-                         (channels (nintendo-ware::xwav-info-body-channels (nintendo-ware::xwav-info-body wave-info))))
+                         (channels (nintendo-ware::xwav-info-channels wave-info)))
                     (assert (string= "CWAV" (nintendo-ware::nintendo-ware-file-magic wave)))
                     (assert (eq (ecase codec (1 'nintendo-ware::pcm-16) (2 'nintendo-ware::dsp-adpcm))
-                                (nintendo-ware::xwav-info-body-codec (nintendo-ware::xwav-info-body wave-info))))
-                    (assert (= rate (nintendo-ware::xwav-info-body-sample-rate (nintendo-ware::xwav-info-body wave-info))))
-                    (assert (= sample-count (nintendo-ware::xwav-info-body-loop-end (nintendo-ware::xwav-info-body wave-info))))
+                                (nintendo-ware::xwav-info-codec wave-info)))
+                    (assert (= rate (nintendo-ware::xwav-info-sample-rate wave-info)))
+                    (assert (= sample-count (nintendo-ware::xwav-info-loop-end wave-info)))
                     (assert (= 1 (length channels)))
                     (when (= codec 2)
                       (assert (typep (nintendo-ware::xwav-channel-codec-info (aref channels 0))
@@ -197,7 +197,7 @@
   (let* ((archive (nintendo-ware::read-file
                    'nintendo-ware::xsar
                    (asdf:system-relative-pathname :cl-nintendo-ware #P"test/data/TigerSound.bcsar")))
-         (sounds (nintendo-ware::xsar-info-body-sounds (nintendo-ware::xsar-info-body (nintendo-ware::xsar-info archive)))))
+         (sounds (nintendo-ware::xsar-info-sounds (nintendo-ware::xsar-info archive))))
     (assert (= 82 (length sounds)))
     (assert (= 16 (length (nintendo-ware::xsar-files archive))))
     (loop for sound across sounds
@@ -215,7 +215,7 @@
                    'nintendo-ware::xsar
                    (asdf:system-relative-pathname :cl-nintendo-ware #P"test/data/menu.bcsar")))
          (info (nintendo-ware::xsar-info archive))
-         (sounds (nintendo-ware::xsar-info-body-sounds (nintendo-ware::xsar-info-body info)))
+         (sounds (nintendo-ware::xsar-info-sounds info))
          (files (nintendo-ware::xsar-files archive))
          ;; File types are selected by this consumer, not inferred by XSAR.
          (contents (map 'vector
@@ -238,7 +238,7 @@
     (assert (string= "CSAR" (nintendo-ware::nintendo-ware-file-magic archive)))
     (assert (eq :little (nintendo-ware::nintendo-ware-file-endian archive)))
     (assert (= #x02000000 (nintendo-ware::nintendo-ware-file-version archive)))
-    (assert (= 133 (length (nintendo-ware::xsar-strg-body-strings (nintendo-ware::xsar-strg-body (nintendo-ware::xsar-strg archive))))))
+    (assert (= 133 (length (nintendo-ware::xsar-strg-strings (nintendo-ware::xsar-strg archive)))))
     (assert (= 104 (length sounds)))
     ;; Counts, external paths, aliases and file lengths cross-checked with DualRip.
     (assert (equal '("BGM_THEME" "BGM_THEME_MONO" "SE_CTR_MYMENU_DECIDE"
@@ -263,7 +263,7 @@
     (loop for id from 0 below 2
           for path in '("stream/BGM_THEME.bcstm" "stream/BGM_THEME_MONO.bcstm")
           for channels in '(2 1)
-          for entries = (nintendo-ware::xsar-info-body-files (nintendo-ware::xsar-info-body info))
+          for entries = (nintendo-ware::xsar-info-files info)
           for detail = (nintendo-ware::xsar-sound-detail (aref sounds id)) do
             (assert (null (nintendo-ware::xsar-file-data (aref files id))))
             (assert (string= path (nintendo-ware::xsar-external-file-text
@@ -285,19 +285,17 @@
                                     (list (nintendo-ware::xwsd-parameters-pitch
                                            (nintendo-ware::xwsd-item-parameters item))
                                           (nintendo-ware::xwsd-note-wave-index (aref notes 0)))))
-                                (nintendo-ware::xwsd-info-body-items
-                                  (nintendo-ware::xwsd-info-body (nintendo-ware::xwsd-info (aref contents id))))))))
+                                (nintendo-ware::xwsd-info-items (nintendo-ware::xwsd-info (aref contents id)))))))
     (loop for id from 15 below 21
           for (waves instruments) in '((10 10) (7 15) (16 18) (4 3) (4 5) (16 11))
           for bank = (nintendo-ware::xbnk-info (aref contents id)) do
-            (assert (= waves (length (nintendo-ware::xbnk-info-body-waves (nintendo-ware::xbnk-info-body bank)))))
-            (assert (= instruments (length (nintendo-ware::xbnk-info-body-instruments (nintendo-ware::xbnk-info-body bank))))))
+            (assert (= waves (length (nintendo-ware::xbnk-info-waves bank))))
+            (assert (= instruments (length (nintendo-ware::xbnk-info-instruments bank)))))
     ;; These groups reference archive file IDs without embedding duplicate data.
     (loop for id from 21 below 24
           for expected in '((13 24 2 15 26 5 17 28 6 16 27 7 8 14 25 10 11)
                             (16 27 3 4 19 30 9) (20 31 12))
-          for entries = (nintendo-ware::xgrp-info-body-entries
-                         (nintendo-ware::xgrp-info-body (nintendo-ware::xgrp-info (aref contents id)))) do
+          for entries = (nintendo-ware::xgrp-info-entries (nintendo-ware::xgrp-info (aref contents id))) do
             (assert (equal expected (map 'list #'nintendo-ware::xgrp-entry-file-id entries)))
             (loop for entry across entries do
               (assert (null (nintendo-ware::xgrp-entry-data entry)))))
@@ -311,12 +309,12 @@
             (assert (= expected-waves (length waves)))
             (loop for wave across waves
                   for wave-info = (nintendo-ware::xwav-info wave) do
-                    (loop for channel across (nintendo-ware::xwav-info-body-channels (nintendo-ware::xwav-info-body wave-info))
+                    (loop for channel across (nintendo-ware::xwav-info-channels wave-info)
                           for data = (nintendo-ware::xwav-channel-data channel) do
-                            (ecase (nintendo-ware::xwav-info-body-codec (nintendo-ware::xwav-info-body wave-info))
+                            (ecase (nintendo-ware::xwav-info-codec wave-info)
                               (nintendo-ware::pcm-16
                                (assert (typep data '(simple-array (signed-byte 16) (*))))
-                               (assert (= (nintendo-ware::xwav-info-body-loop-end (nintendo-ware::xwav-info-body wave-info)) (length data)))
+                               (assert (= (nintendo-ware::xwav-info-loop-end wave-info) (length data)))
                                (incf bytes (* 2 (length data))))
                               (nintendo-ware::dsp-adpcm
                                (assert (typep data '(simple-array (unsigned-byte 8) (*))))
@@ -326,8 +324,8 @@
             (assert (= expected-bytes bytes)))
     (let* ((wave (aref (nintendo-ware::xwar-waves (aref contents 25)) 0))
            (wave-info (nintendo-ware::xwav-info wave)))
-      (assert (eq 'nintendo-ware::dsp-adpcm (nintendo-ware::xwav-info-body-codec (nintendo-ware::xwav-info-body wave-info))))
-      (assert (= 32000 (nintendo-ware::xwav-info-body-sample-rate (nintendo-ware::xwav-info-body wave-info))))
-      (assert (= 1212 (nintendo-ware::xwav-info-body-loop-end (nintendo-ware::xwav-info-body wave-info))))
-      (assert (= 2 (length (nintendo-ware::xwav-info-body-channels (nintendo-ware::xwav-info-body wave-info)))))))
+      (assert (eq 'nintendo-ware::dsp-adpcm (nintendo-ware::xwav-info-codec wave-info)))
+      (assert (= 32000 (nintendo-ware::xwav-info-sample-rate wave-info)))
+      (assert (= 1212 (nintendo-ware::xwav-info-loop-end wave-info)))
+      (assert (= 2 (length (nintendo-ware::xwav-info-channels wave-info))))))
   (format t "Real menu.bcsar regression passed: 2 external files, 30 embedded files and 57 waves.~%"))

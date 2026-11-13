@@ -337,7 +337,7 @@
          (events (nintendo-ware::xseq-events sequence))
          (note (aref events 0)) (tempo (aref events 1))
          (random (aref events 2)) (extended (aref events 3))
-         (label (aref (nintendo-ware::xseq-labels-body-entries (nintendo-ware::xseq-labels-body (nintendo-ware::xseq-labels sequence))) 0)))
+         (label (aref (nintendo-ware::xseq-labels-entries (nintendo-ware::xseq-labels sequence)) 0)))
     (assert (= #x01020300 (nintendo-ware::nintendo-ware-file-version sequence)))
     (assert (string= "start" (nintendo-ware::xseq-label-entry-name label)))
     (assert (typep note 'nintendo-ware::xseq-event-note))

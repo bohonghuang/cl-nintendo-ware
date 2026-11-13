@@ -19,6 +19,12 @@
 - `sound/`: platform-neutral sound schemas, references, tables and event declarations.
 - `test/`: independent fixture layouts, assertion-based reader regressions and the explicitly retained real archive `test/data/mset.bcsar`. Keep other downloaded game assets and temporary smoke scripts outside the repository.
 
+## Agent Workflow
+
+- NEVER use subagents or delegate repository work to other agents. Perform all investigation, implementation, review and verification in the main session.
+- Treat generated file/section bodies as nonexistent outside the implementation of `define-nintendo-ware-*`. NEVER access body slots, body types or body accessors directly in library consumers, tests or documentation examples; use the generated section accessors instead.
+- After completing and verifying each task, MUST commit its changes before yielding. Include only files belonging to that task; NEVER include unrelated user changes.
+
 ## Development Commands
 
 Use SBCL with Quicklisp initialized. After moving the repository into `local-projects/`, run `(ql:register-local-projects)`.

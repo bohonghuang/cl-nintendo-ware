@@ -28,7 +28,7 @@
 
 (defun xwar-waves (xwar)
   "Return WAV structures in wave-index order, preserving absent entries as NIL."
-  (xwar-info-body-entries (xwar-info-body (xwar-info xwar))))
+  (xwar-info-entries (xwar-info xwar)))
 
 (defmethod read-file ((type (eql 'xwar)) (stream stream))
   (read-xwar stream))
